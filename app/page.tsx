@@ -1,65 +1,179 @@
-import Image from "next/image";
+"use client";
+
+import { useState, useRef, useEffect } from "react";
+import RecommendationCard from "@/components/RecommendationCard";
+import { RecommendationCard as CardType } from "@/lib/types";
+
+const EXAMPLES = [
+  "Romantic Thai restaurant for a first date, ~$60/person, quiet, not too trendy",
+  "Best ramen in SF, under $20, doesn't matter if it's busy",
+  "Business dinner spot, $100/person, impressive but not stuffy, good wine list",
+];
+
+interface Message {
+  role: "user" | "assistant";
+  content: string;
+  cards?: CardType[];
+}
 
 export default function Home() {
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [input, setInput] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [visibleCards, setVisibleCards] = useState<CardType[]>([]);
+  const bottomRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, visibleCards]);
+
+  async function sendMessage(text: string) {
+    if (!text.trim() || loading) return;
+
+    const userMessage: Message = { role: "user", content: text };
+    setMessages((prev) => [...prev, userMessage]);
+    setInput("");
+    setLoading(true);
+    setVisibleCards([]);
+
+    const history = messages.map((m) => ({ role: m.role, content: m.content }));
+
+    try {
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: text, history }),
+      });
+
+      const data = await res.json();
+
+      if (data.error) throw new Error(data.error);
+
+      const assistantMessage: Message = {
+        role: "assistant",
+        content: `Found ${data.recommendations.length} restaurants for you.`,
+        cards: data.recommendations,
+      };
+
+      setMessages((prev) => [...prev, assistantMessage]);
+
+      // Reveal cards one by one for streaming effect
+      const cards: CardType[] = data.recommendations;
+      for (let i = 0; i < cards.length; i++) {
+        await new Promise((r) => setTimeout(r, 150));
+        setVisibleCards((prev) => [...prev, cards[i]]);
+      }
+    } catch {
+      setMessages((prev) => [
+        ...prev,
+        { role: "assistant", content: "Something went wrong. Please try again." },
+      ]);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const hasMessages = messages.length > 0;
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <main className="min-h-screen bg-gray-50 flex flex-col">
+      {/* Header */}
+      <header className="sticky top-0 z-10 bg-white border-b border-gray-100 px-4 py-3">
+        <div className="max-w-2xl mx-auto flex items-center gap-2">
+          <span className="text-xl">🍽️</span>
+          <h1 className="font-semibold text-gray-900">SF Restaurant Agent</h1>
+          <span className="text-xs text-gray-400 ml-auto">Powered by Claude</span>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+      </header>
+
+      {/* Content */}
+      <div className="flex-1 max-w-2xl mx-auto w-full px-4 py-6">
+        {!hasMessages ? (
+          <div className="flex flex-col items-center justify-center min-h-[60vh] text-center">
+            <div className="text-5xl mb-4">🍜</div>
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">
+              Find your perfect SF restaurant
+            </h2>
+            <p className="text-gray-500 mb-8 max-w-sm">
+              Tell me what you&apos;re looking for in plain English. I&apos;ll find the best
+              options and explain exactly why each one fits.
+            </p>
+            <div className="flex flex-col gap-2 w-full max-w-sm">
+              {EXAMPLES.map((ex) => (
+                <button
+                  key={ex}
+                  onClick={() => sendMessage(ex)}
+                  className="text-left text-sm bg-white border border-gray-200 rounded-xl px-4 py-3 text-gray-700 hover:border-gray-400 hover:bg-gray-50 transition-colors"
+                >
+                  &quot;{ex}&quot;
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-4">
+            {messages.map((msg, i) => (
+              <div key={i}>
+                {msg.role === "user" ? (
+                  <div className="flex justify-end">
+                    <div className="bg-gray-900 text-white rounded-2xl rounded-br-sm px-4 py-3 max-w-xs text-sm">
+                      {msg.content}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-sm text-gray-500 py-1">{msg.content}</div>
+                )}
+              </div>
+            ))}
+
+            {visibleCards.length > 0 && (
+              <div className="flex flex-col gap-3">
+                {visibleCards.map((card, i) => (
+                  <RecommendationCard key={card.restaurant?.id ?? i} card={card} index={i} />
+                ))}
+              </div>
+            )}
+
+            {loading && (
+              <div className="flex items-center gap-3 text-sm text-gray-500 py-2">
+                <div className="flex gap-1">
+                  <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce [animation-delay:0ms]" />
+                  <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce [animation-delay:150ms]" />
+                  <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce [animation-delay:300ms]" />
+                </div>
+                Searching SF restaurants...
+              </div>
+            )}
+          </div>
+        )}
+        <div ref={bottomRef} />
+      </div>
+
+      {/* Input */}
+      <div className="sticky bottom-0 bg-white border-t border-gray-100 px-4 py-3">
+        <div className="max-w-2xl mx-auto flex gap-2">
+          <input
+            type="text"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && sendMessage(input)}
+            placeholder={
+              hasMessages
+                ? "Refine: 'more quiet', 'remove chains', 'cheaper options'..."
+                : "Describe what you're looking for..."
+            }
+            className="flex-1 bg-gray-100 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-gray-300 placeholder:text-gray-400"
+            disabled={loading}
+          />
+          <button
+            onClick={() => sendMessage(input)}
+            disabled={loading || !input.trim()}
+            className="bg-gray-900 text-white rounded-xl px-4 py-3 text-sm font-medium hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+            Send
+          </button>
         </div>
-      </main>
-    </div>
+      </div>
+    </main>
   );
 }
