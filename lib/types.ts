@@ -23,8 +23,11 @@ export interface Restaurant {
   phone?: string;
   url?: string;
   image_url?: string;
+  description?: string;
   is_closed: boolean;
   distance?: number;
+  lat?: number;
+  lng?: number;
 }
 
 export interface RecommendationCard {
