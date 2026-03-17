@@ -194,5 +194,13 @@ export async function runAgent(
     conversationHistory
   );
 
-  return { requirements, recommendations };
+  // Add OpenTable search URLs
+  const withOpenTable = recommendations.map((card) => ({
+    ...card,
+    opentable_url: card.restaurant?.name
+      ? `https://www.opentable.com/s?term=${encodeURIComponent(card.restaurant.name)}&metroId=4&covers=${requirements.party_size ?? 2}`
+      : undefined,
+  }));
+
+  return { requirements, recommendations: withOpenTable };
 }

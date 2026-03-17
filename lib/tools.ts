@@ -18,7 +18,7 @@ export async function googlePlacesSearch(params: {
         "Content-Type": "application/json",
         "X-Goog-Api-Key": process.env.GOOGLE_PLACES_API_KEY!,
         "X-Goog-FieldMask":
-          "places.id,places.displayName,places.formattedAddress,places.rating,places.userRatingCount,places.priceLevel,places.primaryTypeDisplayName,places.websiteUri,places.photos,places.regularOpeningHours,places.editorialSummary",
+          "places.id,places.displayName,places.formattedAddress,places.rating,places.userRatingCount,places.priceLevel,places.primaryTypeDisplayName,places.websiteUri,places.photos,places.regularOpeningHours,places.editorialSummary,places.location",
       },
       body: JSON.stringify({
         textQuery,
@@ -54,6 +54,8 @@ export async function googlePlacesSearch(params: {
       : undefined,
     is_closed: false,
     description: p.editorialSummary?.text,
+    lat: p.location?.latitude,
+    lng: p.location?.longitude,
   }));
 }
 
