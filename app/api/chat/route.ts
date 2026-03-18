@@ -50,30 +50,80 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  try {
-    const body = ChatRequestSchema.safeParse(await req.json());
-    if (!body.success) {
-      return NextResponse.json({ error: "Invalid request." }, { status: 400 });
-    }
-
-    const { message, history, city, gpsCoords, nearLocation, sessionPreferences, profileContext } = body.data;
-
-    const result = await runAgent(
-      message,
-      history,
-      city ?? undefined,
-      gpsCoords ?? null,
-      nearLocation ?? undefined,
-      sessionPreferences ?? undefined,
-      profileContext ?? undefined
-    );
-
-    return NextResponse.json(result);
-  } catch (error) {
-    console.error("Agent error:", error);
-    return NextResponse.json(
-      { error: classifyError(error) },
-      { status: 500 }
-    );
+  const body = ChatRequestSchema.safeParse(await req.json());
+  if (!body.success) {
+    return NextResponse.json({ error: "Invalid request." }, { status: 400 });
   }
+
+  const { message, history, city, gpsCoords, nearLocation, sessionPreferences, profileContext, customWeights } = body.data;
+  const request_id = crypto.randomUUID();
+
+  console.log(JSON.stringify({
+    type: "request",
+    request_id,
+    ip,
+    message: message.slice(0, 100),
+    city,
+    timestamp: new Date().toISOString(),
+  }));
+
+  const stream = new ReadableStream({
+    async start(controller) {
+      function sendEvent(data: Record<string, unknown>) {
+        const chunk = `data: ${JSON.stringify(data)}\n\n`;
+        controller.enqueue(new TextEncoder().encode(chunk));
+      }
+
+      try {
+        const result = await runAgent(
+          message,
+          history,
+          city ?? undefined,
+          gpsCoords ?? null,
+          nearLocation ?? undefined,
+          sessionPreferences ?? undefined,
+          profileContext ?? undefined,
+          {
+            onPartial: (cards, requirements) => {
+              sendEvent({ type: "partial", cards, requirements });
+            },
+          },
+          customWeights ?? undefined
+        );
+
+        console.log(JSON.stringify({
+          type: "response",
+          request_id,
+          recommendations_count: result.recommendations.length,
+          timestamp: new Date().toISOString(),
+        }));
+
+        sendEvent({
+          type: "complete",
+          requirements: result.requirements,
+          recommendations: result.recommendations,
+          suggested_refinements: result.suggested_refinements,
+          request_id,
+        });
+      } catch (error) {
+        console.error(JSON.stringify({
+          type: "error",
+          request_id,
+          error: error instanceof Error ? error.message : String(error),
+          timestamp: new Date().toISOString(),
+        }));
+        sendEvent({ type: "error", error: classifyError(error) });
+      } finally {
+        controller.close();
+      }
+    },
+  });
+
+  return new Response(stream, {
+    headers: {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      Connection: "keep-alive",
+    },
+  });
 }

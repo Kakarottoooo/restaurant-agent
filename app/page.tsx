@@ -8,6 +8,7 @@ import { useChat, LOADING_STEPS } from "@/app/hooks/useChat";
 import { useLocation } from "@/app/hooks/useLocation";
 import { useFavorites } from "@/app/hooks/useFavorites";
 import { usePreferences, formatProfileForPrompt } from "@/app/hooks/usePreferences";
+import { RecommendationCard as CardType } from "@/lib/types";
 
 // Leaflet is not SSR-compatible
 const MapView = dynamic(() => import("@/components/MapView"), { ssr: false });
@@ -25,8 +26,16 @@ const NOISE_OPTIONS: Array<{ value: "quiet" | "moderate" | "lively"; label: stri
   { value: "lively", label: "热闹" },
 ];
 
+const WEIGHT_LABELS: Record<string, string> = {
+  budget_match: "预算匹配",
+  scene_match: "场景契合",
+  review_quality: "口碑质量",
+  location_convenience: "位置便利",
+  preference_match: "偏好吻合",
+};
+
 export default function Home() {
-  const { profile, updateProfile, learnFromFavorite, learnFromSearch, resetProfile } =
+  const { profile, updateProfile, learnFromFavorite, learnFromSearch, resetProfile, learnedWeights, learnWeightsFromFeedback } =
     usePreferences();
   const profileContext = formatProfileForPrompt(profile);
 
@@ -37,10 +46,21 @@ export default function Home() {
     isNearMe: location.isNearMe,
     nearLocation: location.nearLocation,
     profileContext,
+    learnedWeights,
   });
   const { favorites, toggleFavorite } = useFavorites(learnFromFavorite);
   const bottomRef = useRef<HTMLDivElement>(null);
   const [prefModalOpen, setPrefModalOpen] = useState(false);
+
+  // Phase 4.3: Compare state
+  const [compareSelection, setCompareSelection] = useState<(CardType | null)[]>([null, null]);
+  const [compareOpen, setCompareOpen] = useState(false);
+
+  // Phase 4.6: Call learnWeightsFromFeedback on mount
+  useEffect(() => {
+    learnWeightsFromFeedback();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -50,6 +70,56 @@ export default function Home() {
   const lastUserQuery =
     [...chat.messages].reverse().find((m) => m.role === "user")?.content ?? "";
   const isMapMode = chat.viewMode === "map" && chat.allCards.length > 0;
+
+  // Phase 4.3: Compare helpers
+  function toggleCompare(card: CardType) {
+    setCompareSelection((prev) => {
+      const existingIdx = prev.findIndex((c) => c?.restaurant.id === card.restaurant.id);
+      if (existingIdx >= 0) {
+        // Remove from compare
+        const next = [...prev];
+        next[existingIdx] = null;
+        return next;
+      }
+      // Add to first empty slot
+      const emptyIdx = prev.findIndex((c) => c === null);
+      if (emptyIdx >= 0) {
+        const next = [...prev];
+        next[emptyIdx] = card;
+        return next;
+      }
+      // Replace slot 1 (keep slot 0)
+      return [prev[0], card];
+    });
+  }
+
+  function isComparing(card: CardType) {
+    return compareSelection.some((c) => c?.restaurant.id === card.restaurant.id);
+  }
+
+  // Phase 4.5: Updated share button — also generate base64 share URL
+  function handleShare() {
+    // Existing: copy URL with query param
+    chat.shareResults(lastUserQuery);
+
+    // Also generate base64 share URL for top 3
+    if (chat.allCards.length > 0) {
+      const top3 = chat.allCards.slice(0, 3).map((c) => ({
+        name: c.restaurant.name,
+        rank: c.rank,
+        why_recommended: c.why_recommended,
+        score: c.score,
+      }));
+      const token = btoa(JSON.stringify(top3));
+      // Update URL to shareable share page
+      const shareUrl = `${window.location.origin}/share/${token}`;
+      navigator.clipboard.writeText(shareUrl).catch(() => {});
+    }
+  }
+
+  // Phase 4.3: request_id is available in complete event; track it
+  // (We track it via suggestedRefinements being set when complete arrives)
+  // We pass requestId=undefined for now (it's in the SSE data but not surfaced here)
 
   // Shared filter/view bar rendered in both list and map contexts
   const filterViewBar = chat.allCards.length > 0 && (
@@ -84,7 +154,7 @@ export default function Home() {
 
         {/* Share button */}
         <button
-          onClick={() => chat.shareResults(lastUserQuery)}
+          onClick={handleShare}
           className="flex items-center gap-1.5 text-xs rounded-xl px-3 py-1.5 transition-colors"
           style={{
             color: "var(--text-secondary)",
@@ -156,6 +226,39 @@ export default function Home() {
           ))}
         </div>
       )}
+
+      {/* Phase 4.3: Suggested refinement chips — hidden in map mode */}
+      {!isMapMode && chat.suggestedRefinements.length > 0 && (
+        <div className="flex gap-2 flex-wrap">
+          {chat.suggestedRefinements.map((refinement) => (
+            <button
+              key={refinement}
+              onClick={() => {
+                learnFromSearch(refinement);
+                chat.sendMessage(refinement);
+              }}
+              style={{
+                backgroundColor: "var(--card-2)",
+                color: "var(--text-secondary)",
+                border: "0.5px solid var(--border)",
+                fontFamily: "var(--font-dm-sans)",
+                borderRadius: "20px",
+                padding: "5px 12px",
+                fontSize: "12px",
+                cursor: "pointer",
+              }}
+              onMouseEnter={(e) => {
+                (e.currentTarget as HTMLElement).style.borderColor = "var(--gold)";
+              }}
+              onMouseLeave={(e) => {
+                (e.currentTarget as HTMLElement).style.borderColor = "var(--border)";
+              }}
+            >
+              {refinement}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 
@@ -193,7 +296,7 @@ export default function Home() {
         </div>
       )}
 
-      {/* ─── Preferences Modal (Phase 3.3b) ──────────────────── */}
+      {/* ─── Preferences Modal (Phase 3.3b + 4.6) ──────────────────── */}
       {prefModalOpen && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-4"
@@ -417,6 +520,54 @@ export default function Home() {
               />
             </div>
 
+            {/* Phase 4.6: Learned weights section */}
+            {learnedWeights && (
+              <div style={{ marginBottom: "20px" }}>
+                <p
+                  style={{
+                    fontFamily: "var(--font-dm-sans)",
+                    fontSize: "13px",
+                    fontWeight: 500,
+                    color: "var(--text-primary)",
+                    marginBottom: "8px",
+                  }}
+                >
+                  个性化权重
+                </p>
+                <p
+                  style={{
+                    fontFamily: "var(--font-dm-sans)",
+                    fontSize: "11px",
+                    color: "var(--text-muted)",
+                    marginBottom: "10px",
+                  }}
+                >
+                  基于 {learnedWeights.sample_size} 条反馈自动学习
+                </p>
+                <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                  {(["scene_match", "budget_match", "review_quality", "location_convenience", "preference_match"] as const).map((key) => {
+                    const val = learnedWeights[key];
+                    const pct = Math.round(val * 100);
+                    return (
+                      <div key={key}>
+                        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "3px" }}>
+                          <span style={{ fontFamily: "var(--font-dm-sans)", fontSize: "11px", color: "var(--text-secondary)" }}>
+                            {WEIGHT_LABELS[key]}
+                          </span>
+                          <span style={{ fontFamily: "var(--font-dm-sans)", fontSize: "11px", color: "var(--gold)" }}>
+                            {pct}%
+                          </span>
+                        </div>
+                        <div style={{ height: "4px", backgroundColor: "var(--card-2)", borderRadius: "2px", overflow: "hidden" }}>
+                          <div style={{ width: `${pct}%`, height: "100%", backgroundColor: "var(--gold)", borderRadius: "2px" }} />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             {/* Actions */}
             <div style={{ display: "flex", gap: "8px", marginTop: "8px" }}>
               <button
@@ -454,6 +605,145 @@ export default function Home() {
               >
                 重置
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── Compare Bottom Sheet (Phase 4.3) ──────────────────── */}
+      {compareOpen && compareSelection.some((c) => c !== null) && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center"
+          style={{ backgroundColor: "rgba(0,0,0,0.5)" }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setCompareOpen(false);
+          }}
+        >
+          <div
+            className="w-full max-w-2xl rounded-t-2xl overflow-y-auto"
+            style={{
+              backgroundColor: "var(--card)",
+              maxHeight: "70dvh",
+              padding: "20px 16px",
+            }}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h3
+                style={{
+                  fontFamily: "var(--font-playfair)",
+                  fontSize: "18px",
+                  fontWeight: 600,
+                  color: "var(--text-primary)",
+                }}
+              >
+                对比
+              </h3>
+              <button
+                onClick={() => setCompareOpen(false)}
+                style={{
+                  background: "none",
+                  border: "none",
+                  cursor: "pointer",
+                  color: "var(--text-secondary)",
+                  fontSize: "20px",
+                  lineHeight: 1,
+                }}
+              >
+                ×
+              </button>
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+              {compareSelection.map((card, idx) =>
+                card ? (
+                  <div
+                    key={idx}
+                    style={{
+                      backgroundColor: "var(--card-2)",
+                      borderRadius: "12px",
+                      border: "0.5px solid var(--border)",
+                      padding: "14px",
+                    }}
+                  >
+                    <p
+                      style={{
+                        fontFamily: "var(--font-playfair)",
+                        fontSize: "15px",
+                        fontWeight: 600,
+                        color: "var(--text-primary)",
+                        marginBottom: "4px",
+                      }}
+                    >
+                      {card.restaurant.name}
+                    </p>
+                    <p
+                      style={{
+                        fontFamily: "var(--font-dm-sans)",
+                        fontSize: "12px",
+                        color: "var(--text-secondary)",
+                        marginBottom: "12px",
+                      }}
+                    >
+                      {card.restaurant.cuisine} · {card.restaurant.price}
+                    </p>
+                    {card.scoring && (
+                      <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                        {(["scene_match", "budget_match", "review_quality", "location_convenience", "preference_match"] as const).map((key) => {
+                          const val = card.scoring![key];
+                          const pct = Math.round((val / 10) * 100);
+                          return (
+                            <div key={key}>
+                              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "2px" }}>
+                                <span style={{ fontFamily: "var(--font-dm-sans)", fontSize: "10px", color: "var(--text-secondary)" }}>
+                                  {WEIGHT_LABELS[key]}
+                                </span>
+                                <span style={{ fontFamily: "var(--font-dm-sans)", fontSize: "10px", color: "var(--gold)" }}>
+                                  {val.toFixed(1)}
+                                </span>
+                              </div>
+                              <div style={{ height: "3px", backgroundColor: "var(--border)", borderRadius: "2px", overflow: "hidden" }}>
+                                <div style={{ width: `${pct}%`, height: "100%", backgroundColor: "var(--gold)", borderRadius: "2px" }} />
+                              </div>
+                            </div>
+                          );
+                        })}
+                        <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: "12px", fontWeight: 600, color: "var(--gold)", marginTop: "4px" }}>
+                          综合 {card.scoring.weighted_total.toFixed(1)}
+                        </p>
+                      </div>
+                    )}
+                    <p
+                      style={{
+                        fontFamily: "var(--font-dm-sans)",
+                        fontSize: "12px",
+                        color: "var(--text-secondary)",
+                        lineHeight: 1.5,
+                        marginTop: "8px",
+                      }}
+                    >
+                      {card.why_recommended}
+                    </p>
+                  </div>
+                ) : (
+                  <div
+                    key={idx}
+                    style={{
+                      backgroundColor: "var(--card-2)",
+                      borderRadius: "12px",
+                      border: "0.5px dashed var(--border)",
+                      padding: "14px",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      color: "var(--text-muted)",
+                      fontFamily: "var(--font-dm-sans)",
+                      fontSize: "12px",
+                    }}
+                  >
+                    点击卡片上的「对比」
+                  </div>
+                )
+              )}
             </div>
           </div>
         </div>
@@ -860,6 +1150,11 @@ export default function Home() {
                         }
                         nearLocationLabel={location.nearLocation || undefined}
                         currentQuery={lastUserQuery}
+                        onCompare={() => {
+                          toggleCompare(card);
+                          setCompareOpen(true);
+                        }}
+                        isComparing={isComparing(card)}
                       />
                     ))}
                   </div>

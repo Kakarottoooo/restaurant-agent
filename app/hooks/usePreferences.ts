@@ -1,8 +1,17 @@
 import { useState, useEffect, useCallback } from "react";
-import { UserPreferenceProfile, RecommendationCard, FeedbackRecord } from "@/lib/types";
+import { UserPreferenceProfile, RecommendationCard, FeedbackRecord, LearnedWeights } from "@/lib/types";
 
 const STORAGE_KEY = "restaurant-preference-profile";
 const FEEDBACK_KEY = "restaurant-feedback";
+const LEARNED_WEIGHTS_KEY = "restaurant-learned-weights";
+
+const DEFAULT_LEARNED_WEIGHTS: Omit<LearnedWeights, "updated_at" | "sample_size"> = {
+  budget_match: 0.25,
+  scene_match: 0.30,
+  review_quality: 0.20,
+  location_convenience: 0.15,
+  preference_match: 0.10,
+};
 
 const DEFAULT_PROFILE: UserPreferenceProfile = {
   version: 1,
@@ -58,9 +67,17 @@ export function formatProfileForPrompt(profile: UserPreferenceProfile): string {
 
 export function usePreferences() {
   const [profile, setProfile] = useState<UserPreferenceProfile>(DEFAULT_PROFILE);
+  const [learnedWeights, setLearnedWeights] = useState<LearnedWeights | null>(null);
 
   useEffect(() => {
     setProfile(loadProfile());
+    try {
+      const raw = localStorage.getItem(LEARNED_WEIGHTS_KEY);
+      if (raw) {
+        const parsed: LearnedWeights = JSON.parse(raw);
+        setLearnedWeights(parsed);
+      }
+    } catch {}
   }, []);
 
   const updateProfile = useCallback((patch: Partial<UserPreferenceProfile>) => {
@@ -137,6 +154,51 @@ export function usePreferences() {
     setProfile(fresh);
   }, []);
 
+  const learnWeightsFromFeedback = useCallback(() => {
+    try {
+      const raw = localStorage.getItem(FEEDBACK_KEY);
+      if (!raw) return;
+      const records: FeedbackRecord[] = JSON.parse(raw);
+      if (records.length < 10) return;
+
+      // Count unsatisfied issue patterns
+      const unsatisfied = records.filter((r) => !r.satisfied && r.issues?.length);
+      const issueCounts: Record<string, number> = {};
+      for (const rec of unsatisfied) {
+        for (const issue of rec.issues ?? []) {
+          issueCounts[issue] = (issueCounts[issue] ?? 0) + 1;
+        }
+      }
+
+      // Start from default weights
+      const weights = { ...DEFAULT_LEARNED_WEIGHTS };
+
+      // Adjust weights based on feedback issues
+      if (issueCounts["氛围不符"]) weights.scene_match += 0.05;
+      if (issueCounts["价格偏高"]) weights.budget_match += 0.05;
+      if (issueCounts["等位太久"]) weights.review_quality += 0.05;
+
+      // Normalize to sum to 1.0
+      const total = Object.values(weights).reduce((sum, v) => sum + v, 0);
+      const normalized = {
+        budget_match: weights.budget_match / total,
+        scene_match: weights.scene_match / total,
+        review_quality: weights.review_quality / total,
+        location_convenience: weights.location_convenience / total,
+        preference_match: weights.preference_match / total,
+      };
+
+      const newLearnedWeights: LearnedWeights = {
+        ...normalized,
+        updated_at: new Date().toISOString(),
+        sample_size: records.length,
+      };
+
+      localStorage.setItem(LEARNED_WEIGHTS_KEY, JSON.stringify(newLearnedWeights));
+      setLearnedWeights(newLearnedWeights);
+    } catch {}
+  }, []);
+
   // Load and process any unprocessed feedback on mount
   useEffect(() => {
     try {
@@ -160,5 +222,7 @@ export function usePreferences() {
     learnFromSearch,
     learnFromFeedback,
     resetProfile,
+    learnedWeights,
+    learnWeightsFromFeedback,
   };
 }

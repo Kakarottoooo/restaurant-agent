@@ -632,3 +632,382 @@ Phase 3.3c 反馈闭环（约 2 天）
 | 个性化程度 | 对所有人一样 | 区分偏好安静/热闹、预算高低 |
 | 系统学习能力 | 零 | 随收藏和反馈逐步提升 |
 | 推荐可解释性 | "AI 说好" | 5 维度分数 + 评论原文证据 |
+
+---
+
+## 阶段四：从"推荐工具"到"决策引擎"
+
+> 更新日期：2026-03-18
+> 前提：Phase 3 已完成。Phase 4 的目标是补上六个核心缺口，让产品真正兑现"替用户完成搜索→比较→筛选→总结→推荐"这条完整链路的承诺，并建立通用 AI 和传统 App 无法复制的壁垒。
+
+---
+
+### Phase 4.1 — 流式渐进加载（Streaming Response）
+
+**背景与问题**
+
+用户提交 query 后，当前系统要等 Pipeline 全部完成才返回结果，通常需要 8-15 秒。这是用户流失的最大单点。进度条虽然存在，但屏幕上没有实际内容出现，体验远差于 ChatGPT 这类流式输出产品。
+
+**目标**
+
+将结果改为流式/分批返回：先展示前 3 张卡片，后台继续补全剩余卡片，最终呈现完整 Top 10。用户在 2-3 秒内看到第一个结果。
+
+**修改 `app/api/chat/route.ts`**
+
+将 `Response` 改为 `ReadableStream`，使用 Next.js `StreamingTextResponse` 或原生 `TransformStream`：
+
+```typescript
+// 伪代码结构
+const stream = new TransformStream();
+const writer = stream.writable.getWriter();
+
+// 立即发送前 3 个候选（跳过 review signal 提取）
+const quickCards = await rankAndExplain(topCandidates.slice(0, 3), requirements, "quick");
+writer.write(encodeChunk({ type: "partial", cards: quickCards }));
+
+// 后台补充：提取评论信号 + 完整排序
+const fullCards = await rankAndExplain(candidatesWithSignals, requirements, "full");
+writer.write(encodeChunk({ type: "complete", cards: fullCards }));
+writer.close();
+
+return new Response(stream.readable, { headers: { "Content-Type": "text/event-stream" } });
+```
+
+**修改 `app/hooks/useChat.ts`**
+
+将 `fetch` 改为流式消费，使用 `ReadableStream.getReader()`：
+
+```typescript
+// 读取 partial 事件 → 立即渲染前 3 张卡片
+// 读取 complete 事件 → 替换/追加为完整 Top 10
+// 在 complete 到达前，卡片列表末尾展示"正在加载更多..."骨架屏
+```
+
+**修改 `app/page.tsx`**
+
+新增骨架屏组件（3 个占位卡片，与真实卡片等高），在 `partial` 结果加载完成后替换为真实卡片，`complete` 后无缝追加剩余结果。
+
+**成功标准**
+
+| 指标 | 当前 | Phase 4.1 完成后 |
+|------|------|----------------|
+| 首屏内容出现时间 | 8-15s | ≤3s |
+| 用户等待体验 | 黑屏 + 进度条 | 2-3 秒出现真实卡片 |
+| 完整结果加载时间 | 同上 | 8-12s（后台继续） |
+
+---
+
+### Phase 4.2 — 服务端遥测（Server-Side Telemetry）
+
+**背景与问题**
+
+当前完全不知道：哪些 query 成功了、哪些失败了、Top 1 的推荐被采纳了多少次、排名第几的结果最受欢迎、哪个城市的请求最多、延迟分布如何。没有这些数据，排序权重永远只能靠猜。
+
+**目标**
+
+在 API 层加入结构化日志，记录每次请求的关键信号，为 Phase 4.4 的排序权重优化提供数据基础。
+
+**修改 `app/api/chat/route.ts`**
+
+每次请求完成后，写入结构化日志：
+
+```typescript
+interface RequestLog {
+  request_id: string;           // nanoid
+  timestamp: string;
+  city: string;
+  query_length: number;
+  intent_parsed: {
+    cuisine?: string;
+    purpose?: string;
+    budget_per_person?: number;
+    noise_level?: string;
+  };
+  candidates_fetched: number;
+  results_returned: number;
+  top3_scores: number[];        // weighted_total of rank 1-3
+  pipeline_ms: {
+    intent_parse: number;
+    gather_candidates: number;
+    review_signals: number;
+    rank_explain: number;
+    total: number;
+  };
+  error?: string;
+}
+```
+
+**MVP 实现方式**
+
+不引入数据库，将日志写入 Vercel Edge Config 或直接通过 `console.log` 结构化输出（Vercel 会自动捕获到 Log Drain）。后续可迁移到 Vercel Postgres 或 PlanetScale。
+
+**新增客户端信号上报**
+
+在 `RecommendationCard.tsx` 中，用户点击"Map"或"Reserve →"时，向 `/api/telemetry` 发送一个 fire-and-forget 请求：
+
+```typescript
+interface SelectionEvent {
+  request_id: string;   // 从父组件传入
+  rank_selected: number; // 用户选择了第几名
+  action: "map" | "reserve";
+}
+```
+
+这个信号是后续"哪个排名被采纳最多"分析的核心数据源。
+
+**成功标准**
+
+运行一周后能回答：平均延迟多少、Top 1 被选中的比例、哪类 query 失败率最高。
+
+---
+
+### Phase 4.3 — 持续协作式交互（Collaborative Refinement UI）
+
+**背景与问题**
+
+当前用户只能通过"重新输入"来 refine 结果。没有任何 UI 引导用户继续协作。结果返回后，产品就变成了一个"展示板"而非"持续决策工具"。
+
+**目标**
+
+在结果返回后，主动提供 refine 入口，让用户一键调整策略，不需要重新输入完整 query。
+
+**4.3a — Refine 快捷 Chip**
+
+结果卡片列表顶部（筛选 chip 行下方），新增一行动态 refine chip，根据当前结果自动生成建议：
+
+```
+[更安静一点] [再便宜一点] [排除连锁] [离我更近] [更适合约会]
+```
+
+生成逻辑：在 `rankAndExplain` 返回时，让 AI 额外输出 3-5 个 `suggested_refinements: string[]`（基于当前结果的分布，例如"当前结果中有 3 家嘈杂，建议提供安静选项"）。
+
+点击 chip 时，以该 chip 文字作为新 message 触发 `sendMessage`，同时保留 session preferences。
+
+**4.3b — 对比视图（Compare View）**
+
+在每张 RecommendationCard 上新增"对比"按钮（最多选 2 张）。选中 2 张后，页面底部弹出抽屉式对比面板，展示：
+
+```
+                        餐厅 A          餐厅 B
+场景契合                   9.0             7.5
+预算匹配                   8.0             9.5
+口碑质量                   7.0             8.0
+噪音等级                   安静            中等
+招牌菜                 手工意面, 提拉米苏   烤鸭, 北京卷饼
+主要风险               周末等位 45 分钟    只收现金
+```
+
+**新增类型（`lib/types.ts`）**
+
+```typescript
+// 在 RecommendationCard 中新增
+suggested_refinements?: string[];  // AI 给出的 refine 建议
+```
+
+**修改 `app/page.tsx`**
+
+新增 compare 状态：`compareSelection: [RecommendationCard?, RecommendationCard?]`。对比面板以 bottom sheet 形式呈现，移动端友好。
+
+**成功标准**
+
+结果返回后，用户不需要重新输入，可以通过 1 次点击完成 refinement。对比视图让用户无需自己提炼"这两家有什么区别"。
+
+---
+
+### Phase 4.4 — 候选召回层升级（Wider Funnel）
+
+**背景与问题**
+
+当前 `googlePlacesSearch()` 每次只召回最多 20 个候选，直接过滤到 10 个。这违背了产品愿景中"先广撒网 30-100 个，再漏斗压缩"的设计。只有一个数据源，召回的候选集合过小，优质但不热门的餐厅容易被漏掉。
+
+**目标**
+
+扩大候选池，改为真正的三阶段漏斗：召回 → 初筛 → 精排。
+
+**修改 `lib/tools.ts`**
+
+`googlePlacesSearch` 支持分页，连续调用 2 次（利用 Google Places API 的 `pageToken`），最多召回 40 个候选。同时并行发起第二路搜索（换关键词，例如将用户的 `cuisine` 替换为相邻类别），合并去重后得到 40-60 个候选池：
+
+```typescript
+// 第一路：精确匹配（当前逻辑）
+const primary = await googlePlacesSearch(query, location, priceLevel);
+
+// 第二路：扩展搜索（放宽菜系或价位约束）
+const expanded = await googlePlacesSearch(broadenedQuery, location, undefined);
+
+// 合并去重（按 place_id）
+const pool = deduplicateByPlaceId([...primary, ...expanded]);
+// 通常得到 30-60 个候选
+```
+
+**修改 `lib/agent.ts`**
+
+将初筛逻辑拆分为明确的三阶段：
+
+```
+Stage 1 召回（Recall）：pool = 30-60 个原始候选
+Stage 2 初筛（Pre-filter）：
+  - 排除评分 < 3.5 且评论数 < 30 的（放宽之前过于严格的 10 条门槛）
+  - 排除距离 > 用户指定范围 * 1.5 的
+  - 按 (rating × log(review_count)) 简单排序，取前 15 个
+Stage 3 精排（Re-rank）：
+  - 对 15 个候选提取 review signals
+  - 调用 rankAndExplain 维度打分
+  - 按 weighted_total 输出 Top 10
+```
+
+**成功标准**
+
+| 指标 | 当前 | Phase 4.4 完成后 |
+|------|------|----------------|
+| 候选池大小 | 最多 20 | 30-60 |
+| 精排前候选数 | 直接拿全部 | 明确的 15 个精选 |
+| 数据源数量 | 1（Google Places） | 2（主搜索 + 扩展搜索） |
+
+---
+
+### Phase 4.5 — 结果分享卡片（Shareable Decision Card）
+
+**背景与问题**
+
+用户得到推荐结果后，最自然的行为是"发给朋友确认"或"发给另一半选"。当前只有 URL 分享，没有可视化的分享卡片，缺乏社交传播路径。
+
+**目标**
+
+允许用户将 Top 3 推荐生成一张可分享的图片卡片，或生成带预览的分享链接。
+
+**4.5a — 分享链接（MVP）**
+
+在结果标题行右侧新增分享按钮。点击后，将当前 Top 3 结果的核心字段（名称、分数、推荐理由摘要）序列化为 URL 参数（Base64 编码），生成可分享的短链接：
+
+```
+https://folio.app/share?r=eyJjYXJkcyI6W3...
+```
+
+接收方打开链接后，直接展示对应的推荐卡片（无需重新搜索），并在顶部显示"由 Folio. 生成的推荐"标识。
+
+**4.5b — 图片卡片（可选）**
+
+使用 `html2canvas` 或 Vercel OG Image 生成图片卡片，包含：
+- Folio. 品牌标识
+- Top 3 餐厅名 + 推荐理由一句话摘要
+- 原始搜索词
+
+**修改 `app/api/share/route.ts`（新增路由）**
+
+```typescript
+// GET /api/share?r=<encoded>
+// 解码参数，返回分享页面数据
+// POST /api/share
+// 接收 Top 3 卡片数据，生成短 token，存入 KV（Vercel KV 或 Edge Config）
+```
+
+**成功标准**
+
+用户能一键生成分享链接，接收方打开后直接看到推荐结果，无需重新搜索。
+
+---
+
+### Phase 4.6 — 排序权重闭环（Feedback → Ranking Improvement）
+
+**背景与问题**
+
+这是产品愿景中最核心的壁垒：排序权重应该随着真实用户行为不断优化，而不是永远靠经验拍板。当前虽然有反馈记录（`FeedbackRecord`），但这些数据存在 localStorage，从未被用于改进排序逻辑。
+
+**目标**
+
+建立从"用户行为 → 信号分析 → 权重调整"的闭环，让系统随着使用变得更准。
+
+**闭环数据流**
+
+```
+用户选择了第几名（Phase 4.2 遥测）
+    ↓
+用户给出 👍/👎 反馈（Phase 3.3c）
+    ↓
+统计：哪个维度高分的结果被选中更多？
+哪个维度被用户负反馈最多？
+    ↓
+动态调整 DEFAULT_WEIGHTS
+```
+
+**4.6a — 客户端权重自适应（MVP）**
+
+在 `usePreferences.ts` 中，新增 `learnWeightsFromFeedback()` 函数。每次满足条件时（≥10 条反馈记录），分析反馈模式并微调本地权重：
+
+```typescript
+interface LearnedWeights {
+  budget_match: number;
+  scene_match: number;
+  review_quality: number;
+  location_convenience: number;
+  preference_match: number;
+  updated_at: string;
+  sample_size: number;
+}
+```
+
+例如：若 8/10 次不满意都集中在"场景不符"（对应 scene_match 低分），则将 `scene_match` 权重从 0.30 上调至 0.35，相应缩减其他权重。
+
+**4.6b — 服务端聚合权重（长期）**
+
+将 Phase 4.2 收集的服务端选择信号（哪个 rank 被采纳）汇总，每周分析一次维度分分布与被选中相关性，手动或自动更新 `lib/agent.ts` 中的 `DEFAULT_WEIGHTS`。这一步是手动运营 + 数据驱动的，不需要复杂的 ML 管道。
+
+**成功标准**
+
+| 指标 | 当前 | Phase 4.6 完成后 |
+|------|------|----------------|
+| 权重来源 | 经验拍板，永不变化 | 随用户反馈动态更新（客户端） |
+| 反馈利用率 | 0%（存 localStorage 无用） | 100%（直接影响下次排序） |
+| 可解释性 | 权重不透明 | 用户可在设置中看到"你的个人权重" |
+
+---
+
+### Phase 4 执行顺序
+
+```
+Phase 4.1 流式加载（约 3 天）
+  ├── 修改 api/chat/route.ts：ReadableStream 分批返回
+  ├── 修改 useChat.ts：流式消费 partial/complete 事件
+  └── 修改 page.tsx：骨架屏 + 渐进追加卡片
+
+Phase 4.2 服务端遥测（约 2 天）
+  ├── 修改 api/chat/route.ts：结构化日志写入
+  ├── 新增 api/telemetry/route.ts：接收选择事件
+  └── 修改 RecommendationCard：点击 Map/Reserve 时上报 rank
+
+Phase 4.3 协作式交互（约 3-4 天）
+  ├── 修改 rankAndExplain：返回 suggested_refinements
+  ├── 修改 page.tsx：渲染 refine chip 行
+  ├── 修改 RecommendationCard：新增"对比"按钮
+  └── 修改 page.tsx：compare 状态 + bottom sheet 对比面板
+
+Phase 4.4 候选召回升级（约 2 天）
+  ├── 修改 tools.ts：googlePlacesSearch 支持扩展搜索
+  └── 修改 agent.ts：三阶段漏斗（召回 → 初筛 → 精排）
+
+Phase 4.5 分享卡片（约 2-3 天）
+  ├── 新增 api/share/route.ts
+  ├── 修改 page.tsx：分享按钮 + 链接生成
+  └── 新增 app/share/[token]/page.tsx：分享结果展示页
+
+Phase 4.6 排序权重闭环（约 3 天）
+  ├── 修改 usePreferences.ts：learnWeightsFromFeedback
+  ├── 修改 agent.ts/api：接受客户端传入的自定义权重
+  └── 修改 computeWeightedScore：支持外部 weights 注入
+```
+
+---
+
+### Phase 4 成功标准
+
+| 指标 | Phase 3 完成后 | Phase 4 完成后 |
+|------|--------------|--------------|
+| 首屏内容出现时间 | 8-15s | ≤3s |
+| 候选池大小 | 最多 20 | 30-60 |
+| 排序权重 | 固定经验值 | 随反馈动态调整 |
+| Refine 方式 | 重新输入 query | 一键 chip 或继续追问 |
+| 对比能力 | 无 | 并排展示 2 家 |
+| 数据可见性 | 零（无日志） | 延迟分布、rank 采纳率、失败率 |
+| 社交传播 | URL 复制 | 结构化分享卡片/短链接 |
+| 用户留存信号 | 无 | 选择事件 + 反馈 → 权重闭环 |

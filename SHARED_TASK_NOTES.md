@@ -1,7 +1,7 @@
 # Shared Task Notes
 
 ## Status
-Phase 3 fully implemented and build passes. All PLAN.md phases complete.
+Phase 4 fully implemented and build passes. All PLAN.md phases complete.
 
 ## Architecture notes
 - `FlyToController` is a render-null react-leaflet child component
@@ -14,7 +14,42 @@ Phase 3 fully implemented and build passes. All PLAN.md phases complete.
 - `--bg: #1C1C1C`, `--card: #242424`, `--card-2: #2A2A2A`
 - `--text-primary: #F0EAD6`, `--text-secondary: #8A8070`, `--gold: #C9A84C`
 
-## Phase 3 features (implemented this iteration)
+## Phase 4 features (implemented this iteration)
+
+### Phase 4.1 — Streaming Response
+- `StreamCallbacks` type in `lib/agent.ts`; `runAgent` accepts `streamCallbacks?: StreamCallbacks`
+- After `gatherCandidates`, sends quick top-3 partial cards (sorted by rating × log(review_count)) via `onPartial` callback
+- `rankAndExplain` now returns `{ cards, suggested_refinements }` instead of just `RecommendationCard[]`
+- `app/api/chat/route.ts`: switched to `ReadableStream` SSE. Events: `partial`, `complete`, `error`
+- `app/hooks/useChat.ts`: reads SSE stream; `isStreaming` and `suggestedRefinements` states added
+
+### Phase 4.2 — Server-Side Telemetry
+- `app/api/telemetry/route.ts`: POST endpoint, logs `SelectionEvent` as JSON
+- `RecommendationCard.tsx`: `requestId` prop; Map/Reserve clicks fire telemetry via fire-and-forget
+- `app/api/chat/route.ts`: structured JSON logging per request with `request_id` (crypto.randomUUID())
+
+### Phase 4.3 — Collaborative Refinement UI
+- `suggested_refinements?: string[]` added to `RecommendationCard` type and `RankedItemSchema`
+- `rankAndExplain` prompt asks AI for 3-5 `suggested_refinements` based on result distribution
+- `app/page.tsx`: refine chip row below filter chips; compare functionality with bottom-sheet side-by-side scoring panel
+- `RecommendationCard.tsx`: `onCompare`/`isComparing` props + "对比" button
+
+### Phase 4.4 — Wider Funnel
+- `gatherCandidates` runs primary + broadened search in parallel, merges+deduplicates by `id`
+- Three-stage funnel: Recall (30-60) → Pre-filter (rating≥3.5 & reviews≥30, top 15) → Re-rank
+
+### Phase 4.5 — Shareable Decision Card
+- `app/api/share/route.ts`: GET, decodes `r` base64 param
+- Share button generates `/share/[token]` URL with top-3 cards encoded as base64
+- `app/share/[token]/page.tsx`: client component decodes token, shows top-3 cards
+
+### Phase 4.6 — Feedback → Ranking Improvement
+- `LearnedWeights` interface in `lib/types.ts`
+- `usePreferences.ts`: `learnedWeights` state + `learnWeightsFromFeedback()` (requires ≥10 feedback records)
+- `ChatRequestSchema` accepts `customWeights`; `runAgent` accepts and applies custom weights
+- `app/page.tsx`: passes `learnedWeights` to `useChat`, shows learned weight bars in preferences modal
+
+## Phase 3 features (for reference)
 
 ### Phase 3.1 — Review Signal Extraction
 - `ReviewSignals` interface in `lib/types.ts`, added to `Restaurant.review_signals?`

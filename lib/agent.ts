@@ -42,7 +42,7 @@ async function minimaxChat(params: {
 
 // ─── Phase 3.2: Weighted Scoring ─────────────────────────────────────────────
 
-const DEFAULT_WEIGHTS = {
+export const DEFAULT_WEIGHTS = {
   budget_match: 0.25,
   scene_match: 0.30,
   review_quality: 0.20,
@@ -173,6 +173,11 @@ Return JSON with these fields (omit fields that aren't mentioned):
 
 // ─── Layer 2+3: Search & Collect (parallel) ──────────────────────────────────
 
+// Phase 4.1: StreamCallbacks type
+export type StreamCallbacks = {
+  onPartial?: (cards: RecommendationCard[], requirements: UserRequirements) => void;
+};
+
 async function gatherCandidates(
   requirements: UserRequirements,
   cityId: string,
@@ -222,6 +227,15 @@ async function gatherCandidates(
     .filter(Boolean)
     .join(" ");
 
+  // Phase 4.4: Broadened search (no cuisine, no price filter)
+  const broadSearchQuery = [
+    requirements.purpose === "date" ? "romantic" : "",
+    requirements.noise_level === "quiet" ? "quiet" : "",
+    "restaurant",
+  ]
+    .filter(Boolean)
+    .join(" ");
+
   const tavilyQuery = [
     requirements.cuisine,
     `restaurant ${city.fullName}`,
@@ -232,8 +246,8 @@ async function gatherCandidates(
     .filter(Boolean)
     .join(" ");
 
-  // Parallel: Google Places + Tavily (Tavily failure is non-fatal)
-  const [restaurants, tavilyResult] = await Promise.all([
+  // Phase 4.4: Run primary AND broadened search in parallel, plus Tavily
+  const [primaryRestaurants, broadRestaurants, tavilyResult] = await Promise.all([
     googlePlacesSearch({
       query: searchQuery,
       location,
@@ -241,6 +255,13 @@ async function gatherCandidates(
       nearLocationCoords,
       maxResults: 20,
     }),
+    googlePlacesSearch({
+      query: broadSearchQuery,
+      location,
+      cityCenter,
+      nearLocationCoords,
+      maxResults: 20,
+    }).catch(() => [] as Restaurant[]),
     tavilySearch(`best ${tavilyQuery} reviews 2024`).catch((err) => {
       console.warn("Tavily search failed:", err);
       return { results: "", failed: true };
@@ -248,14 +269,25 @@ async function gatherCandidates(
   ]);
   const semanticSignals = tavilyResult.failed ? "" : tavilyResult.results;
 
-  // Hard filter: remove low-rated
-  const filtered = restaurants.filter((r) => {
-    if (r.rating < 3.5) return false;
-    if (r.review_count < 10) return false;
-    return true;
-  });
+  // Phase 4.4: Merge and deduplicate by id
+  const seenIds = new Set<string>();
+  const merged: Restaurant[] = [];
+  for (const r of [...primaryRestaurants, ...broadRestaurants]) {
+    if (!seenIds.has(r.id)) {
+      seenIds.add(r.id);
+      merged.push(r);
+    }
+  }
 
-  return { restaurants: filtered.slice(0, 20), semanticSignals, tavilyQuery };
+  // Phase 4.4: Three-stage funnel
+  // Stage 1 (Recall): pool of 30-60 raw candidates → we have merged (up to 40)
+  // Stage 2 (Pre-filter): remove rating < 3.5 AND review_count < 30; sort by score, take top 15
+  const preFiltered = merged
+    .filter((r) => r.rating >= 3.5 && r.review_count >= 30)
+    .sort((a, b) => b.rating * Math.log(b.review_count + 1) - a.rating * Math.log(a.review_count + 1))
+    .slice(0, 15);
+
+  return { restaurants: preFiltered, semanticSignals, tavilyQuery };
 }
 
 // ─── Layer 4+5+6: Rank, Score, Explain ───────────────────────────────────────
@@ -267,8 +299,9 @@ async function rankAndExplain(
   conversationHistory: Array<{ role: "user" | "assistant"; content: string }>,
   cityFullName: string,
   sessionPreferences?: SessionPreferences,
-  profileContext?: string
-): Promise<RecommendationCard[]> {
+  profileContext?: string,
+  customWeights?: Partial<typeof DEFAULT_WEIGHTS>
+): Promise<{ cards: RecommendationCard[]; suggested_refinements: string[] }> {
   const restaurantList = restaurants
     .map((r, i) => {
       const signals = r.review_signals;
@@ -311,7 +344,11 @@ ${restaurantList}
 Additional context from web search:
 ${semanticSignals}
 
-Pick the TOP 10 restaurants that best match the user's needs. For each one, fill in scoring dimensions honestly, then write the explanation. Return a JSON array:
+Pick the TOP 10 restaurants that best match the user's needs. For each one, fill in scoring dimensions honestly, then write the explanation.
+
+Also, based on the current results and user requirements, suggest 3-5 refinements the user might want to make (in Chinese), such as "更安静一点", "再便宜一点", "离地铁近一点" etc.
+
+Return a JSON array:
 [
   {
     "rank": 1,
@@ -328,7 +365,8 @@ Pick the TOP 10 restaurants that best match the user's needs. For each one, fill
     "best_for": "Romantic dates, special occasions",
     "watch_out": "Book at least 3 days ahead, parking is tough",
     "not_great_if": "You're on a tight budget or want a lively atmosphere",
-    "estimated_total": "$80-100 for two with drinks"
+    "estimated_total": "$80-100 for two with drinks",
+    "suggested_refinements": ["更安静一点", "再便宜一点", "离地铁近一点"]
   }
 ]
 
@@ -343,15 +381,23 @@ Return ONLY the JSON array, no other text.`,
   });
 
   const jsonMatch = text.match(/\[[\s\S]*\]/);
-  if (!jsonMatch) return [];
+  if (!jsonMatch) return { cards: [], suggested_refinements: [] };
   let raw: unknown;
   try {
     raw = JSON.parse(jsonMatch[0]);
   } catch {
-    return [];
+    return { cards: [], suggested_refinements: [] };
   }
   const parsed = RankedItemArraySchema.safeParse(raw);
-  if (!parsed.success) return [];
+  if (!parsed.success) return { cards: [], suggested_refinements: [] };
+
+  // Extract suggested_refinements from first item (they should all be the same)
+  const suggested_refinements: string[] = parsed.data[0]?.suggested_refinements ?? [];
+
+  // Merge custom weights with defaults
+  const effectiveWeights = customWeights
+    ? { ...DEFAULT_WEIGHTS, ...customWeights }
+    : DEFAULT_WEIGHTS;
 
   // Phase 3.2: compute weighted_total and re-sort by it
   type MappedItem = {
@@ -370,7 +416,7 @@ Return ONLY the JSON array, no other text.`,
     .filter((item) => item.restaurant_index < restaurants.length)
     .map((item): MappedItem => {
       if (item.scoring) {
-        const weighted_total = computeWeightedScore(item.scoring);
+        const weighted_total = computeWeightedScore(item.scoring, effectiveWeights);
         return {
           ...item,
           score: weighted_total,
@@ -391,7 +437,7 @@ Return ONLY the JSON array, no other text.`,
     })
     .map((item, i) => ({ ...item, rank: i + 1 }));
 
-  return cards;
+  return { cards, suggested_refinements };
 }
 
 // ─── Main Agent Function ──────────────────────────────────────────────────────
@@ -403,10 +449,13 @@ export async function runAgent(
   gpsCoords: { lat: number; lng: number } | null = null,
   nearLocation?: string,
   sessionPreferences?: SessionPreferences,
-  profileContext?: string
+  profileContext?: string,
+  streamCallbacks?: StreamCallbacks,
+  customWeights?: Partial<typeof DEFAULT_WEIGHTS>
 ): Promise<{
   requirements: UserRequirements;
   recommendations: RecommendationCard[];
+  suggested_refinements: string[];
 }> {
   const city = CITIES[cityId] ?? CITIES[DEFAULT_CITY];
   const cityFullName = gpsCoords ? "your current location" : city.fullName;
@@ -427,6 +476,26 @@ export async function runAgent(
     nearLocation
   );
 
+  // Phase 4.1: Send partial results after candidate gathering
+  if (streamCallbacks?.onPartial) {
+    // Quick top 3 sorted by rating * log(review_count + 1)
+    const quickTop3: RecommendationCard[] = restaurants
+      .slice()
+      .sort((a, b) => b.rating * Math.log(b.review_count + 1) - a.rating * Math.log(a.review_count + 1))
+      .slice(0, 3)
+      .map((r, i) => ({
+        restaurant: r,
+        rank: i + 1,
+        score: r.rating,
+        why_recommended: `${r.name} — ⭐${r.rating} (${r.review_count} reviews)`,
+        best_for: r.cuisine,
+        watch_out: "",
+        not_great_if: "",
+        estimated_total: r.price,
+      }));
+    streamCallbacks.onPartial(quickTop3, requirements);
+  }
+
   // Phase 3.1: Extract review signals for top candidates (non-blocking)
   const reviewSignalsMap = await fetchReviewSignals(
     restaurants.slice(0, 12),
@@ -441,23 +510,24 @@ export async function runAgent(
   }));
 
   // Layer 4+5+6: Rank and explain (with scoring + preferences)
-  const recommendations = await rankAndExplain(
+  const { cards, suggested_refinements } = await rankAndExplain(
     requirements,
     candidatesWithSignals,
     semanticSignals,
     conversationHistory,
     cityFullName,
     sessionPreferences,
-    profileContext
+    profileContext,
+    customWeights
   );
 
   // Add OpenTable search URLs
-  const withOpenTable = recommendations.map((card) => ({
+  const withOpenTable = cards.map((card) => ({
     ...card,
     opentable_url: card.restaurant?.name
       ? `https://www.opentable.com/s?term=${encodeURIComponent(card.restaurant.name + " " + city.fullName)}&covers=${requirements.party_size ?? 2}`
       : undefined,
   }));
 
-  return { requirements, recommendations: withOpenTable };
+  return { requirements, recommendations: withOpenTable, suggested_refinements };
 }
