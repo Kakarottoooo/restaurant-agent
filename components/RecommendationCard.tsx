@@ -404,7 +404,7 @@ export default function RecommendationCard({
           </div>
         )}
 
-        {/* Phase 3.1: Real reviews say */}
+        {/* Phase 5.1: Real reviews say (with Google review source + quotes) */}
         {r.review_signals && (
           <div
             style={{
@@ -415,17 +415,33 @@ export default function RecommendationCard({
               marginBottom: "10px",
             }}
           >
-            <p
-              style={{
-                fontFamily: "var(--font-dm-sans)",
-                fontSize: "12px",
-                fontWeight: 500,
-                color: "var(--text-secondary)",
-                marginBottom: "6px",
-              }}
-            >
-              Real reviews say
-            </p>
+            <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "6px" }}>
+              <p
+                style={{
+                  fontFamily: "var(--font-dm-sans)",
+                  fontSize: "12px",
+                  fontWeight: 500,
+                  color: "var(--text-secondary)",
+                  margin: 0,
+                }}
+              >
+                Real reviews say
+              </p>
+              {r.google_reviews && r.google_reviews.length >= 2 && (
+                <span
+                  style={{
+                    fontFamily: "var(--font-dm-sans)",
+                    fontSize: "10px",
+                    color: "var(--gold, #C9A84C)",
+                    backgroundColor: "rgba(201,168,76,0.12)",
+                    borderRadius: "4px",
+                    padding: "1px 5px",
+                  }}
+                >
+                  Google Maps
+                </span>
+              )}
+            </div>
             <div
               style={{
                 display: "flex",
@@ -477,6 +493,31 @@ export default function RecommendationCard({
                 >
                   ⚠ {r.review_signals.red_flags.slice(0, 2).join(" · ")}
                 </span>
+              )}
+              {/* Phase 5.1: Show up to 2 real review quotes */}
+              {r.google_reviews && r.google_reviews.length > 0 && (
+                <div style={{ marginTop: "6px", display: "flex", flexDirection: "column", gap: "4px" }}>
+                  {r.google_reviews.slice(0, 2).map((review, i) => (
+                    <blockquote
+                      key={i}
+                      style={{
+                        fontFamily: "var(--font-dm-sans)",
+                        fontSize: "11px",
+                        color: "var(--text-secondary)",
+                        fontStyle: "italic",
+                        margin: 0,
+                        paddingLeft: "8px",
+                        borderLeft: "2px solid var(--border)",
+                        lineHeight: 1.5,
+                      }}
+                    >
+                      &ldquo;{review.text.length > 120 ? review.text.slice(0, 120) + "…" : review.text}&rdquo;
+                      <span style={{ fontStyle: "normal", fontSize: "10px", marginLeft: "4px", opacity: 0.7 }}>
+                        — Google Maps, {review.relative_time_description}
+                      </span>
+                    </blockquote>
+                  ))}
+                </div>
               )}
             </div>
           </div>

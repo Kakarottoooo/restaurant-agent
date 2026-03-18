@@ -8,6 +8,8 @@ import { useChat, LOADING_STEPS } from "@/app/hooks/useChat";
 import { useLocation } from "@/app/hooks/useLocation";
 import { useFavorites } from "@/app/hooks/useFavorites";
 import { usePreferences, formatProfileForPrompt } from "@/app/hooks/usePreferences";
+import { useVoiceInput } from "@/app/hooks/useVoiceInput";
+import { useAuth } from "@/app/hooks/useAuth";
 import { RecommendationCard as CardType } from "@/lib/types";
 
 // Leaflet is not SSR-compatible
@@ -52,6 +54,23 @@ export default function Home() {
   const bottomRef = useRef<HTMLDivElement>(null);
   const [prefModalOpen, setPrefModalOpen] = useState(false);
 
+  // Phase 5.3: Auth
+  const auth = useAuth();
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+  const [upgradePromptShown, setUpgradePromptShown] = useState(false);
+
+  // Phase 5.2: Voice input
+  const { isListening, isSupported: voiceSupported, startListening, stopListening } = useVoiceInput(
+    (transcript) => {
+      chat.setInput(transcript);
+      // Auto-send after a short delay so the input value is set
+      setTimeout(() => {
+        learnFromSearch(transcript);
+        chat.sendMessage(transcript);
+      }, 100);
+    }
+  );
+
   // Phase 4.3: Compare state
   const [compareSelection, setCompareSelection] = useState<(CardType | null)[]>([null, null]);
   const [compareOpen, setCompareOpen] = useState(false);
@@ -61,6 +80,14 @@ export default function Home() {
     learnWeightsFromFeedback();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Phase 5.3: Migrate localStorage data to cloud after sign-in
+  useEffect(() => {
+    if (auth.isSignedIn) {
+      auth.migrateLocalDataToCloud();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [auth.isSignedIn]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -934,18 +961,182 @@ export default function Home() {
             ⚙
           </button>
 
-          {/* Powered by */}
-          <span
-            className="ml-auto text-xs flex-shrink-0"
-            style={{
-              color: "var(--text-muted)",
-              fontFamily: "var(--font-dm-sans)",
-            }}
-          >
-            Powered by Claude
-          </span>
+          {/* Phase 5.3: Auth area */}
+          <div className="ml-auto flex-shrink-0 relative">
+            {auth.isSignedIn ? (
+              /* Signed-in: Avatar button */
+              <>
+                <button
+                  onClick={() => setAccountMenuOpen((o) => !o)}
+                  aria-label="Account menu"
+                  style={{
+                    width: "30px",
+                    height: "30px",
+                    borderRadius: "50%",
+                    overflow: "hidden",
+                    border: "1.5px solid var(--gold)",
+                    cursor: "pointer",
+                    background: "none",
+                    padding: 0,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    backgroundColor: "var(--gold)",
+                    color: "#fff",
+                    fontFamily: "var(--font-dm-sans)",
+                    fontSize: "12px",
+                    fontWeight: 600,
+                  }}
+                >
+                  {auth.userAvatar ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={auth.userAvatar} alt="avatar" width={30} height={30} style={{ objectFit: "cover" }} />
+                  ) : (
+                    (auth.userDisplayName?.[0] ?? "U").toUpperCase()
+                  )}
+                </button>
+                {accountMenuOpen && (
+                  <div
+                    style={{
+                      position: "absolute",
+                      right: 0,
+                      top: "calc(100% + 8px)",
+                      backgroundColor: "var(--card)",
+                      border: "0.5px solid var(--border)",
+                      borderRadius: "12px",
+                      boxShadow: "0 4px 16px rgba(0,0,0,0.16)",
+                      minWidth: "160px",
+                      zIndex: 50,
+                      overflow: "hidden",
+                    }}
+                  >
+                    <div
+                      style={{
+                        padding: "10px 14px",
+                        fontFamily: "var(--font-dm-sans)",
+                        fontSize: "12px",
+                        color: "var(--text-secondary)",
+                        borderBottom: "0.5px solid var(--border)",
+                      }}
+                    >
+                      {auth.userDisplayName ?? "Signed in"}
+                    </div>
+                    <button
+                      onClick={() => { setPrefModalOpen(true); setAccountMenuOpen(false); }}
+                      style={{
+                        display: "block",
+                        width: "100%",
+                        textAlign: "left",
+                        padding: "8px 14px",
+                        fontFamily: "var(--font-dm-sans)",
+                        fontSize: "13px",
+                        color: "var(--text-primary)",
+                        background: "none",
+                        border: "none",
+                        cursor: "pointer",
+                      }}
+                    >
+                      偏好设置
+                    </button>
+                    <button
+                      onClick={() => { auth.signOut(); setAccountMenuOpen(false); }}
+                      style={{
+                        display: "block",
+                        width: "100%",
+                        textAlign: "left",
+                        padding: "8px 14px",
+                        fontFamily: "var(--font-dm-sans)",
+                        fontSize: "13px",
+                        color: "var(--text-secondary)",
+                        background: "none",
+                        border: "none",
+                        cursor: "pointer",
+                        borderTop: "0.5px solid var(--border)",
+                      }}
+                    >
+                      退出登录
+                    </button>
+                  </div>
+                )}
+              </>
+            ) : (
+              /* Not signed in: Login button */
+              <button
+                onClick={() => auth.signIn()}
+                style={{
+                  fontFamily: "var(--font-dm-sans)",
+                  fontSize: "12px",
+                  color: "var(--text-secondary)",
+                  background: "none",
+                  border: "0.5px solid var(--border)",
+                  borderRadius: "16px",
+                  padding: "4px 10px",
+                  cursor: "pointer",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                登录
+              </button>
+            )}
+          </div>
         </div>
       </header>
+
+      {/* Phase 5.3: Upgrade prompt toast (shown after 3rd favorite when not signed in) */}
+      {upgradePromptShown && !auth.isSignedIn && (
+        <div
+          style={{
+            position: "fixed",
+            bottom: "80px",
+            left: "50%",
+            transform: "translateX(-50%)",
+            backgroundColor: "var(--card)",
+            border: "0.5px solid var(--gold)",
+            borderRadius: "12px",
+            padding: "10px 16px",
+            zIndex: 100,
+            boxShadow: "0 4px 16px rgba(0,0,0,0.16)",
+            maxWidth: "320px",
+            width: "calc(100% - 32px)",
+            display: "flex",
+            alignItems: "center",
+            gap: "10px",
+          }}
+        >
+          <span
+            style={{
+              fontFamily: "var(--font-dm-sans)",
+              fontSize: "13px",
+              color: "var(--text-primary)",
+              flex: 1,
+            }}
+          >
+            保存到云端，换设备也能看到你的收藏
+          </span>
+          <button
+            onClick={() => { auth.signIn(); setUpgradePromptShown(false); }}
+            style={{
+              fontFamily: "var(--font-dm-sans)",
+              fontSize: "12px",
+              color: "#fff",
+              backgroundColor: "var(--gold)",
+              border: "none",
+              borderRadius: "8px",
+              padding: "4px 10px",
+              cursor: "pointer",
+              flexShrink: 0,
+            }}
+          >
+            登录
+          </button>
+          <button
+            onClick={() => setUpgradePromptShown(false)}
+            style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-secondary)", fontSize: "16px", padding: 0 }}
+          >
+            ×
+          </button>
+        </div>
+      )}
 
       {/* ─── Map Mode ───────────────────────────────────────── */}
       {isMapMode && (
@@ -1145,9 +1336,15 @@ export default function Home() {
                         card={card}
                         index={i}
                         isFavorite={favorites.has(card.restaurant?.id ?? "")}
-                        onToggleFavorite={() =>
-                          toggleFavorite(card.restaurant?.id ?? "", card)
-                        }
+                        onToggleFavorite={() => {
+                          const isAdding = !favorites.has(card.restaurant?.id ?? "");
+                          toggleFavorite(card.restaurant?.id ?? "", card);
+                          // Phase 5.3: Show upgrade prompt after 3rd favorite
+                          if (isAdding && !auth.isSignedIn && !upgradePromptShown) {
+                            const newCount = favorites.size + 1;
+                            if (newCount >= 3) setUpgradePromptShown(true);
+                          }
+                        }}
                         nearLocationLabel={location.nearLocation || undefined}
                         currentQuery={lastUserQuery}
                         onCompare={() => {
@@ -1233,7 +1430,7 @@ export default function Home() {
         <div className="max-w-2xl mx-auto flex gap-2 items-center">
           <input
             type="text"
-            value={chat.input}
+            value={isListening ? "" : chat.input}
             onChange={(e) => chat.setInput(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter") {
@@ -1242,7 +1439,9 @@ export default function Home() {
               }
             }}
             placeholder={
-              hasMessages
+              isListening
+                ? "正在聆听..."
+                : hasMessages
                 ? "Refine: 'more quiet', 'cheaper options'..."
                 : "Describe what you're looking for..."
             }
@@ -1250,14 +1449,57 @@ export default function Home() {
             className="flex-1 outline-none px-4 py-2.5"
             style={{
               backgroundColor: "var(--bg)",
-              border: "0.5px solid var(--border)",
+              border: `0.5px solid ${isListening ? "var(--gold)" : "var(--border)"}`,
               borderRadius: "24px",
               color: "var(--text-primary)",
               fontFamily: "var(--font-dm-sans)",
               fontSize: "13px",
+              transition: "border-color 0.2s",
             }}
-            disabled={chat.loading}
+            disabled={chat.loading || isListening}
           />
+          {/* Phase 5.2: Mic button — hidden when voice not supported */}
+          {voiceSupported && (
+            <button
+              onClick={isListening ? stopListening : startListening}
+              disabled={chat.loading}
+              aria-label={isListening ? "Stop listening" : "Start voice input"}
+              style={{
+                width: "44px",
+                height: "44px",
+                borderRadius: "50%",
+                backgroundColor: isListening ? "var(--gold)" : "var(--text-primary)",
+                color: isListening ? "#fff" : "var(--gold)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                flexShrink: 0,
+                border: "none",
+                cursor: chat.loading ? "not-allowed" : "pointer",
+                opacity: chat.loading ? 0.4 : 1,
+                transition: "background-color 0.2s, transform 0.2s",
+                transform: isListening ? "scale(1.08)" : "scale(1)",
+                boxShadow: isListening ? "0 0 0 4px rgba(201,168,76,0.25)" : "none",
+              }}
+            >
+              {isListening ? (
+                // Animated pulse when listening
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                  <rect x="9" y="2" width="6" height="14" rx="3" />
+                  <path d="M5 11a7 7 0 0 0 14 0" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round"/>
+                  <line x1="12" y1="18" x2="12" y2="22" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                  <line x1="8" y1="22" x2="16" y2="22" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                </svg>
+              ) : (
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                  <rect x="9" y="2" width="6" height="14" rx="3" />
+                  <path d="M5 11a7 7 0 0 0 14 0" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round"/>
+                  <line x1="12" y1="18" x2="12" y2="22" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                  <line x1="8" y1="22" x2="16" y2="22" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                </svg>
+              )}
+            </button>
+          )}
           <button
             onClick={() => {
               learnFromSearch(chat.input);

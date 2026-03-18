@@ -24,6 +24,13 @@ export interface ReviewSignals {
   review_confidence: "high" | "medium" | "low";
 }
 
+export interface GoogleReview {
+  author_name: string;
+  rating: number;
+  relative_time_description: string;
+  text: string;
+}
+
 export interface Restaurant {
   id: string;
   name: string;
@@ -41,6 +48,7 @@ export interface Restaurant {
   lat?: number;
   lng?: number;
   review_signals?: ReviewSignals;
+  google_reviews?: GoogleReview[];
 }
 
 export interface ScoringDimensions {

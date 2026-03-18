@@ -1,88 +1,52 @@
 # Shared Task Notes
 
 ## Status
-Phase 4 fully implemented and build passes. All PLAN.md phases complete.
+All 5 phases complete. Build passes cleanly.
 
 ## Architecture notes
 - `FlyToController` is a render-null react-leaflet child component
 - Map Leaflet icon creation uses `L.divIcon` with inline HTML (SSR-safe via dynamic import with `ssr: false`)
 - `isMapMode` flag in `page.tsx` conditionally renders map or list branches
-- Filter chips are hidden in map mode
 - Icon script: `scripts/generate-icons.mjs` — run with `node scripts/generate-icons.mjs` to regenerate
+- middleware renamed to `proxy.ts` (Next.js 16 convention)
 
 ## Color theme (dark mode tokens in app/globals.css)
 - `--bg: #1C1C1C`, `--card: #242424`, `--card-2: #2A2A2A`
 - `--text-primary: #F0EAD6`, `--text-secondary: #8A8070`, `--gold: #C9A84C`
 
-## Phase 4 features (implemented this iteration)
+## Phase 5 features (implemented this iteration)
 
-### Phase 4.1 — Streaming Response
-- `StreamCallbacks` type in `lib/agent.ts`; `runAgent` accepts `streamCallbacks?: StreamCallbacks`
-- After `gatherCandidates`, sends quick top-3 partial cards (sorted by rating × log(review_count)) via `onPartial` callback
-- `rankAndExplain` now returns `{ cards, suggested_refinements }` instead of just `RecommendationCard[]`
-- `app/api/chat/route.ts`: switched to `ReadableStream` SSE. Events: `partial`, `complete`, `error`
-- `app/hooks/useChat.ts`: reads SSE stream; `isStreaming` and `suggestedRefinements` states added
+### Phase 5.1 — Real Review Signals
+- `GoogleReview` interface in `lib/types.ts`; `google_reviews?: GoogleReview[]` on `Restaurant`
+- `googlePlacesSearch` now includes `places.reviews` in FieldMask → maps to `google_reviews[]`
+- `fetchReviewSignals` in `lib/tools.ts`: uses Google reviews (when ≥2 available) as primary source, Tavily (reddit/yelp) as fallback for restaurants with fewer reviews
+- `RecommendationCard.tsx`: "Real reviews say" now shows "Google Maps" badge + original quote excerpts (max 2) with author and time attribution
 
-### Phase 4.2 — Server-Side Telemetry
-- `app/api/telemetry/route.ts`: POST endpoint, logs `SelectionEvent` as JSON
-- `RecommendationCard.tsx`: `requestId` prop; Map/Reserve clicks fire telemetry via fire-and-forget
-- `app/api/chat/route.ts`: structured JSON logging per request with `request_id` (crypto.randomUUID())
+### Phase 5.2 — Voice Input
+- `app/hooks/useVoiceInput.ts`: custom hook wrapping Web Speech API (`SpeechRecognition`/`webkitSpeechRecognition`)
+- Auto-detects language (zh-CN for Chinese browsers, en-US otherwise)
+- Returns `isSupported` flag — mic button hidden when browser doesn't support it
+- `page.tsx`: mic button added to input bar; gold pulse animation when listening; auto-sends on result
+- Input placeholder switches to "正在聆听..." while listening
 
-### Phase 4.3 — Collaborative Refinement UI
-- `suggested_refinements?: string[]` added to `RecommendationCard` type and `RankedItemSchema`
-- `rankAndExplain` prompt asks AI for 3-5 `suggested_refinements` based on result distribution
-- `app/page.tsx`: refine chip row below filter chips; compare functionality with bottom-sheet side-by-side scoring panel
-- `RecommendationCard.tsx`: `onCompare`/`isComparing` props + "对比" button
-
-### Phase 4.4 — Wider Funnel
-- `gatherCandidates` runs primary + broadened search in parallel, merges+deduplicates by `id`
-- Three-stage funnel: Recall (30-60) → Pre-filter (rating≥3.5 & reviews≥30, top 15) → Re-rank
-
-### Phase 4.5 — Shareable Decision Card
-- `app/api/share/route.ts`: GET, decodes `r` base64 param
-- Share button generates `/share/[token]` URL with top-3 cards encoded as base64
-- `app/share/[token]/page.tsx`: client component decodes token, shows top-3 cards
-
-### Phase 4.6 — Feedback → Ranking Improvement
-- `LearnedWeights` interface in `lib/types.ts`
-- `usePreferences.ts`: `learnedWeights` state + `learnWeightsFromFeedback()` (requires ≥10 feedback records)
-- `ChatRequestSchema` accepts `customWeights`; `runAgent` accepts and applies custom weights
-- `app/page.tsx`: passes `learnedWeights` to `useChat`, shows learned weight bars in preferences modal
-
-## Phase 3 features (for reference)
-
-### Phase 3.1 — Review Signal Extraction
-- `ReviewSignals` interface in `lib/types.ts`, added to `Restaurant.review_signals?`
-- `ReviewSignalsSchema` in `lib/schemas.ts`
-- `fetchReviewSignals()` in `lib/tools.ts` — uses Tavily advanced search + MiniMax to extract structured signals for top 12 candidates
-- `lib/agent.ts`: called between `gatherCandidates` and `rankAndExplain`; signals injected into restaurant objects and formatted in the ranking prompt
-- `RecommendationCard.tsx`: "Real reviews say" section shows noise, wait, notable dishes, red flags
-
-### Phase 3.2 — Structured Scoring Framework
-- `ScoringDimensions` interface in `lib/types.ts`, `ScoringDimensionsSchema` in `lib/schemas.ts`
-- `computeWeightedScore()` in `lib/agent.ts` with weights: scene_match 30%, budget_match 25%, review_quality 20%, location_convenience 15%, preference_match 10%
-- `rankAndExplain` prompt now asks AI to fill 5-dimension scoring; system computes `weighted_total` and re-sorts
-- `RecommendationCard.tsx`: collapsible dimension score bars (click "综合评分 X.X" to expand)
-
-### Phase 3.3a — Session Preferences
-- `SessionPreferences` interface in `lib/types.ts`
-- `extractRefinements()` in `lib/agent.ts` (lightweight AI call)
-- `useChat.ts`: client-side lightweight refinement detection (quiet/lively/cheaper/no chains)
-- `sessionPreferences` passed to `/api/chat` and injected in both `parseIntent` and `rankAndExplain` prompts
-- `ChatRequestSchema` updated to accept `sessionPreferences` and `profileContext`
-
-### Phase 3.3b — Persistent Preferences
-- `UserPreferenceProfile` interface in `lib/types.ts`
-- `app/hooks/usePreferences.ts`: full hook with `updateProfile`, `learnFromFavorite`, `learnFromSearch`, `learnFromFeedback`, `resetProfile`; localStorage-backed
-- `formatProfileForPrompt()` exported — formats profile as natural language for AI context
-- `useFavorites.ts` updated to accept optional `learnFromFavorite` callback (called on add, not remove)
-- `page.tsx`: preferences modal (⚙ button in header) with dietary restrictions, noise preference toggle, chains toggle, budget slider
-- Profile context injected into `useChat` → `/api/chat` → `runAgent` → `parseIntent`
-
-### Phase 3.3c — Feedback Loop
-- `FeedbackRecord` interface in `lib/types.ts`
-- `RecommendationCard.tsx`: "去了？分享体验" link at card bottom; 👍/👎 rating; issue multi-select; saves to localStorage `restaurant-feedback` (max 50)
-- `usePreferences.ts`: `learnFromFeedback` auto-applies feedback to profile (e.g., "比描述的吵" → `noise_preference: "quiet"`)
+### Phase 5.3 — User Account System (Clerk)
+- `@clerk/nextjs` + `@vercel/postgres` installed
+- Auth architecture: `AuthContext` (safe context, never throws) + `ClerkSync` (bridges Clerk state to context, only rendered inside ClerkProvider)
+- `clerkEnabled` check in `layout.tsx` — only wraps with ClerkProvider when real keys are configured
+- Env vars needed: `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`, `POSTGRES_URL`
+- DB schema in `lib/schema.sql`, init in `lib/db.ts`
+- API routes: `app/api/user/profile/route.ts`, `app/api/user/favorites/route.ts`, `app/api/user/feedback/route.ts`
+- `useAuth` hook in `app/hooks/useAuth.ts` — reads from AuthContext, includes `migrateLocalDataToCloud()`
+- `usePreferences` + `useFavorites`: dual-track mode — localStorage when not signed in, cloud sync when signed in
+- Header: shows "登录" button when anonymous; avatar + dropdown when signed in
+- Upgrade prompt toast: appears after 3rd favorite when not signed in
+- Data migration: on sign-in, automatically uploads localStorage data to cloud
 
 ## Remaining work
-All PLAN.md phases complete. Future backlog: Itinerary Builder, User accounts, Community reviews.
+All PLAN.md phases (1–5) complete. Future backlog: Itinerary Builder, community reviews.
+
+## To activate Clerk/accounts
+1. Create project at https://clerk.com
+2. Add `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` and `CLERK_SECRET_KEY` to `.env.local`
+3. Provision Vercel Postgres (or Neon) and add `POSTGRES_URL`
+4. Run SQL in `lib/schema.sql` to create tables

@@ -1011,3 +1011,452 @@ Phase 4.6 排序权重闭环（约 3 天）
 | 数据可见性 | 零（无日志） | 延迟分布、rank 采纳率、失败率 |
 | 社交传播 | URL 复制 | 结构化分享卡片/短链接 |
 | 用户留存信号 | 无 | 选择事件 + 反馈 → 权重闭环 |
+
+---
+
+## 阶段五：护城河三件套 — 真实评论信号 · 语音输入 · 用户账号
+
+> 更新日期：2026-03-18
+> 前提：Phase 4 已完成。
+> 目标：补上与通用 AI 和传统 App 的三条真正差异化壁垒。Phase 4 完成后系统已经在功能层面完整，Phase 5 解决的是"为什么用户会持续来用你、而不去用 ChatGPT"这个问题：真实的评论数据让推荐结果更可信，语音输入让 refinement 体验快到不值得离开，账号系统让个性化真正跨设备积累。
+
+---
+
+### Phase 5.1 — 真实评论信号（Real Review Signals）
+
+**背景与问题**
+
+当前 `fetchReviewSignals` 用 Tavily 搜索博客/新闻片段作为"评论信号"来源，抓到的是营销内容而非真实用户反馈。AI 用这些信息生成的 noise_level、wait_time 等字段大量依赖推断，而非用户亲历。用户说"根据近期 Yelp 评论"，但实际数据并不是 Yelp 评论，这是信任风险。真正的壁垒在于：我们能提取出 Google Maps/Yelp 真实用户评论里的信号，而通用 AI 做不到这一点（它没有实时结构化评论数据）。
+
+**目标**
+
+对进入精排阶段的每家候选餐厅，抓取来自 Google Places Reviews API 的真实用户评论（最近 5 条，按 newest 排序），用 AI 从原文中提取结构化信号，替换当前 Tavily 摘要方案。
+
+**数据源选择**
+
+| 方案 | 优点 | 限制 |
+|------|------|------|
+| Google Places Reviews API（`reviews` 字段） | 已有 API Key，每次 Place Detail 调用自带最多 5 条评论，无额外费用 | 每家只有 5 条，且 Google 不允许批量抓取 |
+| Yelp Fusion API（`reviews` endpoint） | 每家最多 3 条精选评论，免费 | 需单独 API Key，评论截断严重 |
+| Tavily `site:` 定向搜索（现有方案改进） | 零新增 API 依赖 | 非结构化，依赖网页抓取质量 |
+
+**MVP 方案：优先用 Google Places Review 字段 + Tavily 定向 Reddit/Yelp 补充**
+
+**第一步：复用 Place Details 调用中的 `reviews` 字段**
+
+Google Places Detail API 响应中自带 `reviews[]` 数组（最多 5 条）。当前 `lib/tools.ts` 的 `googlePlacesSearch` 只取了 `name / rating / price_level / types` 等字段，未取 `reviews`。
+
+修改 `getPlaceDetails(placeId)` 调用，在 `fields` 参数中加入 `reviews`：
+
+```typescript
+// lib/tools.ts
+const fields = [
+  "place_id", "name", "rating", "user_ratings_total",
+  "price_level", "formatted_address", "geometry",
+  "opening_hours", "photos", "website", "types",
+  "reviews"   // ← 新增
+].join(",");
+```
+
+每条 review 结构：
+```typescript
+interface GoogleReview {
+  author_name: string;
+  rating: number;         // 1-5
+  relative_time_description: string; // "a month ago"
+  text: string;           // 用户原文，最多约 300 字
+}
+```
+
+将 5 条 review 原文拼接后，传给 MiniMax 提取 `ReviewSignals`，替换当前 Tavily 搜索方案。
+
+**第二步：Tavily 定向补充（当 Google 评论 < 3 条时）**
+
+```typescript
+// 当某家餐厅 Google 评论少于 3 条时，补一次定向搜索
+const tavilyQuery = `"${restaurant.name}" ${cityName} site:reddit.com OR site:yelp.com reviews`;
+```
+
+**修改 `fetchReviewSignals` 函数签名**
+
+```typescript
+async function fetchReviewSignals(
+  restaurants: Restaurant[],  // 每个 restaurant 对象此时已携带 google_reviews?
+  query: string,
+  cityFullName: string
+): Promise<Map<string, ReviewSignals>>
+```
+
+**新增 `Restaurant.google_reviews` 字段（`lib/types.ts`）**
+
+```typescript
+export interface GoogleReview {
+  author_name: string;
+  rating: number;
+  relative_time_description: string;
+  text: string;
+}
+
+// 在 Restaurant 接口中新增
+google_reviews?: GoogleReview[];
+```
+
+**AI 提取 Prompt 改进**
+
+将当前笼统的"analyze review text"改为原文直传：
+
+```
+You are extracting structured signals from real Google Maps user reviews.
+Below are up to 5 recent user reviews for "{restaurant_name}":
+
+[Review 1 - 5 stars - "a week ago"]
+"The pasta is handmade and the candlelight makes it feel intimate.
+ A bit loud on Friday nights but weekday dinners are peaceful."
+
+[Review 2 - 2 stars - "2 months ago"]
+"They only accept cash. Waited 50 minutes on a Saturday."
+
+Extract ReviewSignals from this evidence. Only report signals that appear in the text.
+Be conservative: if noise level is mentioned once in a 5-star review but twice in 1-star reviews, weight the negative signal more.
+```
+
+**修改 `RecommendationCard.tsx`**
+
+"Real reviews say"区块新增原始评论引用（最多 1-2 条摘录），用引号标注来源（"Google 用户评论"），增加可信度背书：
+
+```
+Real reviews say
+🤫 安静（工作日）/ 🔊 周五嘈杂
+⏱ 周末等位约 50 分钟
+⚠ 只收现金
+
+用户原话：
+"The candlelight makes it feel intimate...
+ A bit loud on Friday nights" — Google Maps, 1 周前
+```
+
+**成功标准**
+
+| 指标 | 当前 | Phase 5.1 完成后 |
+|------|------|----------------|
+| 评论数据来源 | Tavily 博客摘要 | Google Places 真实用户评论 |
+| 信号可信度 | 低（AI 推断） | 高（原文直提取） |
+| 每家候选评论数 | 0 | 最多 5 条（Google） + Reddit/Yelp 补充 |
+| UI 透明度 | "Real reviews say" 无来源 | 显示来源和时间 |
+
+---
+
+### Phase 5.2 — 语音输入（Voice Input）
+
+**背景与问题**
+
+用户做 refinement 时，说"更便宜一点"比打"更便宜一点"快 3-5 倍，在移动端 PWA 场景下尤其明显。底部输入栏已有麦克风按钮（Phase 1 设计），但目前只是 UI 占位，没有接真正的语音识别。语音输入是移动端最自然的 refinement 方式，接通后可以让 refine 轮次从"懒得再打字"变成"随口一句话"。
+
+**目标**
+
+接通底部输入栏麦克风按钮，用 Web Speech API 实现浏览器端语音识别，识别结果直接填入输入框并自动发送。支持中英文混合输入。
+
+**技术方案**
+
+使用浏览器原生 `SpeechRecognition` API（Chrome/Edge/Safari 均支持），不依赖外部语音服务，无额外 API 费用：
+
+```typescript
+// app/hooks/useVoiceInput.ts（新增）
+export function useVoiceInput(onResult: (text: string) => void) {
+  const [isListening, setIsListening] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const recognitionRef = useRef<SpeechRecognition | null>(null);
+
+  function startListening() {
+    const SpeechRecognition =
+      window.SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      setError("该浏览器不支持语音输入");
+      return;
+    }
+    const recognition = new SpeechRecognition();
+    recognition.lang = "zh-CN";           // 中文优先
+    recognition.interimResults = false;   // 只取最终结果
+    recognition.maxAlternatives = 1;
+    recognition.onresult = (e) => {
+      const transcript = e.results[0][0].transcript;
+      onResult(transcript);
+      setIsListening(false);
+    };
+    recognition.onerror = () => setIsListening(false);
+    recognition.onend = () => setIsListening(false);
+    recognitionRef.current = recognition;
+    recognition.start();
+    setIsListening(true);
+  }
+
+  function stopListening() {
+    recognitionRef.current?.stop();
+    setIsListening(false);
+  }
+
+  return { isListening, error, startListening, stopListening };
+}
+```
+
+**交互设计**
+
+- **短按**麦克风按钮：开始录音，按钮变为脉冲动效金色圆圈（`isListening` 状态）
+- **再次点击 / 自动停止**：识别结果填入输入框，**自动触发发送**（不需要用户再点发送）
+- **识别中显示**：输入框出现"正在聆听..."占位文字
+- **不支持时**：麦克风按钮隐藏（`useEffect` 检测 `window.SpeechRecognition` 是否存在）
+- **lang 自适应**：若 `navigator.language` 为 `en-*` 则切换为 `en-US`，支持中英混合城市名
+
+**修改 `app/page.tsx`**
+
+将麦克风按钮从静态 UI 改为接入 `useVoiceInput`：
+
+```typescript
+const { isListening, error: voiceError, startListening, stopListening } = useVoiceInput(
+  (transcript) => {
+    setInputValue(transcript);   // 填入输入框
+    setTimeout(() => handleSubmit(transcript), 100);  // 自动发送
+  }
+);
+```
+
+麦克风按钮样式：
+- 默认：深棕填充，金色麦克风图标
+- `isListening`：金色填充，白色脉冲圆圈，scale 动效
+
+**不支持浏览器的降级处理**
+
+`useVoiceInput` 在不支持的环境返回 `isSupported: false`，`page.tsx` 据此隐藏麦克风按钮，输入栏自动扩宽填满空间。
+
+**成功标准**
+
+| 指标 | 当前 | Phase 5.2 完成后 |
+|------|------|----------------|
+| 麦克风按钮 | UI 占位，无功能 | 点击即录音，识别后自动发送 |
+| Refinement 路径 | 打字 → 点发送（2 步） | 说话 → 自动发送（1 步） |
+| 支持语言 | — | 中文 / 英文（自动切换） |
+| 额外 API 费用 | — | 零（浏览器原生） |
+
+---
+
+### Phase 5.3 — 用户账号系统（Anonymous + OAuth）
+
+**背景与问题**
+
+目前所有个性化数据（偏好 profile、收藏、反馈、学习权重）全部存在 localStorage，换设备归零，无法在服务端积累任何关于真实用户的数据。没有用户身份，就没有：跨设备个性化、用户级推荐质量分析、后续产品的留存/转化指标、任何形式的用户增长数据。但强制注册是用户流失最大的单点——所以默认匿名，账号只在用户想保存/跨设备同步时出现。
+
+**目标**
+
+默认匿名使用（零门槛），自愿升级为账号（Google OAuth 或邮箱一键注册），账号注册后自动将本地数据上传合并，实现无缝过渡。使用 **Clerk** 作为账号服务（Next.js 一等支持，免费额度覆盖早期阶段，内置 Google OAuth + Email Magic Link）。
+
+**匿名 → 账号升级流程**
+
+```
+首次打开 App
+    ↓
+匿名使用（localStorage 存偏好、收藏、反馈）
+    ↓
+触发升级提示（任意时机之一）：
+  - 用户主动点击 Header 右侧"登录/保存数据"按钮
+  - 用户收藏第 3 家餐厅时：弹出"创建账号以跨设备同步收藏"
+  - 反馈累积 5 条时：弹出"登录以保留你的偏好记忆"
+    ↓
+Clerk 注册弹窗：Google 一键登录 / Email Magic Link
+    ↓
+注册成功后：本地 localStorage 数据迁移上云
+```
+
+**技术架构**
+
+```
+Clerk（身份认证）
+    ↓
+Vercel Postgres / PlanetScale（用户数据存储）
+    ↓
+新增 API Routes：
+  /api/user/profile    — 读写 UserPreferenceProfile（替代 localStorage）
+  /api/user/favorites  — 读写收藏列表
+  /api/user/feedback   — 读写 FeedbackRecord
+```
+
+**新增文件**
+
+```
+app/
+  api/
+    user/
+      profile/route.ts    — GET/PATCH UserPreferenceProfile
+      favorites/route.ts  — GET/POST/DELETE 收藏
+      feedback/route.ts   — GET/POST FeedbackRecord
+  hooks/
+    useAuth.ts            — 封装 Clerk useUser，暴露 isSignedIn / userId / isAnonymous
+middleware.ts             — Clerk 中间件（保护需要登录的路由）
+lib/
+  db.ts                   — Vercel Postgres 连接
+  schema.sql              — users / favorites / feedback / preference_profiles 表结构
+```
+
+**数据库表设计**
+
+```sql
+-- 用户偏好（替代 localStorage）
+CREATE TABLE preference_profiles (
+  user_id       TEXT PRIMARY KEY,   -- Clerk userId
+  profile_json  JSONB NOT NULL,     -- UserPreferenceProfile
+  updated_at    TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 收藏
+CREATE TABLE favorites (
+  id            SERIAL PRIMARY KEY,
+  user_id       TEXT NOT NULL,
+  restaurant_id TEXT NOT NULL,
+  card_json     JSONB NOT NULL,     -- 快照：RecommendationCard
+  saved_at      TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(user_id, restaurant_id)
+);
+
+-- 反馈
+CREATE TABLE feedback (
+  id              SERIAL PRIMARY KEY,
+  user_id         TEXT NOT NULL,
+  restaurant_id   TEXT NOT NULL,
+  restaurant_name TEXT NOT NULL,
+  query           TEXT,
+  satisfied       BOOLEAN NOT NULL,
+  issues          TEXT[],
+  created_at      TIMESTAMPTZ DEFAULT NOW()
+);
+```
+
+**匿名用户数据迁移**
+
+注册成功后，客户端自动执行一次迁移：
+
+```typescript
+// app/hooks/useAuth.ts
+async function migrateLocalDataToCloud(userId: string) {
+  const localProfile = localStorage.getItem("restaurant-preferences");
+  const localFavorites = localStorage.getItem("restaurant-favorites");
+  const localFeedback = localStorage.getItem("restaurant-feedback");
+
+  await Promise.all([
+    localProfile && fetch("/api/user/profile", {
+      method: "PATCH",
+      body: JSON.stringify({ profile: JSON.parse(localProfile) })
+    }),
+    localFavorites && fetch("/api/user/favorites", {
+      method: "POST",
+      body: JSON.stringify({ bulk: JSON.parse(localFavorites) })
+    }),
+    localFeedback && fetch("/api/user/feedback", {
+      method: "POST",
+      body: JSON.stringify({ bulk: JSON.parse(localFeedback) })
+    }),
+  ]);
+
+  // 迁移完成后清除本地存储（数据已在云端）
+  localStorage.removeItem("restaurant-preferences");
+  localStorage.removeItem("restaurant-favorites");
+  localStorage.removeItem("restaurant-feedback");
+}
+```
+
+**修改现有 Hooks**
+
+`usePreferences`、`useFavorites` 改为双轨模式：
+- 未登录：继续读写 localStorage（零改动用户体验）
+- 已登录：读写云端 API，localStorage 作为乐观更新缓存
+
+```typescript
+// 伪代码
+const { isSignedIn } = useAuth();
+
+function updateProfile(patch) {
+  // 本地立即更新（乐观）
+  setProfile(prev => merge(prev, patch));
+  localStorage.setItem("restaurant-preferences", JSON.stringify(profile));
+
+  // 已登录则同步云端
+  if (isSignedIn) {
+    fetch("/api/user/profile", { method: "PATCH", body: JSON.stringify(patch) });
+  }
+}
+```
+
+**Header UI 变化**
+
+当前 Header 右侧是"Powered by Claude"文字。Phase 5.3 后：
+
+```
+Folio.  [📍 New York]  [登录]          ← 未登录
+Folio.  [📍 New York]  [头像 缩写]     ← 已登录（点击展开：我的收藏 / 偏好设置 / 退出）
+```
+
+登录按钮点击 → 触发 Clerk `<SignIn>` modal，支持：
+- Google 一键登录
+- Email Magic Link（无需密码）
+
+**升级触发时机（不强制，自愿）**
+
+| 触发事件 | 提示文案 |
+|---------|---------|
+| 收藏第 3 家餐厅 | "保存到云端，换设备也能看到你的收藏" |
+| 反馈累积 5 条 | "登录以保留你的口味记忆，让推荐越来越准" |
+| 点击分享按钮 | "创建账号以查看分享给你的收藏夹" |
+| 主动点击 Header 登录按钮 | — |
+
+提示以 toast 或底部 banner 形式出现，一次会话只出现一次，不打扰用户。
+
+**成功标准**
+
+| 指标 | 当前 | Phase 5.3 完成后 |
+|------|------|----------------|
+| 个性化持久化 | localStorage，换设备归零 | 云端，跨设备同步 |
+| 注册门槛 | — | Google 一键或 Email，< 30 秒 |
+| 匿名可用 | 是 | 是（默认匿名，自愿升级） |
+| 用户数据积累 | 零（无法分析） | 可分析真实用户偏好分布、留存、反馈模式 |
+| 匿名数据迁移 | — | 注册后自动上云，无数据损失 |
+
+---
+
+### Phase 5 执行顺序
+
+```
+Phase 5.1 真实评论信号（约 3 天）
+  ├── 修改 tools.ts：getPlaceDetails 加入 reviews 字段
+  ├── 新增 GoogleReview 类型（lib/types.ts）
+  ├── 修改 fetchReviewSignals：优先用 Google 评论，Tavily 补充
+  ├── 改进提取 Prompt：原文直传，保守提取
+  └── 修改 RecommendationCard：显示评论来源 + 原文摘录
+
+Phase 5.2 语音输入（约 2 天）
+  ├── 新增 useVoiceInput hook（app/hooks/useVoiceInput.ts）
+  ├── 修改 page.tsx：接入 hook，麦克风按钮激活 + 自动发送
+  └── 处理不支持浏览器的降级（隐藏按钮）
+
+Phase 5.3 用户账号系统（约 5-7 天）
+  ├── 安装 Clerk（@clerk/nextjs），配置 Google OAuth + Email Magic Link
+  ├── 新增 middleware.ts
+  ├── 新增数据库：Vercel Postgres，建表（preference_profiles / favorites / feedback）
+  ├── 新增 lib/db.ts
+  ├── 新增 api/user/profile、favorites、feedback 路由
+  ├── 新增 useAuth hook
+  ├── 修改 usePreferences + useFavorites：双轨模式（localStorage / 云端）
+  ├── 修改 Header：未登录显示「登录」，已登录显示头像
+  └── 实现匿名数据迁移逻辑（migrateLocalDataToCloud）
+```
+
+---
+
+### Phase 5 成功标准
+
+| 指标 | Phase 4 完成后 | Phase 5 完成后 |
+|------|--------------|--------------|
+| 评论数据来源 | Tavily 博客摘要 | Google Places 真实用户评论 |
+| 语音 refinement | 不支持 | 说一句话自动触发搜索 |
+| 个性化持久化 | localStorage，换设备归零 | 云端跨设备 |
+| 注册门槛 | — | Google 一键，< 30 秒 |
+| 匿名可用 | 是（默认） | 是（依然默认） |
+| 可分析的用户数据 | 零 | 偏好分布、留存率、反馈模式 |
+| 与通用 AI 差异化 | 中（评论信号可疑） | 高（真实评论 + 个人记忆） |
