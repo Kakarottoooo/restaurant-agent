@@ -7,6 +7,7 @@ export interface UserRequirements {
   noise_level?: "quiet" | "moderate" | "lively" | "any";
   location?: string;
   neighborhood?: string;
+  near_location?: string; // specific landmark/street/area to search near
   party_size?: number;
   constraints?: string[]; // no chains, no tourist traps, etc.
   priorities?: string[]; // what matters most

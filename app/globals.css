@@ -50,3 +50,8 @@ body {
   50%       { opacity: 0.4; }
 }
 .animate-pulse-gold { animation: pulseGold 1.5s ease-in-out infinite; }
+
+/* ─── Location Input ──────────────────────────────────── */
+.location-input::placeholder {
+  color: #B4A89A;
+}

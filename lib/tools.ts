@@ -1,16 +1,59 @@
 import { Restaurant } from "./types";
 
+// ─── Geocoding ────────────────────────────────────────────────────────────────
+
+export async function geocodeLocation(
+  address: string
+): Promise<{ lat: number; lng: number } | null> {
+  try {
+    const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${process.env.GOOGLE_PLACES_API_KEY}`;
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const data = await res.json();
+    const result = data.results?.[0];
+    if (!result) return null;
+    return {
+      lat: result.geometry.location.lat,
+      lng: result.geometry.location.lng,
+    };
+  } catch {
+    return null;
+  }
+}
+
+// ─── Haversine distance (meters) ─────────────────────────────────────────────
+
+function haversineDistance(
+  lat1: number,
+  lng1: number,
+  lat2: number,
+  lng2: number
+): number {
+  const R = 6371000;
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
 // ─── Google Places API ────────────────────────────────────────────────────────
 
 export async function googlePlacesSearch(params: {
   query: string;
   location?: string;
   cityCenter?: { lat: number; lng: number };
+  nearLocationCoords?: { lat: number; lng: number };
   maxResults?: number;
 }): Promise<Restaurant[]> {
   const location = params.location ?? "San Francisco, CA";
   const textQuery = `${params.query} in ${location}`;
-  const center = params.cityCenter ?? { lat: 37.7749, lng: -122.4194 };
+  const center =
+    params.nearLocationCoords ??
+    params.cityCenter ?? { lat: 37.7749, lng: -122.4194 };
+  const radius = params.nearLocationCoords ? 5000 : 20000;
 
   const res = await fetch(
     "https://places.googleapis.com/v1/places:searchText",
@@ -28,7 +71,7 @@ export async function googlePlacesSearch(params: {
         locationBias: {
           circle: {
             center: { latitude: center.lat, longitude: center.lng },
-            radius: 20000,
+            radius,
           },
         },
       }),
@@ -42,7 +85,7 @@ export async function googlePlacesSearch(params: {
 
   const data = await res.json();
 
-  return (data.places ?? []).map((p: any) => ({
+  const results: Restaurant[] = (data.places ?? []).map((p: any) => ({
     id: p.id,
     name: p.displayName?.text ?? "",
     cuisine: p.primaryTypeDisplayName?.text ?? "Restaurant",
@@ -59,6 +102,19 @@ export async function googlePlacesSearch(params: {
     lat: p.location?.latitude,
     lng: p.location?.longitude,
   }));
+
+  // If nearLocationCoords provided, calculate distances and sort by proximity
+  if (params.nearLocationCoords) {
+    const { lat: tLat, lng: tLng } = params.nearLocationCoords;
+    for (const r of results) {
+      if (r.lat !== undefined && r.lng !== undefined) {
+        r.distance = haversineDistance(tLat, tLng, r.lat, r.lng);
+      }
+    }
+    results.sort((a, b) => (a.distance ?? Infinity) - (b.distance ?? Infinity));
+  }
+
+  return results;
 }
 
 function priceLevelToSymbol(level?: string): string {

@@ -32,6 +32,9 @@ export default function Home() {
   const [cityId, setCityId] = useState(DEFAULT_CITY);
   const [gpsCoords, setGpsCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [isNearMe, setIsNearMe] = useState(false);
+  const [nearLocation, setNearLocation] = useState(""); // custom typed location
+  const [locationInput, setLocationInput] = useState(""); // live input text
+  const [locationOpen, setLocationOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -46,6 +49,9 @@ export default function Home() {
   const [gpsError, setGpsError] = useState<string | null>(null);
   const [supportsGps, setSupportsGps] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const locationRef = useRef<HTMLDivElement>(null);
+  const locationInputRef = useRef(""); // stable ref to avoid stale closures
+  const locationSuppressBlur = useRef(false);
   const city = CITIES[cityId];
 
   // Register service worker + check GPS support
@@ -75,12 +81,9 @@ export default function Home() {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, visibleCards]);
 
-  function handleCityChange(value: string) {
-    if (value === "USE_MY_LOCATION") {
-      requestGps();
-      return;
-    }
-    setCityId(value);
+  function handleCitySelect(id: string) {
+    setCityId(id);
+    setNearLocation("");
     setGpsCoords(null);
     setIsNearMe(false);
     setMessages([]);
@@ -88,8 +91,20 @@ export default function Home() {
     setAllCards([]);
   }
 
+  function submitNearLocation(value: string) {
+    setNearLocation(value);
+    setGpsCoords(null);
+    setIsNearMe(false);
+  }
+
+  function updateLocationInput(val: string) {
+    locationInputRef.current = val;
+    setLocationInput(val);
+  }
+
   function requestGps() {
     setGpsError(null);
+    setNearLocation("");
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         setGpsCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude });
@@ -171,6 +186,7 @@ export default function Home() {
           history,
           city: isNearMe ? null : cityId,
           gpsCoords: isNearMe ? gpsCoords : null,
+          nearLocation: nearLocation || undefined,
         }),
       });
 
@@ -207,8 +223,9 @@ export default function Home() {
 
   const hasMessages = messages.length > 0;
   const lastUserQuery = [...messages].reverse().find((m) => m.role === "user")?.content ?? "";
-  const cityLabel = isNearMe ? "Nearby" : city?.label ?? "";
+  const cityLabel = isNearMe ? "Nearby" : nearLocation || (city?.label ?? "");
   const mapCenter = isNearMe && gpsCoords ? gpsCoords : city?.center;
+  const locationDisplayValue = isNearMe ? "◎ Near Me" : nearLocation || (city?.label ?? "");
 
   const isMapMode = viewMode === "map" && allCards.length > 0;
 
@@ -322,36 +339,127 @@ export default function Home() {
             Folio<span style={{ color: "var(--gold)" }}>.</span>
           </span>
 
-          {/* City Selector */}
-          <div className="relative">
-            <select
-              value={isNearMe ? "USE_MY_LOCATION" : cityId}
-              onChange={(e) => handleCityChange(e.target.value)}
-              className="appearance-none outline-none cursor-pointer pr-5 pl-3 py-1 rounded-full text-xs font-medium"
-              style={{
-                backgroundColor: "var(--bg)",
-                border: "0.5px solid var(--gold)",
-                color: "var(--text-primary)",
-                fontFamily: "var(--font-dm-sans)",
-              }}
-            >
-              {supportsGps && (
-                <option value="USE_MY_LOCATION">⊕ Use My Location</option>
-              )}
-              {CITIES_SORTED.map((c) => (
-                <option key={c.id} value={c.id}>{c.label}</option>
-              ))}
-            </select>
-            <span className="absolute right-1.5 top-1/2 -translate-y-1/2 pointer-events-none text-xs" style={{ color: "var(--gold)" }}>▾</span>
-          </div>
+          {/* Location Input with Dropdown */}
+          <div className="relative flex-shrink-0" ref={locationRef}>
+            <div className="relative">
+              <input
+                type="text"
+                value={locationOpen ? locationInput : locationDisplayValue}
+                onChange={(e) => updateLocationInput(e.target.value)}
+                onFocus={() => {
+                  setLocationOpen(true);
+                  updateLocationInput("");
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    const val = locationInputRef.current.trim();
+                    if (val) submitNearLocation(val);
+                    setLocationOpen(false);
+                    updateLocationInput("");
+                    (e.target as HTMLInputElement).blur();
+                  }
+                  if (e.key === "Escape") {
+                    setLocationOpen(false);
+                    updateLocationInput("");
+                    (e.target as HTMLInputElement).blur();
+                  }
+                }}
+                onBlur={() => {
+                  setTimeout(() => {
+                    if (locationSuppressBlur.current) {
+                      locationSuppressBlur.current = false;
+                      return;
+                    }
+                    const val = locationInputRef.current.trim();
+                    if (val) submitNearLocation(val);
+                    setLocationOpen(false);
+                    updateLocationInput("");
+                  }, 0);
+                }}
+                placeholder="Near where? (e.g. Union Square)"
+                className="location-input outline-none"
+                style={{
+                  backgroundColor: "var(--bg)",
+                  border: "0.5px solid rgba(201,168,76,0.4)",
+                  borderRadius: "20px",
+                  fontFamily: "var(--font-dm-sans)",
+                  fontSize: "13px",
+                  color: "var(--text-primary)",
+                  padding: "4px 24px 4px 12px",
+                  width: "160px",
+                }}
+              />
+              <span className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" style={{ fontSize: "10px", color: "var(--gold)" }}>▾</span>
+            </div>
 
-          {/* Near Me badge */}
-          {isNearMe && (
-            <span className="text-xs px-2 py-0.5 rounded-full flex-shrink-0"
-              style={{ backgroundColor: "var(--gold)", color: "#fff", fontFamily: "var(--font-dm-sans)" }}>
-              ◎ Near Me
-            </span>
-          )}
+            {/* Dropdown */}
+            {locationOpen && (
+              <div
+                className="absolute top-full left-0 mt-1 z-50 overflow-y-auto"
+                style={{
+                  backgroundColor: "var(--card)",
+                  border: "0.5px solid var(--border)",
+                  borderRadius: "12px",
+                  boxShadow: "0 4px 16px rgba(0,0,0,0.12)",
+                  maxHeight: "240px",
+                  minWidth: "180px",
+                }}
+              >
+                {supportsGps && (
+                  <button
+                    onMouseDown={() => {
+                      locationSuppressBlur.current = true;
+                      requestGps();
+                      setLocationOpen(false);
+                      updateLocationInput("");
+                    }}
+                    className="w-full text-left px-3 py-2.5"
+                    style={{
+                      fontFamily: "var(--font-dm-sans)",
+                      fontSize: "13px",
+                      color: "var(--gold)",
+                      display: "block",
+                      background: "none",
+                      borderTop: "none",
+                      borderLeft: "none",
+                      borderRight: "none",
+                      borderBottom: "0.5px solid var(--border)",
+                      cursor: "pointer",
+                    }}
+                  >
+                    ⊕ Use My Location
+                  </button>
+                )}
+                {CITIES_SORTED.filter(
+                  (c) =>
+                    !locationInput.trim() ||
+                    c.label.toLowerCase().includes(locationInput.toLowerCase())
+                ).map((c) => (
+                  <button
+                    key={c.id}
+                    onMouseDown={() => {
+                      locationSuppressBlur.current = true;
+                      handleCitySelect(c.id);
+                      setLocationOpen(false);
+                      updateLocationInput("");
+                    }}
+                    className="w-full text-left px-3 py-2"
+                    style={{
+                      fontFamily: "var(--font-dm-sans)",
+                      fontSize: "13px",
+                      color: c.id === cityId ? "var(--gold)" : "var(--text-primary)",
+                      display: "block",
+                      background: "none",
+                      border: "none",
+                      cursor: "pointer",
+                    }}
+                  >
+                    {c.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
 
           {/* Powered by */}
           <span className="ml-auto text-xs flex-shrink-0"
@@ -517,6 +625,7 @@ export default function Home() {
                         index={i}
                         isFavorite={favorites.has(card.restaurant?.id ?? "")}
                         onToggleFavorite={() => toggleFavorite(card.restaurant?.id ?? "")}
+                        nearLocationLabel={nearLocation || undefined}
                       />
                     ))}
                   </div>

@@ -1,7 +1,7 @@
 // import Anthropic from "@anthropic-ai/sdk";
 // const client = new Anthropic();
 
-import { googlePlacesSearch, tavilySearch } from "./tools";
+import { googlePlacesSearch, tavilySearch, geocodeLocation } from "./tools";
 import { UserRequirements, Restaurant, RecommendationCard } from "./types";
 import { CITIES, DEFAULT_CITY } from "./cities";
 
@@ -64,6 +64,7 @@ Return JSON with these fields (omit fields that aren't mentioned):
   "noise_level": "quiet|moderate|lively|any",
   "location": "${cityFullName}",
   "neighborhood": "specific neighborhood or null",
+  "near_location": "specific landmark, address, or area to search near (e.g. 'Union Square', 'Times Square'), or null",
   "party_size": number or null,
   "constraints": ["no chains", "no tourist traps", "no wait", etc],
   "priorities": ["atmosphere", "food quality", "price", "service", etc]
@@ -85,13 +86,27 @@ Return JSON with these fields (omit fields that aren't mentioned):
 async function gatherCandidates(
   requirements: UserRequirements,
   cityId: string,
-  gpsCoords: { lat: number; lng: number } | null = null
+  gpsCoords: { lat: number; lng: number } | null = null,
+  uiNearLocation?: string
 ): Promise<{ restaurants: Restaurant[]; semanticSignals: string }> {
   const city = CITIES[cityId] ?? CITIES[DEFAULT_CITY];
-  const cityCenter = gpsCoords ?? city.center;
+
+  // UI near_location takes priority over parsed near_location from message
+  const effectiveNearLocation = uiNearLocation ?? requirements.near_location;
+
+  // Geocode near_location if provided
+  let nearLocationCoords: { lat: number; lng: number } | undefined;
+  if (effectiveNearLocation) {
+    const geocoded = await geocodeLocation(effectiveNearLocation);
+    if (geocoded) nearLocationCoords = geocoded;
+  }
+
+  const cityCenter = nearLocationCoords ?? gpsCoords ?? city.center;
 
   const location = gpsCoords
     ? "Nearby"
+    : effectiveNearLocation
+    ? effectiveNearLocation
     : requirements.neighborhood
     ? `${requirements.neighborhood}, ${city.fullName}`
     : city.fullName;
@@ -133,6 +148,7 @@ async function gatherCandidates(
       query: searchQuery,
       location,
       cityCenter,
+      nearLocationCoords,
       maxResults: 20,
     }),
     tavilySearch(`best ${tavilyQuery} reviews 2024`),
@@ -224,7 +240,8 @@ export async function runAgent(
   userMessage: string,
   conversationHistory: Array<{ role: "user" | "assistant"; content: string }> = [],
   cityId: string = DEFAULT_CITY,
-  gpsCoords: { lat: number; lng: number } | null = null
+  gpsCoords: { lat: number; lng: number } | null = null,
+  nearLocation?: string
 ): Promise<{
   requirements: UserRequirements;
   recommendations: RecommendationCard[];
@@ -236,7 +253,12 @@ export async function runAgent(
   const requirements = await parseIntent(userMessage, cityFullName);
 
   // Layer 2+3: Gather candidates (parallel search)
-  const { restaurants, semanticSignals } = await gatherCandidates(requirements, cityId, gpsCoords);
+  const { restaurants, semanticSignals } = await gatherCandidates(
+    requirements,
+    cityId,
+    gpsCoords,
+    nearLocation
+  );
 
   // Layer 4+5+6: Rank and explain
   const recommendations = await rankAndExplain(

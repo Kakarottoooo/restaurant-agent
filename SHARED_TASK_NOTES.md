@@ -1,7 +1,7 @@
 # Shared Task Notes
 
 ## Status
-All PLAN.md items complete. Color theme updated (dark mode backgrounds lightened from near-black).
+near_location feature fully implemented. Build passes.
 
 ## Architecture notes
 - `FlyToController` is a render-null react-leaflet child component; it calls `map.flyTo()` in a `useEffect` keyed on `[trigger, lat, lng]` where `trigger` is the `selectedIndex`
@@ -18,5 +18,19 @@ All PLAN.md items complete. Color theme updated (dark mode backgrounds lightened
 - `--text-secondary: #8A8070`
 - `--gold: #C9A84C` (accent, unchanged)
 
+## near_location feature (implemented this iteration)
+- **UI**: City `<select>` replaced with a custom input+dropdown in the header
+  - Input placeholder: "Near where? (e.g. Union Square)"
+  - Shows city label / "◎ Near Me" / typed location when unfocused
+  - On focus: dropdown opens with "Use My Location" + filterable city list
+  - On Enter or blur (not clicking dropdown item): typed text → `nearLocation` state
+  - `locationSuppressBlur` ref prevents double-processing when clicking dropdown items
+- **API flow**: `nearLocation` → `/api/chat` → `runAgent` → `gatherCandidates`
+- **Geocoding**: `lib/tools.ts` `geocodeLocation()` uses Google Geocoding API (same key as Places)
+- **Search bias**: `googlePlacesSearch` uses 5km radius when `nearLocationCoords` provided (vs 20km default)
+- **Distance**: Haversine in tools.ts; results sorted by proximity; `restaurant.distance` in meters
+- **Cards**: `RecommendationCard` shows "X.X mi from [label]" badge when distance + nearLocationLabel set
+- **parseIntent**: also extracts `near_location` from message text; UI value takes priority
+
 ## Remaining work
-No known remaining work. All PLAN.md items implemented. Future backlog: Itinerary Builder, User accounts, Preference Profile, Community reviews — explicitly post-MVP.
+No known remaining work. Future backlog: Itinerary Builder, User accounts, Preference Profile, Community reviews — explicitly post-MVP.
