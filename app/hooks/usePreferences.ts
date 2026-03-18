@@ -1,5 +1,8 @@
+"use client";
+
 import { useState, useEffect, useCallback } from "react";
 import { UserPreferenceProfile, RecommendationCard, FeedbackRecord, LearnedWeights } from "@/lib/types";
+import { useAuthState } from "@/app/contexts/AuthContext";
 
 const STORAGE_KEY = "restaurant-preference-profile";
 const FEEDBACK_KEY = "restaurant-feedback";
@@ -65,12 +68,38 @@ export function formatProfileForPrompt(profile: UserPreferenceProfile): string {
     : "";
 }
 
+// Sync profile to cloud (fire-and-forget)
+function syncProfileToCloud(profile: UserPreferenceProfile) {
+  fetch("/api/user/profile", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ profile }),
+  }).catch(() => {});
+}
+
 export function usePreferences() {
   const [profile, setProfile] = useState<UserPreferenceProfile>(DEFAULT_PROFILE);
   const [learnedWeights, setLearnedWeights] = useState<LearnedWeights | null>(null);
+  const { isSignedIn } = useAuthState();
 
   useEffect(() => {
-    setProfile(loadProfile());
+    // If signed in, try to load profile from cloud; fall back to localStorage
+    if (isSignedIn) {
+      fetch("/api/user/profile")
+        .then((r) => r.json())
+        .then((data) => {
+          if (data.profile) {
+            const merged = { ...DEFAULT_PROFILE, ...data.profile };
+            setProfile(merged);
+            saveProfile(merged); // keep local cache in sync
+          } else {
+            setProfile(loadProfile());
+          }
+        })
+        .catch(() => setProfile(loadProfile()));
+    } else {
+      setProfile(loadProfile());
+    }
     try {
       const raw = localStorage.getItem(LEARNED_WEIGHTS_KEY);
       if (raw) {
@@ -78,15 +107,18 @@ export function usePreferences() {
         setLearnedWeights(parsed);
       }
     } catch {}
-  }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isSignedIn]);
 
   const updateProfile = useCallback((patch: Partial<UserPreferenceProfile>) => {
     setProfile((prev) => {
       const next = { ...prev, ...patch, updated_at: new Date().toISOString() };
       saveProfile(next);
+      if (isSignedIn) syncProfileToCloud(next);
       return next;
     });
-  }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isSignedIn]);
 
   const learnFromFavorite = useCallback((card: RecommendationCard) => {
     setProfile((prev) => {
@@ -102,9 +134,11 @@ export function usePreferences() {
         favorite_signals: [signal, ...prev.favorite_signals].slice(0, 20),
       };
       saveProfile(next);
+      if (isSignedIn) syncProfileToCloud(next);
       return next;
     });
-  }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isSignedIn]);
 
   const learnFromSearch = useCallback((query: string) => {
     setProfile((prev) => {

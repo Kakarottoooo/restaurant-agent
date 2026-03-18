@@ -1,4 +1,4 @@
-import { Restaurant, ReviewSignals } from "./types";
+import { Restaurant, ReviewSignals, GoogleReview } from "./types";
 
 // ─── Geocoding ────────────────────────────────────────────────────────────────
 
@@ -63,7 +63,7 @@ export async function googlePlacesSearch(params: {
         "Content-Type": "application/json",
         "X-Goog-Api-Key": process.env.GOOGLE_PLACES_API_KEY!,
         "X-Goog-FieldMask":
-          "places.id,places.displayName,places.formattedAddress,places.rating,places.userRatingCount,places.priceLevel,places.primaryTypeDisplayName,places.websiteUri,places.photos,places.regularOpeningHours,places.editorialSummary,places.location",
+          "places.id,places.displayName,places.formattedAddress,places.rating,places.userRatingCount,places.priceLevel,places.primaryTypeDisplayName,places.websiteUri,places.photos,places.regularOpeningHours,places.editorialSummary,places.location,places.reviews",
       },
       body: JSON.stringify({
         textQuery,
@@ -86,23 +86,37 @@ export async function googlePlacesSearch(params: {
   const data = await res.json();
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const results: Restaurant[] = (data.places ?? []).map((p: any) => ({
-    id: p.id,
-    name: p.displayName?.text ?? "",
-    cuisine: p.primaryTypeDisplayName?.text ?? "Restaurant",
-    price: priceLevelToSymbol(p.priceLevel),
-    rating: p.rating ?? 0,
-    review_count: p.userRatingCount ?? 0,
-    address: p.formattedAddress ?? "",
-    url: p.websiteUri,
-    image_url: p.photos?.[0]
-      ? `https://places.googleapis.com/v1/${p.photos[0].name}/media?maxWidthPx=400&key=${process.env.GOOGLE_PLACES_API_KEY}`
-      : undefined,
-    is_closed: false,
-    description: p.editorialSummary?.text,
-    lat: p.location?.latitude,
-    lng: p.location?.longitude,
-  }));
+  const results: Restaurant[] = (data.places ?? []).map((p: any) => {
+    // Map Google Places v1 reviews to GoogleReview[]
+    const google_reviews: GoogleReview[] | undefined = p.reviews
+      ? // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        p.reviews.map((rv: any) => ({
+          author_name: rv.authorAttribution?.displayName ?? "Anonymous",
+          rating: rv.rating ?? 0,
+          relative_time_description: rv.relativePublishTimeDescription ?? "",
+          text: rv.text?.text ?? "",
+        })).filter((rv: GoogleReview) => rv.text.length > 0)
+      : undefined;
+
+    return {
+      id: p.id,
+      name: p.displayName?.text ?? "",
+      cuisine: p.primaryTypeDisplayName?.text ?? "Restaurant",
+      price: priceLevelToSymbol(p.priceLevel),
+      rating: p.rating ?? 0,
+      review_count: p.userRatingCount ?? 0,
+      address: p.formattedAddress ?? "",
+      url: p.websiteUri,
+      image_url: p.photos?.[0]
+        ? `https://places.googleapis.com/v1/${p.photos[0].name}/media?maxWidthPx=400&key=${process.env.GOOGLE_PLACES_API_KEY}`
+        : undefined,
+      is_closed: false,
+      description: p.editorialSummary?.text,
+      lat: p.location?.latitude,
+      lng: p.location?.longitude,
+      google_reviews,
+    };
+  });
 
   // If nearLocationCoords provided, calculate distances and sort by proximity
   if (params.nearLocationCoords) {
@@ -120,6 +134,21 @@ export async function googlePlacesSearch(params: {
 
 // ─── Review Signal Extraction ─────────────────────────────────────────────────
 
+/**
+ * Builds review text for a single restaurant from its Google reviews.
+ * Returns null if insufficient reviews (< 2).
+ */
+function formatGoogleReviews(restaurant: Restaurant): string | null {
+  const reviews = restaurant.google_reviews;
+  if (!reviews || reviews.length < 2) return null;
+  return reviews
+    .map(
+      (rv, i) =>
+        `[Review ${i + 1} - ${rv.rating} stars - "${rv.relative_time_description}"]\n"${rv.text}"`
+    )
+    .join("\n\n");
+}
+
 export async function fetchReviewSignals(
   restaurants: Restaurant[],
   query: string,
@@ -127,51 +156,10 @@ export async function fetchReviewSignals(
 ): Promise<Map<string, ReviewSignals>> {
   if (restaurants.length === 0) return new Map();
 
-  const names = restaurants
-    .slice(0, 12)
-    .map((r) => r.name)
-    .join(", ");
-  const searchQuery = `${names} reviews ${cityFullName} noise atmosphere date experience`;
-
-  // Fetch review content from Tavily with advanced depth
-  let reviewText = "";
-  try {
-    const res = await fetch("https://api.tavily.com/search", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        api_key: process.env.TAVILY_API_KEY,
-        query: searchQuery,
-        search_depth: "advanced",
-        max_results: 10,
-        include_domains: [
-          "yelp.com",
-          "tripadvisor.com",
-          "reddit.com",
-          "google.com",
-        ],
-      }),
-    });
-    if (res.ok) {
-      const data = await res.json();
-      reviewText = (data.results ?? [])
-        .map((r: { title: string; content: string }) => `${r.title}: ${r.content}`)
-        .join("\n\n");
-    }
-  } catch {
-    // non-fatal
-  }
-
-  if (!reviewText) return new Map();
-
-  // Use MiniMax to extract structured signals
+  const candidates = restaurants.slice(0, 12);
   const MINIMAX_API_URL = "https://api.minimaxi.chat/v1/chat/completions";
-  const restaurantList = restaurants
-    .slice(0, 12)
-    .map((r) => r.name)
-    .join(", ");
 
-  const systemPrompt = `You are extracting review signals for restaurants. For each restaurant mentioned below, analyze the provided review text and extract structured signals. Return a JSON object where keys are exact restaurant names and values match the ReviewSignals schema. If a signal cannot be determined from the text, use "unknown" for noise_level/wait_time/service_pace, 5 for date_suitability, and [] for arrays. Only report signals that have clear evidence in the text.
+  const systemPrompt = `You are extracting review signals for restaurants from real user reviews. For each restaurant in the input, analyze the provided review text and extract structured signals. Return a JSON object where keys are exact restaurant names and values match the ReviewSignals schema. If a signal cannot be determined from the text, use "unknown" for noise_level, empty string for wait_time/service_pace, 5 for date_suitability, and [] for arrays. Only report signals that have clear evidence in the text. Be conservative: weight negative signals more when they appear in multiple reviews.
 
 ReviewSignals schema:
 {
@@ -184,6 +172,67 @@ ReviewSignals schema:
   "best_for": string[],
   "review_confidence": "high" | "medium" | "low"
 }`;
+
+  // Separate restaurants into those with Google reviews vs. those needing Tavily fallback
+  const withGoogleReviews: Restaurant[] = [];
+  const needsTavily: Restaurant[] = [];
+
+  for (const r of candidates) {
+    const formatted = formatGoogleReviews(r);
+    if (formatted) {
+      withGoogleReviews.push(r);
+    } else {
+      needsTavily.push(r);
+    }
+  }
+
+  // Build combined review content for the AI prompt
+  let combinedReviewText = "";
+
+  // Add Google reviews for restaurants that have them
+  if (withGoogleReviews.length > 0) {
+    combinedReviewText += withGoogleReviews
+      .map((r) => {
+        const reviewsFormatted = formatGoogleReviews(r);
+        return `=== ${r.name} (Google Maps reviews) ===\n${reviewsFormatted}`;
+      })
+      .join("\n\n");
+  }
+
+  // Fetch Tavily reviews for restaurants without Google reviews
+  if (needsTavily.length > 0) {
+    try {
+      const names = needsTavily.map((r) => r.name).join(", ");
+      const searchQuery = `${names} reviews ${cityFullName} noise atmosphere experience site:reddit.com OR site:yelp.com`;
+      const res = await fetch("https://api.tavily.com/search", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          api_key: process.env.TAVILY_API_KEY,
+          query: searchQuery,
+          search_depth: "advanced",
+          max_results: 8,
+          include_domains: ["yelp.com", "tripadvisor.com", "reddit.com"],
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const tavilyText = (data.results ?? [])
+          .map((r: { title: string; content: string }) => `${r.title}: ${r.content}`)
+          .join("\n\n");
+        if (tavilyText) {
+          combinedReviewText += (combinedReviewText ? "\n\n" : "") +
+            `=== Additional review data (Yelp/Reddit) ===\n${tavilyText}`;
+        }
+      }
+    } catch {
+      // non-fatal
+    }
+  }
+
+  if (!combinedReviewText) return new Map();
+
+  const restaurantList = candidates.map((r) => r.name).join(", ");
 
   try {
     const res = await fetch(MINIMAX_API_URL, {
@@ -200,8 +249,8 @@ ReviewSignals schema:
             role: "user",
             content: `Restaurants to analyze: ${restaurantList}
 
-Review text:
-${reviewText.slice(0, 8000)}
+Review content:
+${combinedReviewText.slice(0, 10000)}
 
 User query context: "${query}"
 
