@@ -3,13 +3,19 @@ import { runAgent } from "@/lib/agent";
 
 export async function POST(req: NextRequest) {
   try {
-    const { message, history, city, gpsCoords } = await req.json();
+    const { message, history, city, gpsCoords, nearLocation } = await req.json();
 
     if (!message?.trim()) {
       return NextResponse.json({ error: "Message is required" }, { status: 400 });
     }
 
-    const result = await runAgent(message, history ?? [], city, gpsCoords ?? null);
+    const result = await runAgent(
+      message,
+      history ?? [],
+      city,
+      gpsCoords ?? null,
+      nearLocation ?? undefined
+    );
 
     return NextResponse.json(result);
   } catch (error) {

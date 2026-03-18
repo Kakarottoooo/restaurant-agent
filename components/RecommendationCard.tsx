@@ -7,9 +7,10 @@ interface Props {
   index: number;
   isFavorite?: boolean;
   onToggleFavorite?: () => void;
+  nearLocationLabel?: string;
 }
 
-export default function RecommendationCard({ card, index, isFavorite, onToggleFavorite }: Props) {
+export default function RecommendationCard({ card, index, isFavorite, onToggleFavorite, nearLocationLabel }: Props) {
   const { restaurant: r } = card;
 
   return (
@@ -93,10 +94,26 @@ export default function RecommendationCard({ card, index, isFavorite, onToggleFa
           {r.cuisine} &middot; {r.price}
         </p>
 
-        {/* Address */}
-        <p className="truncate" style={{ fontFamily: "var(--font-dm-sans)", fontSize: "12px", color: "var(--text-muted)", marginBottom: "12px" }}>
-          {r.address}
-        </p>
+        {/* Address + distance */}
+        <div className="flex items-center gap-2" style={{ marginBottom: "12px" }}>
+          <p className="truncate" style={{ fontFamily: "var(--font-dm-sans)", fontSize: "12px", color: "var(--text-muted)" }}>
+            {r.address}
+          </p>
+          {r.distance !== undefined && nearLocationLabel && (
+            <span className="flex-shrink-0" style={{
+              fontFamily: "var(--font-dm-sans)",
+              fontSize: "11px",
+              color: "var(--text-secondary)",
+              backgroundColor: "var(--card-2)",
+              border: "0.5px solid var(--border)",
+              borderRadius: "10px",
+              padding: "2px 8px",
+              whiteSpace: "nowrap",
+            }}>
+              {(r.distance * 0.000621371).toFixed(1)} mi from {nearLocationLabel}
+            </span>
+          )}
+        </div>
 
         {/* Gold divider */}
         <div style={{ width: "32px", height: "2px", backgroundColor: "var(--gold)", marginBottom: "12px" }} />
