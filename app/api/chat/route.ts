@@ -94,7 +94,8 @@ export async function POST(req: NextRequest) {
         console.log(JSON.stringify({
           type: "response",
           request_id,
-          recommendations_count: result.recommendations.length,
+          category: result.category,
+          recommendations_count: result.category === "hotel" ? result.hotelRecommendations.length : result.recommendations.length,
           timestamp: new Date().toISOString(),
         }));
 
@@ -102,7 +103,9 @@ export async function POST(req: NextRequest) {
           type: "complete",
           requirements: result.requirements,
           recommendations: result.recommendations,
+          hotelRecommendations: result.hotelRecommendations,
           suggested_refinements: result.suggested_refinements,
+          category: result.category,
           request_id,
         });
       } catch (error) {

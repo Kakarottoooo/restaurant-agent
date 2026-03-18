@@ -1,8 +1,8 @@
 // import Anthropic from "@anthropic-ai/sdk";
 // const client = new Anthropic();
 
-import { googlePlacesSearch, tavilySearch, geocodeLocation, fetchReviewSignals } from "./tools";
-import { UserRequirements, Restaurant, RecommendationCard, SessionPreferences, ScoringDimensions } from "./types";
+import { googlePlacesSearch, tavilySearch, geocodeLocation, fetchReviewSignals, searchHotels } from "./tools";
+import { UserRequirements, Restaurant, RecommendationCard, SessionPreferences, ScoringDimensions, HotelIntent, RestaurantIntent, ParsedIntent, HotelRecommendationCard, CategoryType } from "./types";
 import { CITIES, DEFAULT_CITY } from "./cities";
 import { UserRequirementsSchema, RankedItemArraySchema } from "./schemas";
 
@@ -119,14 +119,92 @@ function formatSessionPreferences(prefs: SessionPreferences): string {
     : "";
 }
 
-// ─── Layer 1: Intent Parsing ──────────────────────────────────────────────────
+// ─── Phase 7.1: Two-layer Intent Architecture ────────────────────────────────
 
-export async function parseIntent(
+export const HOTEL_DEFAULT_WEIGHTS = {
+  budget_match: 0.30,
+  scene_match: 0.25,
+  review_quality: 0.20,
+  location_convenience: 0.20,
+  preference_match: 0.05,
+};
+
+async function detectCategory(message: string): Promise<CategoryType> {
+  const lower = message.toLowerCase();
+  const hotelKeywords = [
+    "hotel", "motel", "inn", "resort", "lodge", "hostel", "airbnb",
+    "check in", "check-in", "check out", "check-out", "nights", "night stay",
+    "stay at", "book a room", "accommodation", "suite", "booking",
+    "酒店", "旅馆", "住", "入住", "退房", "晚", "客房",
+  ];
+  if (hotelKeywords.some((kw) => lower.includes(kw))) return "hotel";
+  return "restaurant";
+}
+
+async function parseHotelIntent(
   userMessage: string,
   cityFullName: string,
   sessionPreferences?: SessionPreferences,
   profileContext?: string
-): Promise<UserRequirements> {
+): Promise<HotelIntent> {
+  const text = await minimaxChat({
+    messages: [
+      {
+        role: "user",
+        content: `Extract hotel search requirements from this request. Return ONLY valid JSON.
+
+User request: "${userMessage}"
+City: ${cityFullName}
+Today's date: ${new Date().toISOString().split("T")[0]}
+
+Return JSON with these fields (omit fields that aren't mentioned):
+{
+  "category": "hotel",
+  "location": "${cityFullName}",
+  "check_in": "YYYY-MM-DD or null",
+  "check_out": "YYYY-MM-DD or null",
+  "nights": number or null,
+  "guests": number or null,
+  "star_rating": number or null (minimum star rating requested),
+  "room_type": "single|double|suite|null",
+  "amenities": ["pool", "gym", "parking", "breakfast", "wifi", etc],
+  "budget_per_person": number or null (per night per person),
+  "budget_total": number or null (total budget),
+  "neighborhood": "specific area or null",
+  "purpose": "business|leisure|romantic|family|null",
+  "constraints": ["no chains", "quiet", "pet-friendly", etc],
+  "priorities": ["price", "location", "amenities", etc]
+}
+
+For relative dates: "tonight" = today, "tomorrow" = tomorrow, "next Friday" = nearest upcoming Friday, "2 nights" sets nights=2 and check_out = check_in + 2 days.`,
+      },
+    ],
+  });
+
+  const jsonMatch = text.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) return { category: "hotel", location: cityFullName };
+  try {
+    const parsed = JSON.parse(jsonMatch[0]);
+    // If nights given but no check_out, compute it
+    if (parsed.check_in && parsed.nights && !parsed.check_out) {
+      const d = new Date(parsed.check_in);
+      d.setDate(d.getDate() + parsed.nights);
+      parsed.check_out = d.toISOString().split("T")[0];
+    }
+    return { category: "hotel", ...parsed };
+  } catch {
+    return { category: "hotel", location: cityFullName };
+  }
+}
+
+// ─── Layer 1: Intent Parsing ──────────────────────────────────────────────────
+
+async function parseRestaurantIntent(
+  userMessage: string,
+  cityFullName: string,
+  sessionPreferences?: SessionPreferences,
+  profileContext?: string
+): Promise<RestaurantIntent> {
   const prefContext = sessionPreferences
     ? formatSessionPreferences(sessionPreferences)
     : "";
@@ -162,13 +240,26 @@ Return JSON with these fields (omit fields that aren't mentioned):
   });
 
   const jsonMatch = text.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) return {};
+  if (!jsonMatch) return { category: "restaurant" } as RestaurantIntent;
   try {
     const parsed = UserRequirementsSchema.safeParse(JSON.parse(jsonMatch[0]));
-    return parsed.success ? (parsed.data as UserRequirements) : {};
+    return parsed.success ? ({ category: "restaurant", ...parsed.data } as RestaurantIntent) : { category: "restaurant" };
   } catch {
-    return {};
+    return { category: "restaurant" } as RestaurantIntent;
   }
+}
+
+export async function parseIntent(
+  userMessage: string,
+  cityFullName: string,
+  sessionPreferences?: SessionPreferences,
+  profileContext?: string
+): Promise<ParsedIntent> {
+  const category = await detectCategory(userMessage);
+  if (category === "hotel") {
+    return parseHotelIntent(userMessage, cityFullName, sessionPreferences, profileContext);
+  }
+  return parseRestaurantIntent(userMessage, cityFullName, sessionPreferences, profileContext);
 }
 
 // ─── Layer 2+3: Search & Collect (parallel) ──────────────────────────────────
@@ -440,6 +531,125 @@ Return ONLY the JSON array, no other text.`,
   return { cards, suggested_refinements };
 }
 
+// ─── Phase 7.2: Hotel Pipeline ───────────────────────────────────────────────
+
+async function runHotelPipeline(
+  intent: HotelIntent,
+  conversationHistory: Array<{ role: "user" | "assistant"; content: string }>,
+  cityFullName: string,
+): Promise<{ hotelRecommendations: HotelRecommendationCard[]; suggested_refinements: string[] }> {
+  const hotels = await searchHotels({
+    location: intent.location ?? cityFullName,
+    check_in: intent.check_in,
+    check_out: intent.check_out,
+    guests: intent.guests,
+    hotel_class: intent.star_rating,
+    maxResults: 20,
+  });
+
+  if (hotels.length === 0) {
+    return { hotelRecommendations: [], suggested_refinements: [] };
+  }
+
+  // Pre-filter: rating >= 3.5 and some reviews
+  const filtered = hotels
+    .filter((h) => h.rating >= 3.5 || h.review_count === 0)
+    .slice(0, 15);
+
+  const hotelList = filtered
+    .map(
+      (h, i) =>
+        `${i + 1}. ${h.name} | ${h.star_rating}★ | ⭐${h.rating} (${h.review_count} reviews) | $${h.price_per_night}/night | ${h.address} | Amenities: ${h.amenities.slice(0, 5).join(", ")}`
+    )
+    .join("\n");
+
+  const nights = intent.nights ?? 1;
+  const systemPrompt = `You are an expert hotel advisor. Pick the best hotels for the user's specific needs and explain exactly why each one fits.`;
+
+  const text = await minimaxChat({
+    system: systemPrompt,
+    messages: [
+      ...conversationHistory,
+      {
+        role: "user" as const,
+        content: `User hotel requirements: ${JSON.stringify(intent, null, 2)}
+
+Candidate hotels:
+${hotelList}
+
+Pick the TOP 10 hotels that best match. For each, score honestly across dimensions, then explain.
+
+Also suggest 3-4 refinement queries (in Chinese) like "更便宜一点", "离市中心近一点", "带早餐的".
+
+Return a JSON array:
+[
+  {
+    "rank": 1,
+    "hotel_index": 0,
+    "scoring": {
+      "budget_match": 8,
+      "scene_match": 9,
+      "review_quality": 7,
+      "location_convenience": 8,
+      "preference_match": 7,
+      "red_flag_penalty": 0
+    },
+    "why_recommended": "Perfect for business travel with strong WiFi and close to the convention center",
+    "best_for": "Business travelers, solo professionals",
+    "watch_out": "Street noise at night, parking is extra",
+    "not_great_if": "You want a quiet retreat or romantic getaway",
+    "price_summary": "$${Math.round((filtered[0]?.price_per_night ?? 150))} /night · ${nights} nights $${Math.round((filtered[0]?.price_per_night ?? 150) * nights)} total",
+    "location_summary": "Downtown, 5 min walk to convention center",
+    "suggested_refinements": ["更便宜一点", "离市中心近一点", "带早餐的"]
+  }
+]
+
+Return ONLY the JSON array.`,
+      },
+    ],
+    max_tokens: 4096,
+  });
+
+  const jsonMatch = text.match(/\[[\s\S]*\]/);
+  if (!jsonMatch) return { hotelRecommendations: [], suggested_refinements: [] };
+
+  let raw: unknown;
+  try {
+    raw = JSON.parse(jsonMatch[0]);
+  } catch {
+    return { hotelRecommendations: [], suggested_refinements: [] };
+  }
+
+  if (!Array.isArray(raw)) return { hotelRecommendations: [], suggested_refinements: [] };
+
+  const suggested_refinements: string[] = (raw[0] as Record<string, unknown>)?.suggested_refinements as string[] ?? [];
+
+  const cards: HotelRecommendationCard[] = (raw as Array<Record<string, unknown>>)
+    .filter((item) => typeof item.hotel_index === "number" && (item.hotel_index as number) < filtered.length)
+    .map((item, i): HotelRecommendationCard => {
+      const hotel = filtered[item.hotel_index as number];
+      const scoring = item.scoring as Omit<ScoringDimensions, "weighted_total"> | undefined;
+      const weighted_total = scoring ? computeWeightedScore(scoring, HOTEL_DEFAULT_WEIGHTS) : 0;
+      return {
+        hotel,
+        rank: i + 1,
+        score: weighted_total,
+        why_recommended: String(item.why_recommended ?? ""),
+        best_for: String(item.best_for ?? ""),
+        watch_out: String(item.watch_out ?? ""),
+        not_great_if: String(item.not_great_if ?? ""),
+        price_summary: String(item.price_summary ?? `$${hotel.price_per_night}/night`),
+        location_summary: String(item.location_summary ?? hotel.address),
+        scoring: scoring ? { ...scoring, weighted_total } : undefined,
+        suggested_refinements: [],
+      };
+    })
+    .sort((a, b) => b.score - a.score)
+    .map((card, i) => ({ ...card, rank: i + 1 }));
+
+  return { hotelRecommendations: cards, suggested_refinements };
+}
+
 // ─── Main Agent Function ──────────────────────────────────────────────────────
 
 export async function runAgent(
@@ -453,20 +663,41 @@ export async function runAgent(
   streamCallbacks?: StreamCallbacks,
   customWeights?: Partial<typeof DEFAULT_WEIGHTS>
 ): Promise<{
-  requirements: UserRequirements;
+  requirements: UserRequirements | HotelIntent;
   recommendations: RecommendationCard[];
+  hotelRecommendations: HotelRecommendationCard[];
   suggested_refinements: string[];
+  category: CategoryType;
 }> {
   const city = CITIES[cityId] ?? CITIES[DEFAULT_CITY];
   const cityFullName = gpsCoords ? "your current location" : city.fullName;
 
   // Layer 1: Parse intent (with session preferences + profile context)
-  const requirements = await parseIntent(
+  const intent = await parseIntent(
     userMessage,
     cityFullName,
     sessionPreferences,
     profileContext
   );
+
+  // Route to hotel pipeline if needed
+  if (intent.category === "hotel") {
+    const { hotelRecommendations, suggested_refinements } = await runHotelPipeline(
+      intent,
+      conversationHistory,
+      cityFullName,
+    );
+    return {
+      requirements: intent,
+      recommendations: [],
+      hotelRecommendations,
+      suggested_refinements,
+      category: "hotel",
+    };
+  }
+
+  // Otherwise continue with restaurant pipeline
+  const requirements: UserRequirements = intent;
 
   // Layer 2+3: Gather candidates (parallel search)
   const { restaurants, semanticSignals, tavilyQuery } = await gatherCandidates(
@@ -529,5 +760,5 @@ export async function runAgent(
       : undefined,
   }));
 
-  return { requirements, recommendations: withOpenTable, suggested_refinements };
+  return { requirements, recommendations: withOpenTable, hotelRecommendations: [], suggested_refinements, category: "restaurant" };
 }

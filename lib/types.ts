@@ -126,11 +126,85 @@ export interface LearnedWeights {
 export interface AgentResponse {
   requirements: UserRequirements;
   recommendations: RecommendationCard[];
-  summary: string;
+  hotelRecommendations?: HotelRecommendationCard[];
+  category?: CategoryType;
 }
 
 export interface Message {
   role: "user" | "assistant";
   content: string;
   cards?: RecommendationCard[];
+  hotelCards?: HotelRecommendationCard[];
+  category?: "restaurant" | "hotel";
+}
+
+// ─── Phase 7: Multi-category types ───────────────────────────────────────────
+
+export type CategoryType = "restaurant" | "hotel" | "unknown";
+
+export interface BaseIntent {
+  category: CategoryType;
+  budget_per_person?: number;
+  budget_total?: number;
+  location?: string;
+  purpose?: string;
+  constraints?: string[];
+  priorities?: string[];
+}
+
+export interface RestaurantIntent extends BaseIntent {
+  category: "restaurant";
+  cuisine?: string;
+  noise_level?: "quiet" | "moderate" | "lively" | "any";
+  atmosphere?: string[];
+  party_size?: number;
+  neighborhood?: string;
+  near_location?: string;
+}
+
+export interface HotelIntent extends BaseIntent {
+  category: "hotel";
+  check_in?: string;
+  check_out?: string;
+  nights?: number;
+  guests?: number;
+  star_rating?: number;
+  room_type?: string;
+  amenities?: string[];
+  neighborhood?: string;
+}
+
+export type ParsedIntent = RestaurantIntent | HotelIntent;
+
+export interface Hotel {
+  id: string;
+  name: string;
+  star_rating: number;
+  price_per_night: number;
+  total_price: number;
+  rating: number;
+  review_count: number;
+  address: string;
+  neighborhood?: string;
+  distance_to_center?: string;
+  amenities: string[];
+  thumbnail?: string;
+  booking_link: string;
+  description?: string;
+  lat?: number;
+  lng?: number;
+}
+
+export interface HotelRecommendationCard {
+  hotel: Hotel;
+  rank: number;
+  score: number;
+  why_recommended: string;
+  best_for: string;
+  watch_out: string;
+  not_great_if: string;
+  price_summary: string;
+  location_summary: string;
+  scoring?: ScoringDimensions;
+  suggested_refinements?: string[];
 }
