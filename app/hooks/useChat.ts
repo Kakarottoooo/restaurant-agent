@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
-import { RecommendationCard as CardType, Message, SessionPreferences, HotelRecommendationCard, CategoryType } from "@/lib/types";
+import { RecommendationCard as CardType, Message, SessionPreferences, HotelRecommendationCard, FlightRecommendationCard, CategoryType } from "@/lib/types";
 import { LearnedWeights } from "@/lib/types";
 
 export const LOADING_STEPS = [
@@ -49,6 +49,7 @@ export function useChat({
   const [isStreaming, setIsStreaming] = useState(false);
   const [suggestedRefinements, setSuggestedRefinements] = useState<string[]>([]);
   const [allHotelCards, setAllHotelCards] = useState<HotelRecommendationCard[]>([]);
+  const [allFlightCards, setAllFlightCards] = useState<FlightRecommendationCard[]>([]);
   const [resultCategory, setResultCategory] = useState<CategoryType>("restaurant");
 
   // Stable ref to always-current messages (avoids stale closure in sendMessage)
@@ -120,6 +121,7 @@ export function useChat({
       setViewMode("list");
       setSuggestedRefinements([]);
       setAllHotelCards([]);
+      setAllFlightCards([]);
       setResultCategory("restaurant");
 
       const url = new URL(window.location.href);
@@ -216,7 +218,39 @@ export function useChat({
                 const refinements: string[] = event.suggested_refinements ?? [];
                 setSuggestedRefinements(refinements);
 
-                if (category === "hotel") {
+                if (category === "flight") {
+                  const flightRecs: FlightRecommendationCard[] = event.flightRecommendations ?? [];
+                  const missingFields: string[] = event.missing_flight_fields ?? [];
+
+                  if (missingFields.length > 0) {
+                    setMessages((prev) => [
+                      ...prev,
+                      {
+                        role: "assistant",
+                        content: `To search for flights, I need a bit more info: **${missingFields.join(", ")}**. Could you provide those?`,
+                        category: "flight" as const,
+                      },
+                    ]);
+                  } else if (flightRecs.length === 0) {
+                    setMessages((prev) => [
+                      ...prev,
+                      {
+                        role: "assistant",
+                        content: "No flights found for that route. Try adjusting your dates or airports.",
+                        category: "flight" as const,
+                      },
+                    ]);
+                  } else {
+                    const assistantMessage: Message = {
+                      role: "assistant",
+                      content: `Found ${flightRecs.length} flight${flightRecs.length > 1 ? "s" : ""} for you.`,
+                      flightCards: flightRecs,
+                      category: "flight" as const,
+                    };
+                    setMessages((prev) => [...prev, assistantMessage]);
+                    setAllFlightCards(flightRecs);
+                  }
+                } else if (category === "hotel") {
                   const hotelRecs: HotelRecommendationCard[] = event.hotelRecommendations ?? [];
 
                   if (hotelRecs.length === 0) {
@@ -351,6 +385,7 @@ export function useChat({
     visibleCards,
     allCards,
     allHotelCards,
+    allFlightCards,
     resultCategory,
     activePrice,
     setActivePrice,

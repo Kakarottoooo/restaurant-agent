@@ -1,8 +1,8 @@
 // import Anthropic from "@anthropic-ai/sdk";
 // const client = new Anthropic();
 
-import { googlePlacesSearch, tavilySearch, geocodeLocation, fetchReviewSignals, searchHotels } from "./tools";
-import { UserRequirements, Restaurant, RecommendationCard, SessionPreferences, ScoringDimensions, HotelIntent, RestaurantIntent, ParsedIntent, HotelRecommendationCard, CategoryType } from "./types";
+import { googlePlacesSearch, tavilySearch, geocodeLocation, fetchReviewSignals, searchHotels, searchFlights } from "./tools";
+import { UserRequirements, Restaurant, RecommendationCard, SessionPreferences, ScoringDimensions, HotelIntent, RestaurantIntent, FlightIntent, ParsedIntent, HotelRecommendationCard, FlightRecommendationCard, CategoryType } from "./types";
 import { CITIES, DEFAULT_CITY } from "./cities";
 import { UserRequirementsSchema, RankedItemArraySchema } from "./schemas";
 
@@ -131,12 +131,20 @@ export const HOTEL_DEFAULT_WEIGHTS = {
 
 async function detectCategory(message: string): Promise<CategoryType> {
   const lower = message.toLowerCase();
+  const flightKeywords = [
+    "flight", "flights", "fly", "flying", "plane", "airline", "airport",
+    "ticket", "tickets", "one way", "round trip", "roundtrip", "nonstop",
+    "economy class", "business class", "first class", "layover", "stopover",
+    "depart", "departing", "arrive", "arriving", "boarding",
+    "机票", "航班", "飞机", "起飞", "降落", "经济舱", "商务舱",
+  ];
   const hotelKeywords = [
     "hotel", "motel", "inn", "resort", "lodge", "hostel", "airbnb",
     "check in", "check-in", "check out", "check-out", "nights", "night stay",
     "stay at", "book a room", "accommodation", "suite", "booking",
     "酒店", "旅馆", "住", "入住", "退房", "晚", "客房",
   ];
+  if (flightKeywords.some((kw) => lower.includes(kw))) return "flight";
   if (hotelKeywords.some((kw) => lower.includes(kw))) return "hotel";
   return "restaurant";
 }
@@ -253,6 +261,51 @@ Return JSON with these fields (omit fields that aren't mentioned):
   }
 }
 
+async function parseFlightIntent(
+  userMessage: string,
+  cityFullName: string
+): Promise<FlightIntent> {
+  const text = await minimaxChat({
+    messages: [
+      {
+        role: "user",
+        content: `Extract flight search requirements from this request. Return ONLY valid JSON.
+
+User request: "${userMessage}"
+Default city (use ONLY if user did not mention departure): ${cityFullName}
+Today's date: ${new Date().toISOString().split("T")[0]}
+
+Return JSON with these fields (omit fields not mentioned):
+{
+  "category": "flight",
+  "departure_city": "<city or IATA code from user message>",
+  "arrival_city": "<destination city or IATA code>",
+  "date": "YYYY-MM-DD or null",
+  "return_date": "YYYY-MM-DD or null (only for round trip)",
+  "is_round_trip": true or false,
+  "passengers": number or null,
+  "cabin_class": "economy|business|first or null",
+  "prefer_direct": true or false (true if user says 'nonstop', 'direct', '直飞'),
+  "budget_total": number or null
+}
+
+For relative dates: "tomorrow" = tomorrow, "next Friday" = nearest upcoming Friday, "this weekend" = nearest Saturday.
+For "round trip"/"往返": set is_round_trip=true.
+Default cabin_class to "economy" if not specified.`,
+      },
+    ],
+  });
+
+  const jsonMatch = text.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) return { category: "flight" };
+  try {
+    const parsed = JSON.parse(jsonMatch[0]);
+    return { category: "flight", ...parsed };
+  } catch {
+    return { category: "flight" };
+  }
+}
+
 export async function parseIntent(
   userMessage: string,
   cityFullName: string,
@@ -260,6 +313,9 @@ export async function parseIntent(
   profileContext?: string
 ): Promise<ParsedIntent> {
   const category = await detectCategory(userMessage);
+  if (category === "flight") {
+    return parseFlightIntent(userMessage, cityFullName);
+  }
   if (category === "hotel") {
     return parseHotelIntent(userMessage, cityFullName, sessionPreferences, profileContext);
   }
@@ -654,6 +710,59 @@ Return ONLY the JSON array.`,
   return { hotelRecommendations: cards, suggested_refinements };
 }
 
+// ─── Phase 8: Flight Pipeline ─────────────────────────────────────────────────
+
+async function runFlightPipeline(
+  intent: FlightIntent,
+): Promise<{ flightRecommendations: FlightRecommendationCard[]; missing_fields: string[] }> {
+  // Check required fields
+  const missing: string[] = [];
+  if (!intent.departure_city) missing.push("departure city");
+  if (!intent.arrival_city) missing.push("destination city");
+  if (!intent.date) missing.push("travel date");
+
+  if (missing.length > 0) {
+    return { flightRecommendations: [], missing_fields: missing };
+  }
+
+  const flights = await searchFlights({
+    departure_city: intent.departure_city!,
+    arrival_city: intent.arrival_city!,
+    date: intent.date!,
+    return_date: intent.return_date,
+    is_round_trip: intent.is_round_trip,
+    passengers: intent.passengers,
+    cabin_class: intent.cabin_class,
+    prefer_direct: intent.prefer_direct,
+    maxResults: 5,
+  });
+
+  if (flights.length === 0) {
+    return { flightRecommendations: [], missing_fields: [] };
+  }
+
+  const cards: FlightRecommendationCard[] = flights.map((flight, i) => {
+    const group: FlightRecommendationCard["group"] =
+      flight.stops === 0 ? "direct" : flight.stops === 1 ? "one_stop" : "two_stop";
+
+    const why =
+      flight.stops === 0
+        ? `Nonstop flight — fastest option at ${flight.duration}`
+        : flight.stops === 1
+        ? `1 stop via ${flight.layover_city ?? "connecting city"} (${flight.layover_duration ?? ""} layover)`
+        : `${flight.stops} stops — most affordable option`;
+
+    return {
+      flight,
+      rank: i + 1,
+      group,
+      why_recommended: why,
+    };
+  });
+
+  return { flightRecommendations: cards, missing_fields: [] };
+}
+
 // ─── Main Agent Function ──────────────────────────────────────────────────────
 
 export async function runAgent(
@@ -667,9 +776,11 @@ export async function runAgent(
   streamCallbacks?: StreamCallbacks,
   customWeights?: Partial<typeof DEFAULT_WEIGHTS>
 ): Promise<{
-  requirements: UserRequirements | HotelIntent;
+  requirements: UserRequirements | HotelIntent | FlightIntent;
   recommendations: RecommendationCard[];
   hotelRecommendations: HotelRecommendationCard[];
+  flightRecommendations: FlightRecommendationCard[];
+  missing_flight_fields: string[];
   suggested_refinements: string[];
   category: CategoryType;
 }> {
@@ -684,6 +795,20 @@ export async function runAgent(
     profileContext
   );
 
+  // Route to flight pipeline if needed
+  if (intent.category === "flight") {
+    const { flightRecommendations, missing_fields } = await runFlightPipeline(intent);
+    return {
+      requirements: intent,
+      recommendations: [],
+      hotelRecommendations: [],
+      flightRecommendations,
+      missing_flight_fields: missing_fields,
+      suggested_refinements: [],
+      category: "flight",
+    };
+  }
+
   // Route to hotel pipeline if needed
   if (intent.category === "hotel") {
     const { hotelRecommendations, suggested_refinements } = await runHotelPipeline(
@@ -695,6 +820,8 @@ export async function runAgent(
       requirements: intent,
       recommendations: [],
       hotelRecommendations,
+      flightRecommendations: [],
+      missing_flight_fields: [],
       suggested_refinements,
       category: "hotel",
     };
@@ -764,5 +891,5 @@ export async function runAgent(
       : undefined,
   }));
 
-  return { requirements, recommendations: withOpenTable, hotelRecommendations: [], suggested_refinements, category: "restaurant" };
+  return { requirements, recommendations: withOpenTable, hotelRecommendations: [], flightRecommendations: [], missing_flight_fields: [], suggested_refinements, category: "restaurant" };
 }

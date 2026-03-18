@@ -127,6 +127,7 @@ export interface AgentResponse {
   requirements: UserRequirements;
   recommendations: RecommendationCard[];
   hotelRecommendations?: HotelRecommendationCard[];
+  flightRecommendations?: FlightRecommendationCard[];
   category?: CategoryType;
 }
 
@@ -135,12 +136,13 @@ export interface Message {
   content: string;
   cards?: RecommendationCard[];
   hotelCards?: HotelRecommendationCard[];
-  category?: "restaurant" | "hotel";
+  flightCards?: FlightRecommendationCard[];
+  category?: CategoryType;
 }
 
 // ─── Phase 7: Multi-category types ───────────────────────────────────────────
 
-export type CategoryType = "restaurant" | "hotel" | "unknown";
+export type CategoryType = "restaurant" | "hotel" | "flight" | "unknown";
 
 export interface BaseIntent {
   category: CategoryType;
@@ -174,7 +176,21 @@ export interface HotelIntent extends BaseIntent {
   neighborhood?: string;
 }
 
-export type ParsedIntent = RestaurantIntent | HotelIntent;
+export interface FlightIntent extends BaseIntent {
+  category: "flight";
+  departure_city?: string;
+  departure_airport?: string; // IATA code e.g. "JFK"
+  arrival_city?: string;
+  arrival_airport?: string; // IATA code e.g. "LAX"
+  date?: string; // YYYY-MM-DD
+  return_date?: string; // YYYY-MM-DD (round trip)
+  is_round_trip?: boolean;
+  passengers?: number;
+  cabin_class?: "economy" | "business" | "first";
+  prefer_direct?: boolean;
+}
+
+export type ParsedIntent = RestaurantIntent | HotelIntent | FlightIntent;
 
 export interface Hotel {
   id: string;
@@ -193,6 +209,41 @@ export interface Hotel {
   description?: string;
   lat?: number;
   lng?: number;
+}
+
+export interface Flight {
+  id: string;
+  airline: string;
+  airline_logo?: string;
+  flight_number?: string;
+  departure_airport: string; // IATA or city name
+  arrival_airport: string;
+  departure_city: string;
+  arrival_city: string;
+  departure_time: string; // e.g. "08:30"
+  arrival_time: string; // e.g. "11:45"
+  duration: string; // e.g. "3h 15m"
+  stops: number; // 0 = direct
+  layover_city?: string;
+  layover_duration?: string; // e.g. "1h 20m"
+  price: number; // USD
+  booking_link: string;
+  is_round_trip?: boolean;
+  return_departure_time?: string;
+  return_arrival_time?: string;
+  return_duration?: string;
+  // For map arc
+  departure_lat?: number;
+  departure_lng?: number;
+  arrival_lat?: number;
+  arrival_lng?: number;
+}
+
+export interface FlightRecommendationCard {
+  flight: Flight;
+  rank: number;
+  group: "direct" | "one_stop" | "two_stop";
+  why_recommended: string;
 }
 
 export interface HotelRecommendationCard {
