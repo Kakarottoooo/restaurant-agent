@@ -16,9 +16,9 @@
 /* ─── Dark Mode ───────────────────────────────────────── */
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #0F0F0F;
-    --card: #1C1C1C;
-    --card-2: #242424;
+    --bg: #1C1C1C;
+    --card: #242424;
+    --card-2: #2A2A2A;
     --text-primary: #F0EAD6;
     --text-secondary: #8A8070;
     --text-muted: #5A5040;
