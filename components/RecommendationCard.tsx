@@ -11,6 +11,9 @@ interface Props {
   onToggleFavorite?: () => void;
   nearLocationLabel?: string;
   currentQuery?: string;
+  requestId?: string;
+  onCompare?: () => void;
+  isComparing?: boolean;
 }
 
 const NOISE_ICON: Record<string, string> = {
@@ -64,7 +67,27 @@ export default function RecommendationCard({
   onToggleFavorite,
   nearLocationLabel,
   currentQuery = "",
+  requestId,
+  onCompare,
+  isComparing,
 }: Props) {
+
+  function fireTelemetry(type: "map_click" | "reserve_click") {
+    const event = {
+      type,
+      restaurant_id: card.restaurant.id,
+      restaurant_name: card.restaurant.name,
+      rank: card.rank,
+      request_id: requestId,
+      timestamp: new Date().toISOString(),
+    };
+    fetch("/api/telemetry", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(event),
+    }).catch(() => {});
+  }
+
   const { restaurant: r } = card;
   const [scoringOpen, setScoringOpen] = useState(false);
   const [feedbackState, setFeedbackState] = useState<
@@ -582,11 +605,32 @@ export default function RecommendationCard({
               Est. {card.estimated_total}
             </span>
             <div className="flex gap-2">
+              {onCompare && (
+                <button
+                  onClick={onCompare}
+                  aria-pressed={isComparing}
+                  style={{
+                    fontFamily: "var(--font-dm-sans)",
+                    fontSize: "13px",
+                    color: isComparing ? "#fff" : "var(--text-secondary)",
+                    border: `0.5px solid ${isComparing ? "var(--gold)" : "var(--border)"}`,
+                    borderRadius: "8px",
+                    padding: "7px 14px",
+                    textDecoration: "none",
+                    display: "inline-block",
+                    backgroundColor: isComparing ? "var(--gold)" : "transparent",
+                    cursor: "pointer",
+                  }}
+                >
+                  对比
+                </button>
+              )}
               {r.url && (
                 <a
                   href={r.url}
                   target="_blank"
                   rel="noopener noreferrer"
+                  onClick={() => fireTelemetry("map_click")}
                   style={{
                     fontFamily: "var(--font-dm-sans)",
                     fontSize: "13px",
@@ -607,6 +651,7 @@ export default function RecommendationCard({
                   href={card.opentable_url}
                   target="_blank"
                   rel="noopener noreferrer"
+                  onClick={() => fireTelemetry("reserve_click")}
                   style={{
                     fontFamily: "var(--font-dm-sans)",
                     fontSize: "13px",

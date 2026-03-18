@@ -64,6 +64,7 @@ export interface RecommendationCard {
   estimated_total: string;
   opentable_url?: string;
   scoring?: ScoringDimensions;
+  suggested_refinements?: string[];
 }
 
 export interface SessionPreferences {
@@ -102,6 +103,16 @@ export interface FeedbackRecord {
   satisfied: boolean;
   issues?: string[];
   created_at: string;
+}
+
+export interface LearnedWeights {
+  budget_match: number;
+  scene_match: number;
+  review_quality: number;
+  location_convenience: number;
+  preference_match: number;
+  updated_at: string;
+  sample_size: number;
 }
 
 export interface AgentResponse {

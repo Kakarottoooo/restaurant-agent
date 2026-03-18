@@ -21,6 +21,13 @@ export const ChatRequestSchema = z.object({
   nearLocation: z.string().max(200).optional(),
   sessionPreferences: z.any().optional(),
   profileContext: z.string().max(1000).optional(),
+  customWeights: z.object({
+    budget_match: z.number().min(0).max(1),
+    scene_match: z.number().min(0).max(1),
+    review_quality: z.number().min(0).max(1),
+    location_convenience: z.number().min(0).max(1),
+    preference_match: z.number().min(0).max(1),
+  }).optional(),
 });
 
 // ─── AI Response Schemas ───────────────────────────────────────────────────────
@@ -75,6 +82,7 @@ export const RankedItemSchema = z.object({
   watch_out: z.string(),
   not_great_if: z.string(),
   estimated_total: z.string(),
+  suggested_refinements: z.array(z.string()).optional().default([]),
 });
 
 export const RankedItemArraySchema = z.array(RankedItemSchema);

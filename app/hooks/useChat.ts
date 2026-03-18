@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { RecommendationCard as CardType, Message, SessionPreferences } from "@/lib/types";
+import { LearnedWeights } from "@/lib/types";
 
 export const LOADING_STEPS = [
   "Parsing your request...",
@@ -21,6 +22,7 @@ interface UseChatParams {
   isNearMe: boolean;
   nearLocation: string;
   profileContext?: string;
+  learnedWeights?: LearnedWeights | null;
 }
 
 export function useChat({
@@ -29,6 +31,7 @@ export function useChat({
   isNearMe,
   nearLocation,
   profileContext,
+  learnedWeights,
 }: UseChatParams) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -43,6 +46,8 @@ export function useChat({
   const [sessionPreferences, setSessionPreferences] = useState<SessionPreferences>(
     DEFAULT_SESSION_PREFS
   );
+  const [isStreaming, setIsStreaming] = useState(false);
+  const [suggestedRefinements, setSuggestedRefinements] = useState<string[]>([]);
 
   // Stable ref to always-current messages (avoids stale closure in sendMessage)
   const messagesRef = useRef(messages);
@@ -66,6 +71,7 @@ export function useChat({
       setActivePrice(null);
       setActiveCuisine(null);
       setSessionPreferences(DEFAULT_SESSION_PREFS);
+      setSuggestedRefinements([]);
     }
     prevCityIdRef.current = cityId;
     prevIsNearMeRef.current = isNearMe;
@@ -110,6 +116,7 @@ export function useChat({
       setActivePrice(null);
       setActiveCuisine(null);
       setViewMode("list");
+      setSuggestedRefinements([]);
 
       const url = new URL(window.location.href);
       url.searchParams.set("q", text);
@@ -135,6 +142,17 @@ export function useChat({
       // Capture current session preferences at call time
       const currentSessionPrefs = sessionPreferences;
 
+      // Build customWeights from learnedWeights if available
+      const customWeights = learnedWeights
+        ? {
+            budget_match: learnedWeights.budget_match,
+            scene_match: learnedWeights.scene_match,
+            review_quality: learnedWeights.review_quality,
+            location_convenience: learnedWeights.location_convenience,
+            preference_match: learnedWeights.preference_match,
+          }
+        : undefined;
+
       try {
         const res = await fetch("/api/chat", {
           method: "POST",
@@ -150,31 +168,88 @@ export function useChat({
                 ? currentSessionPrefs
                 : undefined,
             profileContext: profileContext || undefined,
+            customWeights,
           }),
         });
 
-        const data = await res.json();
-        if (data.error) throw new Error(data.error);
+        // Check for non-200 before reading as stream
+        if (!res.ok) {
+          const data = await res.json();
+          throw new Error(data.error ?? "Request failed");
+        }
+
+        // Read SSE stream
+        setIsStreaming(true);
+        const reader = res.body?.getReader();
+        if (!reader) throw new Error("No response body");
+
+        const decoder = new TextDecoder();
+        let buffer = "";
+        let finalRecommendations: CardType[] = [];
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n\n");
+          buffer = lines.pop() ?? "";
+
+          for (const line of lines) {
+            if (!line.startsWith("data: ")) continue;
+            try {
+              const event = JSON.parse(line.slice(6));
+
+              if (event.type === "partial") {
+                // Show partial cards immediately
+                const partialCards: CardType[] = event.cards ?? [];
+                setAllCards(partialCards);
+                setVisibleCards(partialCards);
+                setLoadingStep(2);
+              } else if (event.type === "complete") {
+                const recommendations: CardType[] = event.recommendations ?? [];
+                const refinements: string[] = event.suggested_refinements ?? [];
+                finalRecommendations = recommendations;
+                setSuggestedRefinements(refinements);
+
+                if (recommendations.length === 0) {
+                  setMessages((prev) => [
+                    ...prev,
+                    {
+                      role: "assistant",
+                      content:
+                        "No restaurants matched your search. Try broadening your criteria — different cuisine, price range, or neighborhood.",
+                    },
+                  ]);
+                } else {
+                  const assistantMessage: Message = {
+                    role: "assistant",
+                    content: `Found ${recommendations.length} restaurants for you.`,
+                    cards: recommendations,
+                  };
+                  setMessages((prev) => [...prev, assistantMessage]);
+                  setAllCards(recommendations);
+
+                  // Animate cards in
+                  setVisibleCards([]);
+                  for (let i = 0; i < recommendations.length; i++) {
+                    await new Promise((r) => setTimeout(r, 150));
+                    setVisibleCards((prev) => [...prev, recommendations[i]]);
+                  }
+                }
+              } else if (event.type === "error") {
+                throw new Error(event.error ?? "Stream error");
+              }
+            } catch (parseErr) {
+              // Skip malformed events
+              if (parseErr instanceof SyntaxError) continue;
+              throw parseErr;
+            }
+          }
+        }
 
         // Phase 3.3a: update session preferences after each message
-        if (messages.length > 0) {
-          // Only refine if this is a follow-up (not the first query)
-          try {
-            const refineRes = await fetch("/api/chat", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                message: `__extract_refinements__${text}`,
-                history: [],
-                city: cityId,
-                sessionPreferences: currentSessionPrefs,
-              }),
-            });
-            // We don't actually use this endpoint for refinement extraction
-            // The refinement happens server-side via the sessionPreferences flow
-            void refineRes;
-          } catch {}
-
+        if (messagesRef.current.length > 0 && finalRecommendations.length > 0) {
           // Client-side lightweight refinement detection
           const lowerText = text.toLowerCase();
           const updates: Partial<SessionPreferences> = {};
@@ -201,31 +276,6 @@ export function useChat({
             setSessionPreferences(updated);
           }
         }
-
-        if (data.recommendations.length === 0) {
-          setMessages((prev) => [
-            ...prev,
-            {
-              role: "assistant",
-              content:
-                "No restaurants matched your search. Try broadening your criteria — different cuisine, price range, or neighborhood.",
-            },
-          ]);
-        } else {
-          const assistantMessage: Message = {
-            role: "assistant",
-            content: `Found ${data.recommendations.length} restaurants for you.`,
-            cards: data.recommendations,
-          };
-          setMessages((prev) => [...prev, assistantMessage]);
-          setAllCards(data.recommendations);
-
-          const cards: CardType[] = data.recommendations;
-          for (let i = 0; i < cards.length; i++) {
-            await new Promise((r) => setTimeout(r, 150));
-            setVisibleCards((prev) => [...prev, cards[i]]);
-          }
-        }
       } catch (err) {
         const message =
           err instanceof Error
@@ -240,10 +290,11 @@ export function useChat({
         clearTimeout(t2);
         clearTimeout(t3);
         setLoading(false);
+        setIsStreaming(false);
         setLoadingStep(-1);
       }
     },
-    [loading, isNearMe, cityId, gpsCoords, nearLocation, profileContext, sessionPreferences, messages.length]
+    [loading, isNearMe, cityId, gpsCoords, nearLocation, profileContext, sessionPreferences, learnedWeights]
   );
 
   const autoSearchFired = useRef(false);
@@ -281,5 +332,7 @@ export function useChat({
     sendMessage,
     shareResults,
     sessionPreferences,
+    isStreaming,
+    suggestedRefinements,
   };
 }
