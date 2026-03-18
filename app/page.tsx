@@ -3,6 +3,8 @@
 import { useRef, useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import RecommendationCard from "@/components/RecommendationCard";
+import HotelCard from "@/components/HotelCard";
+import DateRangePicker from "@/components/DateRangePicker";
 import { CITIES_SORTED } from "@/lib/cities";
 import { useChat, LOADING_STEPS } from "@/app/hooks/useChat";
 import { useLocation } from "@/app/hooks/useLocation";
@@ -16,9 +18,8 @@ import { RecommendationCard as CardType } from "@/lib/types";
 const MapView = dynamic(() => import("@/components/MapView"), { ssr: false });
 
 const DEFAULT_EXAMPLES = [
-  "Romantic dinner for a first date, ~$60/person, quiet atmosphere",
-  "Best local spot under $20, casual, not a chain",
-  "Business dinner, $100/person, impressive but not stuffy",
+  "Romantic dinner for two, ~$80/person, quiet, no chains, Manhattan",
+  "4-star hotel in Chicago downtown, $200/night, check in Friday, 2 nights, business trip",
 ];
 
 const DIETARY_OPTIONS = ["素食", "纯素", "无麸质", "无贝类", "清真", "犹太洁食"];
@@ -74,6 +75,10 @@ export default function Home() {
   // Phase 4.3: Compare state
   const [compareSelection, setCompareSelection] = useState<(CardType | null)[]>([null, null]);
   const [compareOpen, setCompareOpen] = useState(false);
+
+  // Phase 7: Hotel date picker state
+  const [datePickerOpen, setDatePickerOpen] = useState(false);
+  const [hotelDates, setHotelDates] = useState<{ checkIn: string; checkOut: string } | null>(null);
 
   // Phase 4.6: Call learnWeightsFromFeedback on mount
   useEffect(() => {
@@ -1324,6 +1329,26 @@ export default function Home() {
                   </div>
                 )}
 
+                {/* Hotel date picker trigger */}
+                {chat.resultCategory === "hotel" && (
+                  <button
+                    onClick={() => setDatePickerOpen(true)}
+                    style={{
+                      alignSelf: "flex-start",
+                      padding: "6px 14px",
+                      borderRadius: "20px",
+                      border: "0.5px solid var(--gold)",
+                      backgroundColor: "transparent",
+                      color: "var(--gold)",
+                      fontFamily: "var(--font-dm-sans)",
+                      fontSize: "13px",
+                      cursor: "pointer",
+                    }}
+                  >
+                    📅 {hotelDates ? `${hotelDates.checkIn} → ${hotelDates.checkOut}` : "Select dates"}
+                  </button>
+                )}
+
                 {/* Filter / View Bar */}
                 {filterViewBar}
 
@@ -1353,6 +1378,15 @@ export default function Home() {
                         }}
                         isComparing={isComparing(card)}
                       />
+                    ))}
+                  </div>
+                )}
+
+                {/* Hotel Results */}
+                {chat.resultCategory === "hotel" && chat.allHotelCards.length > 0 && (
+                  <div className="flex flex-col gap-3">
+                    {chat.allHotelCards.map((card, i) => (
+                      <HotelCard key={card.hotel.id} card={card} index={i} />
                     ))}
                   </div>
                 )}
@@ -1529,6 +1563,20 @@ export default function Home() {
           </button>
         </div>
       </div>
+
+      {/* Date Range Picker for hotel searches */}
+      {datePickerOpen && (
+        <DateRangePicker
+          checkIn={hotelDates?.checkIn}
+          checkOut={hotelDates?.checkOut}
+          onSelect={(checkIn, checkOut) => {
+            setHotelDates({ checkIn, checkOut });
+            const dateText = `Check in ${checkIn}, check out ${checkOut}`;
+            chat.sendMessage(dateText);
+          }}
+          onClose={() => setDatePickerOpen(false)}
+        />
+      )}
     </main>
   );
 }

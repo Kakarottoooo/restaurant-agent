@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
-import { RecommendationCard as CardType, Message, SessionPreferences } from "@/lib/types";
+import { RecommendationCard as CardType, Message, SessionPreferences, HotelRecommendationCard, CategoryType } from "@/lib/types";
 import { LearnedWeights } from "@/lib/types";
 
 export const LOADING_STEPS = [
@@ -48,6 +48,8 @@ export function useChat({
   );
   const [isStreaming, setIsStreaming] = useState(false);
   const [suggestedRefinements, setSuggestedRefinements] = useState<string[]>([]);
+  const [allHotelCards, setAllHotelCards] = useState<HotelRecommendationCard[]>([]);
+  const [resultCategory, setResultCategory] = useState<CategoryType>("restaurant");
 
   // Stable ref to always-current messages (avoids stale closure in sendMessage)
   const messagesRef = useRef(messages);
@@ -117,6 +119,8 @@ export function useChat({
       setActiveCuisine(null);
       setViewMode("list");
       setSuggestedRefinements([]);
+      setAllHotelCards([]);
+      setResultCategory("restaurant");
 
       const url = new URL(window.location.href);
       url.searchParams.set("q", text);
@@ -207,34 +211,61 @@ export function useChat({
                 setVisibleCards(partialCards);
                 setLoadingStep(2);
               } else if (event.type === "complete") {
-                const recommendations: CardType[] = event.recommendations ?? [];
+                const category: CategoryType = event.category ?? "restaurant";
+                setResultCategory(category);
                 const refinements: string[] = event.suggested_refinements ?? [];
-                finalRecommendations = recommendations;
                 setSuggestedRefinements(refinements);
 
-                if (recommendations.length === 0) {
-                  setMessages((prev) => [
-                    ...prev,
-                    {
-                      role: "assistant",
-                      content:
-                        "No restaurants matched your search. Try broadening your criteria — different cuisine, price range, or neighborhood.",
-                    },
-                  ]);
-                } else {
-                  const assistantMessage: Message = {
-                    role: "assistant",
-                    content: `Found ${recommendations.length} restaurants for you.`,
-                    cards: recommendations,
-                  };
-                  setMessages((prev) => [...prev, assistantMessage]);
-                  setAllCards(recommendations);
+                if (category === "hotel") {
+                  const hotelRecs: HotelRecommendationCard[] = event.hotelRecommendations ?? [];
 
-                  // Animate cards in
-                  setVisibleCards([]);
-                  for (let i = 0; i < recommendations.length; i++) {
-                    await new Promise((r) => setTimeout(r, 150));
-                    setVisibleCards((prev) => [...prev, recommendations[i]]);
+                  if (hotelRecs.length === 0) {
+                    setMessages((prev) => [
+                      ...prev,
+                      {
+                        role: "assistant",
+                        content: "No hotels matched your search. Try adjusting your dates, budget, or location.",
+                        category: "hotel" as const,
+                      },
+                    ]);
+                  } else {
+                    const assistantMessage: Message = {
+                      role: "assistant",
+                      content: `Found ${hotelRecs.length} hotels for you.`,
+                      hotelCards: hotelRecs,
+                      category: "hotel" as const,
+                    };
+                    setMessages((prev) => [...prev, assistantMessage]);
+                    setAllHotelCards(hotelRecs);
+                  }
+                } else {
+                  const recommendations: CardType[] = event.recommendations ?? [];
+                  finalRecommendations = recommendations;
+
+                  if (recommendations.length === 0) {
+                    setMessages((prev) => [
+                      ...prev,
+                      {
+                        role: "assistant",
+                        content:
+                          "No restaurants matched your search. Try broadening your criteria — different cuisine, price range, or neighborhood.",
+                      },
+                    ]);
+                  } else {
+                    const assistantMessage: Message = {
+                      role: "assistant",
+                      content: `Found ${recommendations.length} restaurants for you.`,
+                      cards: recommendations,
+                    };
+                    setMessages((prev) => [...prev, assistantMessage]);
+                    setAllCards(recommendations);
+
+                    // Animate cards in
+                    setVisibleCards([]);
+                    for (let i = 0; i < recommendations.length; i++) {
+                      await new Promise((r) => setTimeout(r, 150));
+                      setVisibleCards((prev) => [...prev, recommendations[i]]);
+                    }
                   }
                 }
               } else if (event.type === "error") {
@@ -319,6 +350,8 @@ export function useChat({
     loadingStep,
     visibleCards,
     allCards,
+    allHotelCards,
+    resultCategory,
     activePrice,
     setActivePrice,
     activeCuisine,

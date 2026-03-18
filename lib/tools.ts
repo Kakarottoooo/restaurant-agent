@@ -1,4 +1,4 @@
-import { Restaurant, ReviewSignals, GoogleReview } from "./types";
+import { Restaurant, ReviewSignals, GoogleReview, Hotel } from "./types";
 
 // ─── Geocoding ────────────────────────────────────────────────────────────────
 
@@ -316,4 +316,102 @@ export async function tavilySearch(
     .map((r: { title: string; content: string }) => `${r.title}: ${r.content}`)
     .join("\n\n");
   return { results, failed: false };
+}
+
+// ─── Phase 7.2: Hotel Search via SerpApi ─────────────────────────────────────
+
+export async function searchHotels(params: {
+  location: string;
+  check_in?: string;
+  check_out?: string;
+  guests?: number;
+  hotel_class?: number;
+  maxResults?: number;
+}): Promise<Hotel[]> {
+  const apiKey = process.env.SERPAPI_KEY;
+  if (!apiKey) {
+    console.warn("SERPAPI_KEY not set, returning empty hotel results");
+    return [];
+  }
+
+  const today = new Date();
+  const tomorrow = new Date(today);
+  tomorrow.setDate(today.getDate() + 1);
+  const dayAfter = new Date(today);
+  dayAfter.setDate(today.getDate() + 2);
+
+  const formatDate = (d: Date) => d.toISOString().split("T")[0];
+
+  const checkIn = params.check_in ?? formatDate(tomorrow);
+  const checkOut = params.check_out ?? formatDate(dayAfter);
+
+  const url = new URL("https://serpapi.com/search");
+  url.searchParams.set("engine", "google_hotels");
+  url.searchParams.set("q", params.location);
+  url.searchParams.set("check_in_date", checkIn);
+  url.searchParams.set("check_out_date", checkOut);
+  url.searchParams.set("adults", String(params.guests ?? 2));
+  if (params.hotel_class) {
+    url.searchParams.set("hotel_class", String(params.hotel_class));
+  }
+  url.searchParams.set("currency", "USD");
+  url.searchParams.set("gl", "us");
+  url.searchParams.set("hl", "en");
+  url.searchParams.set("api_key", apiKey);
+
+  try {
+    const res = await fetch(url.toString());
+    if (!res.ok) {
+      console.warn("SerpApi hotel search failed:", res.status);
+      return [];
+    }
+    const data = await res.json();
+    const properties: Array<Record<string, unknown>> = data.properties ?? [];
+
+    return properties.slice(0, params.maxResults ?? 20).map((p, i): Hotel => {
+      const prices = p.rate_per_night as Record<string, unknown> | undefined;
+      const pricePerNight = prices?.extracted_lowest
+        ? Number(prices.extracted_lowest)
+        : 0;
+
+      const nights =
+        params.check_in && params.check_out
+          ? Math.max(
+              1,
+              Math.round(
+                (new Date(params.check_out).getTime() -
+                  new Date(params.check_in).getTime()) /
+                  (1000 * 60 * 60 * 24)
+              )
+            )
+          : 1;
+
+      const amenities: string[] = Array.isArray(p.amenities)
+        ? (p.amenities as string[]).slice(0, 8)
+        : [];
+
+      return {
+        id: String(p.property_token ?? `hotel-${i}`),
+        name: String(p.name ?? "Unknown Hotel"),
+        star_rating: Number(p.hotel_class ?? 3),
+        price_per_night: pricePerNight,
+        total_price: Math.round(pricePerNight * nights),
+        rating: Number(p.overall_rating ?? 0),
+        review_count: Number(p.reviews ?? 0),
+        address: String(p.location ?? ""),
+        neighborhood: String(p.neighborhood ?? ""),
+        distance_to_center: String(p.distance ?? ""),
+        amenities,
+        thumbnail: String(
+          (p.images as Array<Record<string, string>> | undefined)?.[0]
+            ?.thumbnail ?? ""
+        ),
+        booking_link: String(p.link ?? `https://www.google.com/travel/hotels`),
+        description: String(p.description ?? ""),
+      };
+    });
+  } catch (err) {
+    console.warn("searchHotels error:", err);
+    return [];
+  }
 }

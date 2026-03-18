@@ -1,7 +1,7 @@
 # Shared Task Notes
 
 ## Status
-All 5 phases complete. Build passes cleanly.
+Phase 7 complete. Build passes cleanly. All PLAN.md phases (1–7) done.
 
 ## Architecture notes
 - `FlyToController` is a render-null react-leaflet child component
@@ -14,36 +14,46 @@ All 5 phases complete. Build passes cleanly.
 - `--bg: #1C1C1C`, `--card: #242424`, `--card-2: #2A2A2A`
 - `--text-primary: #F0EAD6`, `--text-secondary: #8A8070`, `--gold: #C9A84C`
 
-## Phase 5 features (implemented this iteration)
+## Phase 7 features (implemented this iteration)
 
-### Phase 5.1 — Real Review Signals
-- `GoogleReview` interface in `lib/types.ts`; `google_reviews?: GoogleReview[]` on `Restaurant`
-- `googlePlacesSearch` now includes `places.reviews` in FieldMask → maps to `google_reviews[]`
-- `fetchReviewSignals` in `lib/tools.ts`: uses Google reviews (when ≥2 available) as primary source, Tavily (reddit/yelp) as fallback for restaurants with fewer reviews
-- `RecommendationCard.tsx`: "Real reviews say" now shows "Google Maps" badge + original quote excerpts (max 2) with author and time attribution
+### Phase 7.1 — Two-layer Intent Architecture
+- `CategoryType`, `BaseIntent`, `RestaurantIntent`, `HotelIntent`, `ParsedIntent` in `lib/types.ts`
+- `detectCategory()` in `lib/agent.ts` — keyword-based hotel detection (instant, no AI call)
+- `parseRestaurantIntent()` — renamed from old `parseIntent`, unexported
+- `parseHotelIntent()` — AI-driven extraction of check_in/check_out/nights/guests/star_rating/amenities
+- New exported `parseIntent()` dispatches to restaurant or hotel branch
+- `runAgent()` routes hotel intents to `runHotelPipeline()` before the restaurant pipeline
 
-### Phase 5.2 — Voice Input
-- `app/hooks/useVoiceInput.ts`: custom hook wrapping Web Speech API (`SpeechRecognition`/`webkitSpeechRecognition`)
-- Auto-detects language (zh-CN for Chinese browsers, en-US otherwise)
-- Returns `isSupported` flag — mic button hidden when browser doesn't support it
-- `page.tsx`: mic button added to input bar; gold pulse animation when listening; auto-sends on result
-- Input placeholder switches to "正在聆听..." while listening
+### Phase 7.2 — Hotel Search Pipeline
+- `Hotel`, `HotelRecommendationCard` types in `lib/types.ts`
+- `searchHotels()` in `lib/tools.ts` — calls SerpApi `google_hotels` engine
+- `HOTEL_DEFAULT_WEIGHTS` in `lib/agent.ts` (budget_match 30%, scene_match 25%, review_quality 20%, location_convenience 20%, preference_match 5%)
+- `runHotelPipeline()` in `lib/agent.ts` — search → pre-filter → AI rank/explain
+- `runAgent()` returns `{ category, recommendations, hotelRecommendations, suggested_refinements }`
+- `/api/chat/route.ts` SSE `complete` event now includes `category` and `hotelRecommendations`
 
-### Phase 5.3 — User Account System (Clerk)
-- `@clerk/nextjs` + `@vercel/postgres` installed
-- Auth architecture: `AuthContext` (safe context, never throws) + `ClerkSync` (bridges Clerk state to context, only rendered inside ClerkProvider)
-- `clerkEnabled` check in `layout.tsx` — only wraps with ClerkProvider when real keys are configured
-- Env vars needed: `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`, `POSTGRES_URL`
-- DB schema in `lib/schema.sql`, init in `lib/db.ts`
-- API routes: `app/api/user/profile/route.ts`, `app/api/user/favorites/route.ts`, `app/api/user/feedback/route.ts`
-- `useAuth` hook in `app/hooks/useAuth.ts` — reads from AuthContext, includes `migrateLocalDataToCloud()`
-- `usePreferences` + `useFavorites`: dual-track mode — localStorage when not signed in, cloud sync when signed in
-- Header: shows "登录" button when anonymous; avatar + dropdown when signed in
-- Upgrade prompt toast: appears after 3rd favorite when not signed in
-- Data migration: on sign-in, automatically uploads localStorage data to cloud
+### Phase 7.3 — Date Range Picker
+- `components/DateRangePicker.tsx` — mobile-friendly bottom-sheet with native date inputs
+- Auto-advances check-out when check-in is changed past it
+- Shows nights summary before confirming
+- Shown in chat when `resultCategory === "hotel"`
+
+### Phase 7.4 — Homepage Examples Updated
+- Example 1: `"Romantic dinner for two, ~$80/person, quiet, no chains, Manhattan"`
+- Example 2: `"4-star hotel in Chicago downtown, $200/night, check in Friday, 2 nights, business trip"`
+
+### Phase 7.5 — Hotel Card UI
+- `components/HotelCard.tsx` — hotel placeholder SVG, rank badge, star rating, price, Why it fits, Watch out, amenity chips, Map + Book buttons
+- `page.tsx` renders `HotelCard` when `chat.resultCategory === "hotel"`
+- `useChat.ts` tracks `allHotelCards: HotelRecommendationCard[]` and `resultCategory: CategoryType`
+- `Message` type updated with `hotelCards?` and `category?` fields
+
+## To activate hotel search
+Add `SERPAPI_KEY` to `.env.local` (register at https://serpapi.com — 250 free searches/month).
+Without the key, hotel queries return empty results gracefully.
 
 ## Remaining work
-All PLAN.md phases (1–5) complete. Future backlog: Itinerary Builder, community reviews.
+All PLAN.md phases (1–7) complete. Future backlog: Itinerary Builder, community reviews.
 
 ## To activate Clerk/accounts
 1. Create project at https://clerk.com
