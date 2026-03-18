@@ -1503,3 +1503,267 @@ Phase 5.3 用户账号系统（约 5-7 天）
 | 1 | 邀请 3-5 个真实用户试用，收集反馈 |
 | 2 | 根据真实反馈调整推荐 prompt 和评分权重 |
 | 3 | 建立基础 eval 框架（固定 10 个 query，每周手工评估结果质量）|
+
+---
+
+## 阶段七：多品类决策引擎架构 + 酒店支持
+
+> 规划日期：2026-03-18
+> 状态：待开发
+> 前提：Phase 6 生产部署完成
+
+### 核心产品决策（已确定）
+
+1. **单一入口，AI 自动判断品类** — 主页不做 tab 切换，用户说什么，系统自己识别是找餐厅、酒店还是其他，对话框始终是唯一入口
+2. **两层 Intent 架构** — 先建好可扩展的架构，再加酒店，未来加商品/医生等无需改骨架
+3. **酒店数据源：SerpApi Google Hotels** — 免费 250 次/月，注册即可用，支持实时价格+可用性
+4. **日期输入：对话优先 + 日历辅助** — 用户说"下周五入住两晚"自动解析填入日历；也可直接点日历选
+5. **结果：Top 10，对话式 refinement** — 不做刷新，用户继续说一句话缩小范围
+6. **城市范围：全美** — 27 个大城市快捷选保留，输入框支持任意城市/地点自由输入
+7. **主页示例更新** — 放两个示例，一个找餐厅、一个找酒店，用户一看就懂产品能做什么
+
+---
+
+### Phase 7.1 — 两层 Intent 架构重构
+
+**目标：** 把现有的餐厅专用 `parseIntent` 改造为可扩展的两层结构，为所有未来品类打地基。
+
+**新增类型（`lib/types.ts`）**
+
+```typescript
+// 第一层：所有品类共用
+export type CategoryType = "restaurant" | "hotel" | "product" | "doctor" | "unknown";
+
+export interface BaseIntent {
+  category: CategoryType;
+  budget_per_person?: number;
+  budget_total?: number;
+  location?: string;
+  purpose?: string;             // date, business, family, solo...
+  constraints?: string[];       // no chains, quiet, pet-friendly...
+  priorities?: string[];        // what matters most to this user
+}
+
+// 第二层：餐厅专属（现有字段迁移过来）
+export interface RestaurantIntent extends BaseIntent {
+  category: "restaurant";
+  cuisine?: string;
+  noise_level?: "quiet" | "moderate" | "lively" | "any";
+  atmosphere?: string[];
+  party_size?: number;
+  neighborhood?: string;
+  near_location?: string;
+}
+
+// 第二层：酒店专属
+export interface HotelIntent extends BaseIntent {
+  category: "hotel";
+  check_in?: string;            // ISO date string
+  check_out?: string;
+  nights?: number;
+  guests?: number;
+  star_rating?: number;         // 最低星级要求
+  room_type?: string;           // single, double, suite...
+  amenities?: string[];         // pool, gym, parking, breakfast...
+  neighborhood?: string;
+}
+
+export type ParsedIntent = RestaurantIntent | HotelIntent;
+```
+
+**修改 `lib/agent.ts`**
+
+`parseIntent` 第一步先判断 `category`，再根据 category 调用对应的专属解析逻辑：
+
+```typescript
+async function parseIntent(message, history, city, sessionPreferences, profileContext): Promise<ParsedIntent> {
+  // Step 1: 判断品类（轻量调用，只返回 category）
+  const category = await detectCategory(message);
+
+  // Step 2: 根据品类解析专属字段
+  if (category === "restaurant") return parseRestaurantIntent(message, ...);
+  if (category === "hotel") return parseHotelIntent(message, ...);
+  // 未来：if (category === "product") return parseProductIntent(...)
+}
+```
+
+**修改 `runAgent`**
+
+根据 `intent.category` 分发到对应 pipeline：
+
+```typescript
+if (intent.category === "restaurant") return runRestaurantPipeline(intent, ...);
+if (intent.category === "hotel") return runHotelPipeline(intent, ...);
+```
+
+---
+
+### Phase 7.2 — 酒店搜索 Pipeline
+
+**新增工具（`lib/tools.ts`）**
+
+```typescript
+async function searchHotels(intent: HotelIntent): Promise<Hotel[]>
+// 调用 SerpApi Google Hotels API
+// 参数：q（城市/地点）, check_in_date, check_out_date, adults, hotel_class
+// 返回：name, price, rating, reviews, location, amenities, thumbnail, link
+```
+
+**新增类型（`lib/types.ts`）**
+
+```typescript
+export interface Hotel {
+  id: string;                   // SerpApi property_token
+  name: string;
+  star_rating: number;
+  price_per_night: number;      // 用户选定日期的实时价格
+  total_price: number;          // 含税总价
+  rating: number;
+  review_count: number;
+  address: string;
+  neighborhood?: string;
+  distance_to_center?: string;
+  amenities: string[];
+  thumbnail?: string;
+  booking_link: string;         // Google Hotels 预订链接
+  description?: string;
+}
+```
+
+**新增 `HotelRecommendationCard`（`lib/types.ts`）**
+
+```typescript
+export interface HotelRecommendationCard {
+  hotel: Hotel;
+  rank: number;
+  score: number;
+  why_recommended: string;
+  best_for: string;
+  watch_out: string;
+  not_great_if: string;
+  price_summary: string;        // "$189/晚，3晚共 $567（含税）"
+  location_summary: string;     // "距时代广场步行 3 分钟"
+  scoring?: ScoringDimensions;
+  suggested_refinements?: string[];
+}
+```
+
+**酒店评分维度（复用 `ScoringDimensions`，调整权重）**
+
+```typescript
+const HOTEL_DEFAULT_WEIGHTS = {
+  budget_match: 0.30,           // 酒店价格敏感度更高
+  scene_match: 0.25,            // 场景匹配（商务/蜜月/家庭）
+  review_quality: 0.20,
+  location_convenience: 0.20,   // 位置对酒店更重要
+  preference_match: 0.05,
+};
+```
+
+---
+
+### Phase 7.3 — 日期输入组件
+
+**对话解析（修改 `parseHotelIntent`）**
+
+从用户自然语言中提取日期：
+- "下周五入住两晚" → `check_in: "2026-03-27"`, `check_out: "2026-03-29"`, `nights: 2`
+- "3月底" → 解析为最近的3月底日期
+- 未提及日期 → `check_in: undefined`（搜索时用默认"今晚"）
+
+**日历组件（`components/DateRangePicker.tsx`）**
+
+- 仅在品类为酒店时显示，餐厅搜索不出现
+- 对话解析出日期后自动填入日历
+- 用户也可直接点击日历选日期，选完后填入对话框："入住 3月27日，退房 3月29日"
+- 移动端友好，bottom sheet 形式弹出
+
+---
+
+### Phase 7.4 — 主页更新
+
+**示例更新（`app/page.tsx`）**
+
+```typescript
+const DEFAULT_EXAMPLES = [
+  "Romantic dinner for two, ~$80/person, quiet, no chains, Manhattan",
+  "4-star hotel in Chicago downtown, $200/night, check in Friday, 2 nights, business trip",
+];
+```
+
+**城市选择器扩展**
+
+27 个大城市保留快捷选，搜索框支持自由输入任何美国城市/地区（对话框已支持，城市选择器下拉搜索也扩展为全美）。
+
+---
+
+### Phase 7.5 — 酒店结果卡片 UI
+
+新增 `HotelCard.tsx` 组件，结构与 `RecommendationCard.tsx` 相似但字段不同：
+
+```
+[酒店图片]
+[序号] 希尔顿时代广场  ★★★★  ⭐4.6 (2,847 reviews)
+曼哈顿中城 · 距时代广场步行 3 分钟
+
+$189/晚  ·  3晚共 $567（含税）
+
+──────────────────────────────
+Why it fits
+适合商务出差：大堂有安静工作区，评论提到 WiFi 稳定，
+距会议中心步行可达。
+
+Watch out
+周末噪音较大（百老汇区域）；停车 $65/晚额外收费。
+
+[Map]  [Book on Google Hotels →]
+```
+
+---
+
+### 执行顺序
+
+```
+Phase 7.1 两层 Intent 架构（约 3 天）
+  ├── 新增 BaseIntent / RestaurantIntent / HotelIntent 类型
+  ├── 修改 parseIntent：detectCategory + 分发逻辑
+  ├── 修改 runAgent：按 category 分发 pipeline
+  └── 确保餐厅功能回归测试通过（不破坏现有功能）
+
+Phase 7.2 酒店搜索 Pipeline（约 3 天，需 SerpApi key）
+  ├── 新增 Hotel 类型 + HotelRecommendationCard 类型
+  ├── 新增 searchHotels 工具函数
+  ├── 新增 runHotelPipeline（召回→初筛→AI评分→解释）
+  └── 新增 /api/chat 对酒店结果的处理
+
+Phase 7.3 日期输入组件（约 2 天）
+  ├── 新增 DateRangePicker 组件
+  ├── 修改 parseHotelIntent：自然语言日期解析
+  └── 联动：对话解析 ↔ 日历显示
+
+Phase 7.4 主页更新（约 1 天）
+  ├── 更新示例文案（一餐厅一酒店）
+  └── 城市选择器支持全美自由输入
+
+Phase 7.5 酒店卡片 UI（约 2 天）
+  ├── 新增 HotelCard.tsx 组件
+  └── page.tsx 根据 category 渲染不同卡片组件
+```
+
+---
+
+### 待接入 API
+
+| API | 用途 | 注册地址 |
+|-----|------|---------|
+| SerpApi Google Hotels | 酒店实时价格 + 可用性 | https://serpapi.com |
+
+### Phase 7 成功标准
+
+| 指标 | 完成后 |
+|------|--------|
+| 品类识别 | 用户说"找酒店"自动走酒店 pipeline，说"找餐厅"走餐厅 pipeline |
+| 日期解析 | "下周五两晚"正确解析为具体日期 |
+| 实时价格 | 酒店卡片显示用户所选日期的真实价格 |
+| 架构可扩展 | 新增商品/医生品类只需加新的 Intent 类型 + Pipeline，不改核心代码 |
+| 餐厅功能 | 完全不受影响，回归测试全过 |
