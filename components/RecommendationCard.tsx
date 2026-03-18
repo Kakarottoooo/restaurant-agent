@@ -1,6 +1,8 @@
 "use client";
 
-import { RecommendationCard as CardType } from "@/lib/types";
+import Image from "next/image";
+import { useState } from "react";
+import { RecommendationCard as CardType, FeedbackRecord } from "@/lib/types";
 
 interface Props {
   card: CardType;
@@ -8,10 +10,116 @@ interface Props {
   isFavorite?: boolean;
   onToggleFavorite?: () => void;
   nearLocationLabel?: string;
+  currentQuery?: string;
 }
 
-export default function RecommendationCard({ card, index, isFavorite, onToggleFavorite, nearLocationLabel }: Props) {
+const NOISE_ICON: Record<string, string> = {
+  quiet: "🤫",
+  moderate: "🔉",
+  loud: "🔊",
+  unknown: "❓",
+};
+
+function ScoreBar({ value, max = 10 }: { value: number; max?: number }) {
+  const pct = Math.round((value / max) * 100);
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+      <div
+        style={{
+          flex: 1,
+          height: "4px",
+          backgroundColor: "var(--card-2)",
+          borderRadius: "2px",
+          overflow: "hidden",
+        }}
+      >
+        <div
+          style={{
+            width: `${pct}%`,
+            height: "100%",
+            backgroundColor: "var(--gold)",
+            borderRadius: "2px",
+          }}
+        />
+      </div>
+      <span
+        style={{
+          fontFamily: "var(--font-dm-sans)",
+          fontSize: "12px",
+          color: "var(--text-secondary)",
+          minWidth: "28px",
+          textAlign: "right",
+        }}
+      >
+        {value.toFixed(1)}
+      </span>
+    </div>
+  );
+}
+
+export default function RecommendationCard({
+  card,
+  index,
+  isFavorite,
+  onToggleFavorite,
+  nearLocationLabel,
+  currentQuery = "",
+}: Props) {
   const { restaurant: r } = card;
+  const [scoringOpen, setScoringOpen] = useState(false);
+  const [feedbackState, setFeedbackState] = useState<
+    "idle" | "rating" | "issues" | "done"
+  >("idle");
+  const [feedbackSatisfied, setFeedbackSatisfied] = useState<boolean | null>(null);
+  const [selectedIssues, setSelectedIssues] = useState<string[]>([]);
+
+  const ISSUE_OPTIONS = [
+    "比描述的吵",
+    "价格偏高",
+    "等位太久",
+    "氛围不符",
+    "服务差",
+    "食物普通",
+  ];
+
+  function saveFeedback(satisfied: boolean, issues?: string[]) {
+    const record: FeedbackRecord = {
+      restaurant_id: r.id,
+      restaurant_name: r.name,
+      query: currentQuery,
+      satisfied,
+      issues,
+      created_at: new Date().toISOString(),
+    };
+    try {
+      const existing: FeedbackRecord[] = JSON.parse(
+        localStorage.getItem("restaurant-feedback") ?? "[]"
+      );
+      const next = [record, ...existing].slice(0, 50);
+      localStorage.setItem("restaurant-feedback", JSON.stringify(next));
+    } catch {}
+  }
+
+  function handleFeedbackThumb(satisfied: boolean) {
+    setFeedbackSatisfied(satisfied);
+    if (satisfied) {
+      saveFeedback(true);
+      setFeedbackState("done");
+    } else {
+      setFeedbackState("issues");
+    }
+  }
+
+  function handleIssueToggle(issue: string) {
+    setSelectedIssues((prev) =>
+      prev.includes(issue) ? prev.filter((i) => i !== issue) : [...prev, issue]
+    );
+  }
+
+  function submitIssues() {
+    saveFeedback(false, selectedIssues);
+    setFeedbackState("done");
+  }
 
   return (
     <div
@@ -24,56 +132,94 @@ export default function RecommendationCard({ card, index, isFavorite, onToggleFa
     >
       {/* Image */}
       {r.image_url ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={r.image_url} alt={r.name} className="w-full object-cover" style={{ height: "180px" }} />
+        <div style={{ position: "relative", height: "180px", width: "100%" }}>
+          <Image
+            src={r.image_url}
+            alt={r.name}
+            fill
+            sizes="(max-width: 672px) 100vw, 672px"
+            style={{ objectFit: "cover" }}
+            priority={index === 0}
+          />
+        </div>
       ) : (
-        <div className="w-full flex items-center justify-center" style={{ height: "180px", backgroundColor: "var(--card-2)" }}>
-          <svg width="48" height="48" viewBox="0 0 48 48" fill="none" opacity={0.25}>
-            <path d="M8 40V16l16-8 16 8v24H8z" stroke="var(--text-secondary)" strokeWidth="1.5" strokeLinejoin="round" />
-            <path d="M18 40v-12h12v12" stroke="var(--text-secondary)" strokeWidth="1.5" strokeLinejoin="round" />
-            <circle cx="24" cy="22" r="3" stroke="var(--text-secondary)" strokeWidth="1.5" />
+        <div
+          className="w-full flex items-center justify-center"
+          style={{ height: "180px", backgroundColor: "var(--card-2)" }}
+        >
+          <svg
+            width="48"
+            height="48"
+            viewBox="0 0 48 48"
+            fill="none"
+            opacity={0.25}
+          >
+            <path
+              d="M8 40V16l16-8 16 8v24H8z"
+              stroke="var(--text-secondary)"
+              strokeWidth="1.5"
+              strokeLinejoin="round"
+            />
+            <path
+              d="M18 40v-12h12v12"
+              stroke="var(--text-secondary)"
+              strokeWidth="1.5"
+              strokeLinejoin="round"
+            />
+            <circle
+              cx="24"
+              cy="22"
+              r="3"
+              stroke="var(--text-secondary)"
+              strokeWidth="1.5"
+            />
           </svg>
         </div>
       )}
 
       <div style={{ padding: "16px" }}>
-        {/* Card Header: rank badge + name + rating + favorite */}
+        {/* Card Header */}
         <div className="flex items-start gap-3 mb-2">
-          {/* Rank badge */}
-          <div className="flex-shrink-0 flex items-center justify-center" style={{
-            width: "26px",
-            height: "26px",
-            borderRadius: "50%",
-            backgroundColor: "var(--text-primary)",
-            color: "var(--bg)",
-            fontFamily: "var(--font-dm-sans)",
-            fontSize: "12px",
-            fontWeight: 600,
-            marginTop: "2px",
-          }}>
+          <div
+            className="flex-shrink-0 flex items-center justify-center"
+            style={{
+              width: "26px",
+              height: "26px",
+              borderRadius: "50%",
+              backgroundColor: "var(--text-primary)",
+              color: "var(--bg)",
+              fontFamily: "var(--font-dm-sans)",
+              fontSize: "12px",
+              fontWeight: 600,
+              marginTop: "2px",
+            }}
+          >
             {index + 1}
           </div>
 
           <div className="flex-1 min-w-0">
-            <h3 style={{
-              fontFamily: "var(--font-playfair)",
-              fontSize: "18px",
-              fontWeight: 600,
-              color: "var(--text-primary)",
-              lineHeight: 1.2,
-            }}>
+            <h3
+              style={{
+                fontFamily: "var(--font-playfair)",
+                fontSize: "18px",
+                fontWeight: 600,
+                color: "var(--text-primary)",
+                lineHeight: 1.2,
+              }}
+            >
               {r.name}
             </h3>
           </div>
 
-          {/* Rating + Favorite */}
           <div className="flex items-center gap-2 flex-shrink-0">
-            <span style={{
-              fontFamily: "var(--font-dm-sans)",
-              fontSize: "13px",
-              fontWeight: 600,
-              color: "var(--gold)",
-            }}>
+            <span
+              style={{
+                fontFamily: "var(--font-dm-sans)",
+                fontSize: "13px",
+                fontWeight: 600,
+                color: "var(--gold)",
+              }}
+            >
               ★ {r.rating}
             </span>
             {onToggleFavorite && (
@@ -81,7 +227,13 @@ export default function RecommendationCard({ card, index, isFavorite, onToggleFa
                 onClick={onToggleFavorite}
                 aria-label={isFavorite ? "Remove from favorites" : "Save to favorites"}
                 className="transition-transform hover:scale-110 active:scale-95"
-                style={{ fontSize: "16px", lineHeight: 1, background: "none", border: "none", cursor: "pointer" }}
+                style={{
+                  fontSize: "16px",
+                  lineHeight: 1,
+                  background: "none",
+                  border: "none",
+                  cursor: "pointer",
+                }}
               >
                 {isFavorite ? "❤️" : "🤍"}
               </button>
@@ -90,126 +242,524 @@ export default function RecommendationCard({ card, index, isFavorite, onToggleFa
         </div>
 
         {/* Cuisine + price */}
-        <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: "13px", color: "var(--text-secondary)", marginBottom: "4px" }}>
+        <p
+          style={{
+            fontFamily: "var(--font-dm-sans)",
+            fontSize: "13px",
+            color: "var(--text-secondary)",
+            marginBottom: "4px",
+          }}
+        >
           {r.cuisine} &middot; {r.price}
         </p>
 
         {/* Address + distance */}
-        <div className="flex items-center gap-2" style={{ marginBottom: "12px" }}>
-          <p className="truncate" style={{ fontFamily: "var(--font-dm-sans)", fontSize: "12px", color: "var(--text-muted)" }}>
+        <div
+          className="flex items-center gap-2"
+          style={{ marginBottom: "12px" }}
+        >
+          <p
+            className="truncate"
+            style={{
+              fontFamily: "var(--font-dm-sans)",
+              fontSize: "12px",
+              color: "var(--text-muted)",
+            }}
+          >
             {r.address}
           </p>
           {r.distance !== undefined && nearLocationLabel && (
-            <span className="flex-shrink-0" style={{
-              fontFamily: "var(--font-dm-sans)",
-              fontSize: "11px",
-              color: "var(--text-secondary)",
-              backgroundColor: "var(--card-2)",
-              border: "0.5px solid var(--border)",
-              borderRadius: "10px",
-              padding: "2px 8px",
-              whiteSpace: "nowrap",
-            }}>
+            <span
+              className="flex-shrink-0"
+              style={{
+                fontFamily: "var(--font-dm-sans)",
+                fontSize: "11px",
+                color: "var(--text-secondary)",
+                backgroundColor: "var(--card-2)",
+                border: "0.5px solid var(--border)",
+                borderRadius: "10px",
+                padding: "2px 8px",
+                whiteSpace: "nowrap",
+              }}
+            >
               {(r.distance * 0.000621371).toFixed(1)} mi from {nearLocationLabel}
             </span>
           )}
         </div>
 
         {/* Gold divider */}
-        <div style={{ width: "32px", height: "2px", backgroundColor: "var(--gold)", marginBottom: "12px" }} />
+        <div
+          style={{
+            width: "32px",
+            height: "2px",
+            backgroundColor: "var(--gold)",
+            marginBottom: "12px",
+          }}
+        />
 
         {/* Description */}
         {r.description && (
-          <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: "13px", color: "var(--text-secondary)", fontStyle: "italic", lineHeight: 1.5, marginBottom: "12px" }}>
+          <p
+            style={{
+              fontFamily: "var(--font-dm-sans)",
+              fontSize: "13px",
+              color: "var(--text-secondary)",
+              fontStyle: "italic",
+              lineHeight: 1.5,
+              marginBottom: "12px",
+            }}
+          >
             {r.description}
           </p>
         )}
 
         {/* Why it fits */}
-        <div style={{
-          backgroundColor: "var(--card-2)",
-          borderLeft: "3px solid var(--gold)",
-          borderRadius: "0 8px 8px 0",
-          padding: "10px 12px",
-          marginBottom: "10px",
-        }}>
-          <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: "12px", fontWeight: 500, color: "#8B6914", marginBottom: "4px" }}>
+        <div
+          style={{
+            backgroundColor: "var(--why-bg)",
+            borderLeft: "3px solid var(--gold)",
+            borderRadius: "0 8px 8px 0",
+            padding: "10px 12px",
+            marginBottom: "10px",
+          }}
+        >
+          <p
+            style={{
+              fontFamily: "var(--font-dm-sans)",
+              fontSize: "12px",
+              fontWeight: 500,
+              color: "var(--why-label)",
+              marginBottom: "4px",
+            }}
+          >
             Why it fits
           </p>
-          <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: "13px", color: "#4A3F2F", lineHeight: 1.5 }}>
+          <p
+            style={{
+              fontFamily: "var(--font-dm-sans)",
+              fontSize: "13px",
+              color: "var(--why-text)",
+              lineHeight: 1.5,
+            }}
+          >
             {card.why_recommended}
           </p>
         </div>
 
         {/* Watch out */}
         {card.watch_out && (
-          <div style={{
-            backgroundColor: "#FDF6EC",
-            borderLeft: "3px solid var(--amber)",
-            borderRadius: "0 8px 8px 0",
-            padding: "10px 12px",
-            marginBottom: "10px",
-          }}>
-            <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: "12px", fontWeight: 500, color: "#8B5E14", marginBottom: "4px" }}>
+          <div
+            style={{
+              backgroundColor: "var(--watchout-bg)",
+              borderLeft: "3px solid var(--amber)",
+              borderRadius: "0 8px 8px 0",
+              padding: "10px 12px",
+              marginBottom: "10px",
+            }}
+          >
+            <p
+              style={{
+                fontFamily: "var(--font-dm-sans)",
+                fontSize: "12px",
+                fontWeight: 500,
+                color: "var(--watchout-label)",
+                marginBottom: "4px",
+              }}
+            >
               Watch out
             </p>
-            <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: "13px", color: "#6B4A1A", lineHeight: 1.5 }}>
+            <p
+              style={{
+                fontFamily: "var(--font-dm-sans)",
+                fontSize: "13px",
+                color: "var(--watchout-text)",
+                lineHeight: 1.5,
+              }}
+            >
               {card.watch_out}
             </p>
           </div>
         )}
 
+        {/* Phase 3.1: Real reviews say */}
+        {r.review_signals && (
+          <div
+            style={{
+              backgroundColor: "var(--card-2)",
+              borderLeft: "3px solid var(--text-secondary)",
+              borderRadius: "0 8px 8px 0",
+              padding: "10px 12px",
+              marginBottom: "10px",
+            }}
+          >
+            <p
+              style={{
+                fontFamily: "var(--font-dm-sans)",
+                fontSize: "12px",
+                fontWeight: 500,
+                color: "var(--text-secondary)",
+                marginBottom: "6px",
+              }}
+            >
+              Real reviews say
+            </p>
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: "4px",
+              }}
+            >
+              {r.review_signals.noise_level !== "unknown" && (
+                <span
+                  style={{
+                    fontFamily: "var(--font-dm-sans)",
+                    fontSize: "12px",
+                    color: "var(--text-secondary)",
+                  }}
+                >
+                  {NOISE_ICON[r.review_signals.noise_level]} Noise:{" "}
+                  {r.review_signals.noise_level}
+                </span>
+              )}
+              {r.review_signals.wait_time && (
+                <span
+                  style={{
+                    fontFamily: "var(--font-dm-sans)",
+                    fontSize: "12px",
+                    color: "var(--text-secondary)",
+                  }}
+                >
+                  ⏱ Wait: {r.review_signals.wait_time}
+                </span>
+              )}
+              {r.review_signals.notable_dishes.length > 0 && (
+                <span
+                  style={{
+                    fontFamily: "var(--font-dm-sans)",
+                    fontSize: "12px",
+                    color: "var(--text-secondary)",
+                  }}
+                >
+                  🍽 Must try: {r.review_signals.notable_dishes.slice(0, 3).join(", ")}
+                </span>
+              )}
+              {r.review_signals.red_flags.length > 0 && (
+                <span
+                  style={{
+                    fontFamily: "var(--font-dm-sans)",
+                    fontSize: "12px",
+                    color: "var(--amber, #E8A020)",
+                  }}
+                >
+                  ⚠ {r.review_signals.red_flags.slice(0, 2).join(" · ")}
+                </span>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Skip if */}
         {card.not_great_if && (
-          <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: "12px", color: "var(--text-muted)", marginBottom: "10px", lineHeight: 1.5 }}>
-            <span style={{ fontWeight: 500 }}>Skip if:</span> {card.not_great_if}
+          <p
+            style={{
+              fontFamily: "var(--font-dm-sans)",
+              fontSize: "12px",
+              color: "var(--text-muted)",
+              marginBottom: "10px",
+              lineHeight: 1.5,
+            }}
+          >
+            <span style={{ fontWeight: 500 }}>Skip if:</span>{" "}
+            {card.not_great_if}
           </p>
         )}
 
-        {/* Card footer */}
-        <div className="flex items-center justify-between" style={{ borderTop: "0.5px solid var(--border)", paddingTop: "12px", marginTop: "4px" }}>
-          <span style={{ fontFamily: "var(--font-dm-sans)", fontSize: "13px", fontWeight: 500, color: "var(--text-primary)" }}>
-            Est. {card.estimated_total}
-          </span>
-          <div className="flex gap-2">
-            {r.url && (
-              <a
-                href={r.url}
-                target="_blank"
-                rel="noopener noreferrer"
+        {/* Phase 3.2: Dimension score toggle */}
+        {card.scoring && (
+          <div style={{ marginBottom: "10px" }}>
+            <button
+              onClick={() => setScoringOpen((o) => !o)}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "6px",
+                background: "none",
+                border: "none",
+                cursor: "pointer",
+                padding: 0,
+                fontFamily: "var(--font-dm-sans)",
+                fontSize: "13px",
+                fontWeight: 500,
+                color: "var(--text-primary)",
+              }}
+            >
+              <span>综合评分 {card.scoring.weighted_total.toFixed(1)}</span>
+              <span
                 style={{
-                  fontFamily: "var(--font-dm-sans)",
-                  fontSize: "13px",
+                  fontSize: "11px",
                   color: "var(--text-secondary)",
-                  border: "0.5px solid var(--border)",
-                  borderRadius: "8px",
-                  padding: "7px 14px",
-                  textDecoration: "none",
-                  display: "inline-block",
-                  backgroundColor: "transparent",
+                  fontWeight: 400,
                 }}
               >
-                Map
-              </a>
+                {scoringOpen ? "▲" : "▼"}
+              </span>
+            </button>
+            {scoringOpen && (
+              <div
+                style={{
+                  marginTop: "8px",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "6px",
+                  padding: "10px 12px",
+                  backgroundColor: "var(--card-2)",
+                  borderRadius: "8px",
+                }}
+              >
+                {[
+                  { label: "场景契合", key: "scene_match" as const },
+                  { label: "预算匹配", key: "budget_match" as const },
+                  { label: "口碑质量", key: "review_quality" as const },
+                  { label: "位置便利", key: "location_convenience" as const },
+                  { label: "偏好吻合", key: "preference_match" as const },
+                ].map(({ label, key }) => (
+                  <div key={key}>
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        marginBottom: "2px",
+                      }}
+                    >
+                      <span
+                        style={{
+                          fontFamily: "var(--font-dm-sans)",
+                          fontSize: "11px",
+                          color: "var(--text-secondary)",
+                        }}
+                      >
+                        {label}
+                      </span>
+                    </div>
+                    <ScoreBar value={card.scoring![key]} />
+                  </div>
+                ))}
+                {card.scoring.red_flag_penalty > 0 && (
+                  <p
+                    style={{
+                      fontFamily: "var(--font-dm-sans)",
+                      fontSize: "11px",
+                      color: "var(--amber, #E8A020)",
+                      marginTop: "2px",
+                    }}
+                  >
+                    ⚠ 扣分项 -{card.scoring.red_flag_penalty}
+                  </p>
+                )}
+              </div>
             )}
-            {card.opentable_url && (
-              <a
-                href={card.opentable_url}
-                target="_blank"
-                rel="noopener noreferrer"
+          </div>
+        )}
+
+        {/* Card footer */}
+        <div
+          style={{
+            borderTop: "0.5px solid var(--border)",
+            paddingTop: "12px",
+            marginTop: "4px",
+          }}
+        >
+          <div className="flex items-center justify-between" style={{ marginBottom: "10px" }}>
+            <span
+              style={{
+                fontFamily: "var(--font-dm-sans)",
+                fontSize: "13px",
+                fontWeight: 500,
+                color: "var(--text-primary)",
+              }}
+            >
+              Est. {card.estimated_total}
+            </span>
+            <div className="flex gap-2">
+              {r.url && (
+                <a
+                  href={r.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    fontFamily: "var(--font-dm-sans)",
+                    fontSize: "13px",
+                    color: "var(--text-secondary)",
+                    border: "0.5px solid var(--border)",
+                    borderRadius: "8px",
+                    padding: "7px 14px",
+                    textDecoration: "none",
+                    display: "inline-block",
+                    backgroundColor: "transparent",
+                  }}
+                >
+                  Map
+                </a>
+              )}
+              {card.opentable_url && (
+                <a
+                  href={card.opentable_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    fontFamily: "var(--font-dm-sans)",
+                    fontSize: "13px",
+                    color: "#fff",
+                    backgroundColor: "var(--gold)",
+                    borderRadius: "8px",
+                    padding: "7px 14px",
+                    textDecoration: "none",
+                    display: "inline-block",
+                  }}
+                >
+                  Reserve →
+                </a>
+              )}
+            </div>
+          </div>
+
+          {/* Phase 3.3c: Feedback row */}
+          <div>
+            {feedbackState === "idle" && (
+              <button
+                onClick={() => setFeedbackState("rating")}
+                style={{
+                  background: "none",
+                  border: "none",
+                  cursor: "pointer",
+                  fontFamily: "var(--font-dm-sans)",
+                  fontSize: "12px",
+                  color: "var(--text-secondary)",
+                  padding: 0,
+                  textDecoration: "underline",
+                  textUnderlineOffset: "2px",
+                }}
+              >
+                去了？分享体验
+              </button>
+            )}
+            {feedbackState === "rating" && (
+              <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                <p
+                  style={{
+                    fontFamily: "var(--font-dm-sans)",
+                    fontSize: "12px",
+                    color: "var(--text-secondary)",
+                  }}
+                >
+                  实际体验如何？
+                </p>
+                <div style={{ display: "flex", gap: "8px" }}>
+                  <button
+                    onClick={() => handleFeedbackThumb(true)}
+                    style={{
+                      flex: 1,
+                      padding: "6px 12px",
+                      borderRadius: "8px",
+                      border: "0.5px solid var(--border)",
+                      backgroundColor: "var(--card-2)",
+                      cursor: "pointer",
+                      fontFamily: "var(--font-dm-sans)",
+                      fontSize: "12px",
+                      color: "var(--text-primary)",
+                    }}
+                  >
+                    👍 符合推荐
+                  </button>
+                  <button
+                    onClick={() => handleFeedbackThumb(false)}
+                    style={{
+                      flex: 1,
+                      padding: "6px 12px",
+                      borderRadius: "8px",
+                      border: "0.5px solid var(--border)",
+                      backgroundColor: "var(--card-2)",
+                      cursor: "pointer",
+                      fontFamily: "var(--font-dm-sans)",
+                      fontSize: "12px",
+                      color: "var(--text-primary)",
+                    }}
+                  >
+                    👎 不太对
+                  </button>
+                </div>
+              </div>
+            )}
+            {feedbackState === "issues" && (
+              <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                <p
+                  style={{
+                    fontFamily: "var(--font-dm-sans)",
+                    fontSize: "12px",
+                    color: "var(--text-secondary)",
+                  }}
+                >
+                  哪里没达预期？（可多选）
+                </p>
+                <div
+                  style={{
+                    display: "flex",
+                    flexWrap: "wrap",
+                    gap: "6px",
+                  }}
+                >
+                  {ISSUE_OPTIONS.map((issue) => (
+                    <button
+                      key={issue}
+                      onClick={() => handleIssueToggle(issue)}
+                      style={{
+                        padding: "4px 10px",
+                        borderRadius: "20px",
+                        border: "0.5px solid var(--border)",
+                        backgroundColor: selectedIssues.includes(issue)
+                          ? "var(--gold)"
+                          : "var(--card-2)",
+                        color: selectedIssues.includes(issue)
+                          ? "#fff"
+                          : "var(--text-secondary)",
+                        cursor: "pointer",
+                        fontFamily: "var(--font-dm-sans)",
+                        fontSize: "11px",
+                      }}
+                    >
+                      {issue}
+                    </button>
+                  ))}
+                </div>
+                <button
+                  onClick={submitIssues}
+                  style={{
+                    alignSelf: "flex-start",
+                    padding: "6px 14px",
+                    borderRadius: "8px",
+                    border: "none",
+                    backgroundColor: "var(--gold)",
+                    color: "#fff",
+                    cursor: "pointer",
+                    fontFamily: "var(--font-dm-sans)",
+                    fontSize: "12px",
+                  }}
+                >
+                  提交反馈
+                </button>
+              </div>
+            )}
+            {feedbackState === "done" && (
+              <p
                 style={{
                   fontFamily: "var(--font-dm-sans)",
-                  fontSize: "13px",
-                  color: "#fff",
-                  backgroundColor: "var(--gold)",
-                  borderRadius: "8px",
-                  padding: "7px 14px",
-                  textDecoration: "none",
-                  display: "inline-block",
+                  fontSize: "12px",
+                  color: "var(--text-secondary)",
                 }}
               >
-                Reserve →
-              </a>
+                感谢反馈！将用于优化推荐 ✓
+              </p>
             )}
           </div>
         </div>

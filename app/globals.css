@@ -11,6 +11,14 @@
   --text-secondary: #6B5E45;
   --text-muted: #B4A89A;
   --border: rgba(201, 168, 76, 0.25);
+
+  /* Task 12: RecommendationCard section tokens */
+  --why-bg: var(--card-2);
+  --why-label: #8B6914;
+  --why-text: #4A3F2F;
+  --watchout-bg: #FDF6EC;
+  --watchout-label: #8B5E14;
+  --watchout-text: #6B4A1A;
 }
 
 /* ─── Dark Mode ───────────────────────────────────────── */
@@ -23,6 +31,14 @@
     --text-secondary: #8A8070;
     --text-muted: #5A5040;
     --border: rgba(201, 168, 76, 0.15);
+
+    /* Task 12: dark mode overrides for card sections */
+    --why-bg: #2A2A1E;
+    --why-label: #C9A84C;
+    --why-text: #D4C4A0;
+    --watchout-bg: #2A221A;
+    --watchout-label: #E8A020;
+    --watchout-text: #C8A870;
   }
 }
 
