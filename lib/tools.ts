@@ -347,7 +347,7 @@ export async function searchHotels(params: {
 
   const url = new URL("https://serpapi.com/search");
   url.searchParams.set("engine", "google_hotels");
-  url.searchParams.set("q", params.location);
+  url.searchParams.set("q", `hotels in ${params.location}`);
   url.searchParams.set("check_in_date", checkIn);
   url.searchParams.set("check_out_date", checkOut);
   url.searchParams.set("adults", String(params.guests ?? 2));
@@ -408,6 +408,8 @@ export async function searchHotels(params: {
         ),
         booking_link: String(p.link ?? `https://www.google.com/travel/hotels`),
         description: String(p.description ?? ""),
+        lat: (p.gps_coordinates as Record<string, number> | undefined)?.latitude,
+        lng: (p.gps_coordinates as Record<string, number> | undefined)?.longitude,
       };
     });
   } catch (err) {

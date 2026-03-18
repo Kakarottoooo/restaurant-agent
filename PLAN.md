@@ -1767,3 +1767,17 @@ Phase 7.5 酒店卡片 UI（约 2 天）
 | 实时价格 | 酒店卡片显示用户所选日期的真实价格 |
 | 架构可扩展 | 新增商品/医生品类只需加新的 Intent 类型 + Pipeline，不改核心代码 |
 | 餐厅功能 | 完全不受影响，回归测试全过 |
+
+---
+
+## 2026-03-18 改动记录
+
+### Hero 封面轮播
+- 新增 4 条品牌标语（方向 1/2/3/5），随机起始，每 4.5s 循环切换
+- 动画：fade + translateY，副标题 60ms 延迟跟随
+- 修复 hydration 错误：SSR 固定从第 0 条开始，`Math.random()` 移至 `useEffect`
+
+### 酒店搜索 Location Bug 修复
+- 根因：intent 解析 prompt 把 `cityFullName` 硬填为默认值，AI 不提取用户消息里的地点
+- 修复：prompt 明确要求从用户消息提取地点（含 typo 容错），只在无地点时 fallback
+- SerpApi `q` 参数从 `"Las Vegas"` 改为 `"hotels in Las Vegas"`，提升搜索精准度

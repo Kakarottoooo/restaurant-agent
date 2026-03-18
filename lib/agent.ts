@@ -154,13 +154,15 @@ async function parseHotelIntent(
         content: `Extract hotel search requirements from this request. Return ONLY valid JSON.
 
 User request: "${userMessage}"
-City: ${cityFullName}
+Default city (use ONLY if user did not mention any location): ${cityFullName}
 Today's date: ${new Date().toISOString().split("T")[0]}
+
+IMPORTANT: For "location", look for any city, region, or place name in the user request (including typos like "las vagas"="Las Vegas", "new yok"="New York"). Only fall back to "${cityFullName}" if the user truly mentioned no location.
 
 Return JSON with these fields (omit fields that aren't mentioned):
 {
   "category": "hotel",
-  "location": "${cityFullName}",
+  "location": "<city from user message, or ${cityFullName} if none>",
   "check_in": "YYYY-MM-DD or null",
   "check_out": "YYYY-MM-DD or null",
   "nights": number or null,
@@ -168,8 +170,8 @@ Return JSON with these fields (omit fields that aren't mentioned):
   "star_rating": number or null (minimum star rating requested),
   "room_type": "single|double|suite|null",
   "amenities": ["pool", "gym", "parking", "breakfast", "wifi", etc],
-  "budget_per_person": number or null (per night per person),
-  "budget_total": number or null (total budget),
+  "budget_per_night": number or null,
+  "budget_total": number or null,
   "neighborhood": "specific area or null",
   "purpose": "business|leisure|romantic|family|null",
   "constraints": ["no chains", "quiet", "pet-friendly", etc],
@@ -216,9 +218,11 @@ async function parseRestaurantIntent(
         content: `Extract structured requirements from this restaurant request. Return ONLY valid JSON.
 
 User request: "${userMessage}"
-City: ${cityFullName}
+Default city (use ONLY if user did not mention any location): ${cityFullName}
 ${prefContext ? `\n${prefContext}` : ""}
 ${profileContext ? `\nUser profile: ${profileContext}` : ""}
+
+IMPORTANT: For "location", look for any city or place name in the user request (including typos). Only fall back to "${cityFullName}" if the user truly mentioned no location.
 
 Return JSON with these fields (omit fields that aren't mentioned):
 {
@@ -228,7 +232,7 @@ Return JSON with these fields (omit fields that aren't mentioned):
   "budget_total": number or null,
   "atmosphere": ["romantic", "quiet", "lively", "cozy", "trendy", etc],
   "noise_level": "quiet|moderate|lively|any",
-  "location": "${cityFullName}",
+  "location": "<city from user message, or ${cityFullName} if none>",
   "neighborhood": "specific neighborhood or null",
   "near_location": "specific landmark, address, or area to search near (e.g. 'Union Square', 'Times Square'), or null",
   "party_size": number or null,

@@ -31,8 +31,17 @@ self.addEventListener("fetch", (event) => {
   }
 
   event.respondWith(
-    caches
-      .match(event.request)
-      .then((cached) => cached || fetch(event.request))
+    caches.match(event.request).then((cached) => {
+      if (cached) return cached;
+
+      return fetch(event.request).catch(() => {
+        // For navigation requests, fall back to the cached app shell
+        if (event.request.mode === "navigate") {
+          return caches.match("/");
+        }
+        // For other requests, let it fail silently
+        return new Response("", { status: 408, statusText: "Offline" });
+      });
+    })
   );
 });

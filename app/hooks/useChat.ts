@@ -4,7 +4,7 @@ import { LearnedWeights } from "@/lib/types";
 
 export const LOADING_STEPS = [
   "Parsing your request...",
-  "Searching nearby restaurants...",
+  "Searching targets...",
   "Gathering real signals...",
   "AI scoring & ranking...",
 ];

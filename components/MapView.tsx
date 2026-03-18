@@ -3,7 +3,16 @@
 import { useEffect, useRef, useState } from "react";
 import { MapContainer, TileLayer, Marker, useMap } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
-import type { RecommendationCard } from "@/lib/types";
+
+export interface MapPin {
+  id: string;
+  name: string;
+  lat: number;
+  lng: number;
+  rank: number;
+  subtitle: string;
+  rating: number;
+}
 
 function FlyToController({
   lat,
@@ -25,11 +34,13 @@ function FlyToController({
 }
 
 export default function MapView({
-  cards,
+  pins,
   center: cityCenter,
+  label = "Location",
 }: {
-  cards: RecommendationCard[];
+  pins: MapPin[];
   center?: { lat: number; lng: number };
+  label?: string;
 }) {
   const [selectedIndex, setSelectedIndex] = useState(0);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -53,9 +64,7 @@ export default function MapView({
     setL(leaflet);
   }, []);
 
-  const validCards = cards.filter(
-    (c) => c.restaurant.lat != null && c.restaurant.lng != null
-  );
+  const validCards = pins;
 
   function selectCard(i: number) {
     setSelectedIndex(i);
@@ -83,7 +92,7 @@ export default function MapView({
   const selected = validCards[selectedIndex];
   const center: [number, number] = cityCenter
     ? [cityCenter.lat, cityCenter.lng]
-    : [validCards[0].restaurant.lat!, validCards[0].restaurant.lng!];
+    : [validCards[0].lat, validCards[0].lng];
 
   function createMarkerIcon(isSelected: boolean, rank: number) {
     if (!L) return undefined;
@@ -130,21 +139,21 @@ export default function MapView({
             style={{ height: "100%", width: "100%" }}
             zoomControl={false}
             keyboard={true}
-            aria-label="Restaurant location map"
+            aria-label={`${label} location map`}
           >
             <TileLayer
               attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
               url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             />
             <FlyToController
-              lat={selected?.restaurant.lat ?? null}
-              lng={selected?.restaurant.lng ?? null}
+              lat={selected?.lat ?? null}
+              lng={selected?.lng ?? null}
               trigger={selectedIndex}
             />
-            {validCards.map((card, i) => (
+            {validCards.map((pin, i) => (
               <Marker
-                key={card.restaurant.id}
-                position={[card.restaurant.lat!, card.restaurant.lng!]}
+                key={pin.id}
+                position={[pin.lat, pin.lng]}
                 icon={createMarkerIcon(i === selectedIndex, i + 1)}
                 eventHandlers={{ click: () => selectCard(i) }}
                 zIndexOffset={i === selectedIndex ? 1000 : 0}
@@ -179,7 +188,7 @@ export default function MapView({
       <div
         ref={stripRef}
         role="listbox"
-        aria-label="Restaurant list"
+        aria-label={`${label} list`}
         style={{
           display: "flex",
           overflowX: "auto",
@@ -192,18 +201,17 @@ export default function MapView({
           scrollbarWidth: "none",
         }}
       >
-        {validCards.map((card, i) => {
-          const r = card.restaurant;
+        {validCards.map((pin, i) => {
           const isSelected = i === selectedIndex;
           return (
             <button
-              key={r.id}
+              key={pin.id}
               ref={(el) => {
                 cardRefs.current[i] = el;
               }}
               role="option"
               aria-selected={isSelected}
-              aria-label={`Select ${r.name}, rank ${i + 1}`}
+              aria-label={`Select ${pin.name}, rank ${i + 1}`}
               onClick={() => selectCard(i)}
               style={{
                 flexShrink: 0,
@@ -264,10 +272,10 @@ export default function MapView({
                     WebkitBoxOrient: "vertical",
                   }}
                 >
-                  {r.name}
+                  {pin.name}
                 </span>
               </div>
-              {/* Cuisine + rating */}
+              {/* Subtitle + rating */}
               <div
                 style={{
                   display: "flex",
@@ -286,7 +294,7 @@ export default function MapView({
                     maxWidth: "110px",
                   }}
                 >
-                  {r.cuisine}
+                  {pin.subtitle}
                 </span>
                 <span
                   style={{
@@ -297,7 +305,7 @@ export default function MapView({
                     flexShrink: 0,
                   }}
                 >
-                  ★ {r.rating}
+                  ★ {pin.rating}
                 </span>
               </div>
             </button>

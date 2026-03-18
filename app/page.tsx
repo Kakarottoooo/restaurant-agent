@@ -7,6 +7,7 @@ import HotelCard from "@/components/HotelCard";
 import DateRangePicker from "@/components/DateRangePicker";
 import { CITIES_SORTED } from "@/lib/cities";
 import { useChat, LOADING_STEPS } from "@/app/hooks/useChat";
+import type { MapPin } from "@/components/MapView";
 import { useLocation } from "@/app/hooks/useLocation";
 import { useFavorites } from "@/app/hooks/useFavorites";
 import { usePreferences, formatProfileForPrompt } from "@/app/hooks/usePreferences";
@@ -20,6 +21,25 @@ const MapView = dynamic(() => import("@/components/MapView"), { ssr: false });
 const DEFAULT_EXAMPLES = [
   "Romantic dinner for two, ~$80/person, quiet, no chains, Manhattan",
   "4-star hotel in Chicago downtown, $200/night, check in Friday, 2 nights, business trip",
+];
+
+const HERO_TAGLINES = [
+  {
+    headline: ["Your AI guide", "to the city."],
+    sub: "Restaurants, hotels, and more — curated for you.",
+  },
+  {
+    headline: ["Tell me where", "you want to be."],
+    sub: "I'll find exactly the right place.",
+  },
+  {
+    headline: ["Discover places", "worth remembering."],
+    sub: "Powered by AI. Guided by taste.",
+  },
+  {
+    headline: ["Every city has", "hidden gems."],
+    sub: "Folio. helps you find them.",
+  },
 ];
 
 const DIETARY_OPTIONS = ["素食", "纯素", "无麸质", "无贝类", "清真", "犹太洁食"];
@@ -80,6 +100,10 @@ export default function Home() {
   const [datePickerOpen, setDatePickerOpen] = useState(false);
   const [hotelDates, setHotelDates] = useState<{ checkIn: string; checkOut: string } | null>(null);
 
+  // Hero tagline rotation (start at 0 for SSR, randomize on mount to avoid hydration mismatch)
+  const [heroIdx, setHeroIdx] = useState(0);
+  const [heroVisible, setHeroVisible] = useState(true);
+
   // Phase 4.6: Call learnWeightsFromFeedback on mount
   useEffect(() => {
     learnWeightsFromFeedback();
@@ -101,7 +125,48 @@ export default function Home() {
   const hasMessages = chat.messages.length > 0;
   const lastUserQuery =
     [...chat.messages].reverse().find((m) => m.role === "user")?.content ?? "";
-  const isMapMode = chat.viewMode === "map" && chat.allCards.length > 0;
+  const hasResults = chat.allCards.length > 0 || chat.allHotelCards.length > 0;
+  const isMapMode = chat.viewMode === "map" && hasResults;
+
+  // Unified map pins for both restaurants and hotels
+  const mapPins: MapPin[] = chat.resultCategory === "hotel"
+    ? chat.allHotelCards
+        .filter((c) => c.hotel.lat != null && c.hotel.lng != null)
+        .map((c, i) => ({
+          id: c.hotel.id,
+          name: c.hotel.name,
+          lat: c.hotel.lat!,
+          lng: c.hotel.lng!,
+          rank: i + 1,
+          subtitle: c.hotel.price_per_night > 0 ? `$${c.hotel.price_per_night}/night` : "",
+          rating: c.hotel.rating,
+        }))
+    : chat.allCards
+        .filter((c) => c.restaurant.lat != null && c.restaurant.lng != null)
+        .map((c, i) => ({
+          id: c.restaurant.id,
+          name: c.restaurant.name,
+          lat: c.restaurant.lat!,
+          lng: c.restaurant.lng!,
+          rank: i + 1,
+          subtitle: c.restaurant.cuisine ?? "",
+          rating: c.restaurant.rating,
+        }));
+
+  // Hero tagline rotation — cycle every 4.5s with fade transition
+  useEffect(() => {
+    if (hasMessages) return;
+    // Randomize starting index on client only (avoids SSR hydration mismatch)
+    setHeroIdx(Math.floor(Math.random() * HERO_TAGLINES.length));
+    const id = setInterval(() => {
+      setHeroVisible(false);
+      setTimeout(() => {
+        setHeroIdx((i) => (i + 1) % HERO_TAGLINES.length);
+        setHeroVisible(true);
+      }, 500);
+    }, 4500);
+    return () => clearInterval(id);
+  }, [hasMessages]);
 
   // Phase 4.3: Compare helpers
   function toggleCompare(card: CardType) {
@@ -154,7 +219,7 @@ export default function Home() {
   // We pass requestId=undefined for now (it's in the SSE data but not surfaced here)
 
   // Shared filter/view bar rendered in both list and map contexts
-  const filterViewBar = chat.allCards.length > 0 && (
+  const filterViewBar = hasResults && (
     <div className="flex flex-col gap-2">
       <div className="flex items-center justify-between">
         {/* View toggle */}
@@ -1163,7 +1228,7 @@ export default function Home() {
             {filterViewBar}
           </div>
           <div style={{ flex: 1, minHeight: 0 }}>
-            <MapView cards={chat.allCards} center={location.mapCenter} />
+            <MapView pins={mapPins} center={location.mapCenter} label={chat.resultCategory === "hotel" ? "Hotel" : "Restaurant"} />
           </div>
         </div>
       )}
@@ -1183,10 +1248,13 @@ export default function Home() {
                     color: "var(--text-primary)",
                     lineHeight: 1.15,
                     marginBottom: "16px",
+                    opacity: heroVisible ? 1 : 0,
+                    transform: heroVisible ? "translateY(0)" : "translateY(-10px)",
+                    transition: "opacity 0.5s ease, transform 0.5s ease",
                   }}
                 >
-                  Find your perfect<br />
-                  {location.cityLabel} restaurant.
+                  {HERO_TAGLINES[heroIdx].headline[0]}<br />
+                  {HERO_TAGLINES[heroIdx].headline[1]}
                 </h2>
                 <p
                   style={{
@@ -1196,10 +1264,12 @@ export default function Home() {
                     maxWidth: "340px",
                     marginBottom: "40px",
                     fontFamily: "var(--font-dm-sans)",
+                    opacity: heroVisible ? 1 : 0,
+                    transform: heroVisible ? "translateY(0)" : "translateY(-10px)",
+                    transition: "opacity 0.5s ease 0.06s, transform 0.5s ease 0.06s",
                   }}
                 >
-                  Tell me what you&apos;re looking for. I&apos;ll find the best
-                  options and explain exactly why each one fits.
+                  {HERO_TAGLINES[heroIdx].sub}
                 </p>
                 <div className="flex flex-col gap-2 w-full max-w-sm">
                   {DEFAULT_EXAMPLES.map((ex) => (
