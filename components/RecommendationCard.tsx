@@ -687,26 +687,24 @@ export default function RecommendationCard({
                   Map
                 </a>
               )}
-              {card.opentable_url && (
-                <a
-                  href={card.opentable_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onClick={() => fireTelemetry("reserve_click")}
-                  style={{
-                    fontFamily: "var(--font-dm-sans)",
-                    fontSize: "13px",
-                    color: "#fff",
-                    backgroundColor: "var(--gold)",
-                    borderRadius: "8px",
-                    padding: "7px 14px",
-                    textDecoration: "none",
-                    display: "inline-block",
-                  }}
-                >
-                  Reserve →
-                </a>
-              )}
+              <a
+                href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(card.restaurant.name)}&query_place_id=${card.restaurant.id}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => fireTelemetry("reserve_click")}
+                style={{
+                  fontFamily: "var(--font-dm-sans)",
+                  fontSize: "13px",
+                  color: "#fff",
+                  backgroundColor: "var(--gold)",
+                  borderRadius: "8px",
+                  padding: "7px 14px",
+                  textDecoration: "none",
+                  display: "inline-block",
+                }}
+              >
+                Reserve →
+              </a>
             </div>
           </div>
 
