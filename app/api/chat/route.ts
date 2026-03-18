@@ -91,11 +91,18 @@ export async function POST(req: NextRequest) {
           customWeights ?? undefined
         );
 
+        const recCount =
+          result.category === "hotel"
+            ? result.hotelRecommendations.length
+            : result.category === "flight"
+            ? result.flightRecommendations.length
+            : result.recommendations.length;
+
         console.log(JSON.stringify({
           type: "response",
           request_id,
           category: result.category,
-          recommendations_count: result.category === "hotel" ? result.hotelRecommendations.length : result.recommendations.length,
+          recommendations_count: recCount,
           timestamp: new Date().toISOString(),
         }));
 
@@ -104,6 +111,8 @@ export async function POST(req: NextRequest) {
           requirements: result.requirements,
           recommendations: result.recommendations,
           hotelRecommendations: result.hotelRecommendations,
+          flightRecommendations: result.flightRecommendations,
+          missing_flight_fields: result.missing_flight_fields,
           suggested_refinements: result.suggested_refinements,
           category: result.category,
           request_id,

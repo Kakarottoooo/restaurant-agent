@@ -1,4 +1,4 @@
-import { Restaurant, ReviewSignals, GoogleReview, Hotel } from "./types";
+import { Restaurant, ReviewSignals, GoogleReview, Hotel, Flight } from "./types";
 
 // ─── Geocoding ────────────────────────────────────────────────────────────────
 
@@ -414,6 +414,170 @@ export async function searchHotels(params: {
     });
   } catch (err) {
     console.warn("searchHotels error:", err);
+    return [];
+  }
+}
+
+// ─── Phase 8: Flight Search via SerpApi Google Flights ────────────────────────
+
+// Airport coordinates for map arc rendering (major US airports)
+const AIRPORT_COORDS: Record<string, { lat: number; lng: number }> = {
+  JFK: { lat: 40.6413, lng: -73.7781 }, LGA: { lat: 40.7772, lng: -73.8726 },
+  EWR: { lat: 40.6895, lng: -74.1745 }, LAX: { lat: 33.9425, lng: -118.408 },
+  SFO: { lat: 37.6213, lng: -122.379 }, ORD: { lat: 41.9742, lng: -87.9073 },
+  MDW: { lat: 41.7868, lng: -87.7522 }, ATL: { lat: 33.6407, lng: -84.4277 },
+  DFW: { lat: 32.8998, lng: -97.0403 }, IAH: { lat: 29.9902, lng: -95.3368 },
+  MIA: { lat: 25.7959, lng: -80.2870 }, FLL: { lat: 26.0726, lng: -80.1527 },
+  SEA: { lat: 47.4502, lng: -122.309 }, DEN: { lat: 39.8561, lng: -104.674 },
+  BOS: { lat: 42.3656, lng: -71.0096 }, PHL: { lat: 39.8744, lng: -75.2424 },
+  DCA: { lat: 38.8521, lng: -77.0377 }, IAD: { lat: 38.9531, lng: -77.4565 },
+  BWI: { lat: 39.1754, lng: -76.6683 }, LAS: { lat: 36.0840, lng: -115.153 },
+  PHX: { lat: 33.4373, lng: -112.007 }, MSP: { lat: 44.8848, lng: -93.2223 },
+  DTW: { lat: 42.2162, lng: -83.3554 }, CLT: { lat: 35.2140, lng: -80.9431 },
+  SLC: { lat: 40.7884, lng: -111.978 }, PDX: { lat: 45.5898, lng: -122.591 },
+  SAN: { lat: 32.7338, lng: -117.190 }, HNL: { lat: 21.3245, lng: -157.925 },
+  AUS: { lat: 30.1975, lng: -97.6664 }, MCO: { lat: 28.4312, lng: -81.3081 },
+};
+
+function getAirportCoords(iata: string): { lat: number; lng: number } | undefined {
+  return AIRPORT_COORDS[iata.toUpperCase()];
+}
+
+export async function searchFlights(params: {
+  departure_city: string;
+  arrival_city: string;
+  date: string; // YYYY-MM-DD
+  return_date?: string;
+  passengers?: number;
+  cabin_class?: "economy" | "business" | "first";
+  is_round_trip?: boolean;
+  prefer_direct?: boolean;
+  maxResults?: number;
+}): Promise<Flight[]> {
+  const apiKey = process.env.SERPAPI_KEY;
+  if (!apiKey) {
+    console.warn("SERPAPI_KEY not set, returning empty flight results");
+    return [];
+  }
+
+  // Build SerpApi Google Flights URL
+  const url = new URL("https://serpapi.com/search");
+  url.searchParams.set("engine", "google_flights");
+  url.searchParams.set("departure_id", params.departure_city); // city name or IATA
+  url.searchParams.set("arrival_id", params.arrival_city);
+  url.searchParams.set("outbound_date", params.date);
+  if (params.is_round_trip && params.return_date) {
+    url.searchParams.set("return_date", params.return_date);
+    url.searchParams.set("type", "1"); // round trip
+  } else {
+    url.searchParams.set("type", "2"); // one way
+  }
+  url.searchParams.set("adults", String(params.passengers ?? 1));
+  const classMap: Record<string, string> = { economy: "1", business: "2", first: "3" };
+  url.searchParams.set("travel_class", classMap[params.cabin_class ?? "economy"]);
+  url.searchParams.set("currency", "USD");
+  url.searchParams.set("gl", "us");
+  url.searchParams.set("hl", "en");
+  url.searchParams.set("api_key", apiKey);
+
+  try {
+    const res = await fetch(url.toString());
+    if (!res.ok) {
+      console.warn("SerpApi flight search failed:", res.status);
+      return [];
+    }
+    const data = await res.json();
+
+    // SerpApi Google Flights returns best_flights and other_flights
+    const allFlights: Array<Record<string, unknown>> = [
+      ...((data.best_flights as Array<Record<string, unknown>>) ?? []),
+      ...((data.other_flights as Array<Record<string, unknown>>) ?? []),
+    ];
+
+    if (allFlights.length === 0) return [];
+
+    const parseFlightEntry = (entry: Record<string, unknown>, idx: number): Flight | null => {
+      const flights = entry.flights as Array<Record<string, unknown>> | undefined;
+      if (!flights || flights.length === 0) return null;
+
+      const firstLeg = flights[0];
+      const lastLeg = flights[flights.length - 1];
+      const layovers = entry.layovers as Array<Record<string, unknown>> | undefined;
+      const stops = (flights.length - 1);
+
+      // Airline from first leg
+      const airline = String(firstLeg.airline ?? "Unknown");
+      const airlineLogo = String(firstLeg.airline_logo ?? "");
+      const flightNumber = String(firstLeg.flight_number ?? "");
+
+      const depAirport = String((firstLeg.departure_airport as Record<string, unknown>)?.id ?? params.departure_city);
+      const arrAirport = String((lastLeg.arrival_airport as Record<string, unknown>)?.id ?? params.arrival_city);
+      const depCity = String((firstLeg.departure_airport as Record<string, unknown>)?.name ?? params.departure_city);
+      const arrCity = String((lastLeg.arrival_airport as Record<string, unknown>)?.name ?? params.arrival_city);
+      const depTime = String((firstLeg.departure_airport as Record<string, unknown>)?.time ?? "");
+      const arrTime = String((lastLeg.arrival_airport as Record<string, unknown>)?.time ?? "");
+
+      const totalDurationMin = Number(entry.total_duration ?? 0);
+      const durationHr = Math.floor(totalDurationMin / 60);
+      const durationMin = totalDurationMin % 60;
+      const duration = totalDurationMin > 0 ? `${durationHr}h ${durationMin}m` : "";
+
+      const layoverCity = layovers?.[0]
+        ? String((layovers[0] as Record<string, unknown>).name ?? "")
+        : undefined;
+      const layoverDurationMin = layovers?.[0]
+        ? Number((layovers[0] as Record<string, unknown>).duration ?? 0)
+        : 0;
+      const layoverDuration = layoverDurationMin > 0
+        ? `${Math.floor(layoverDurationMin / 60)}h ${layoverDurationMin % 60}m`
+        : undefined;
+
+      const price = Number(entry.price ?? 0);
+
+      // Build Google Flights booking link (pre-filled)
+      const bookingLink = `https://www.google.com/flights?hl=en#flt=${encodeURIComponent(depAirport)}.${encodeURIComponent(arrAirport)}.${params.date}`;
+
+      // Get airport coords for map arcs
+      const depCoords = getAirportCoords(depAirport);
+      const arrCoords = getAirportCoords(arrAirport);
+
+      return {
+        id: `flight-${idx}`,
+        airline,
+        airline_logo: airlineLogo || undefined,
+        flight_number: flightNumber || undefined,
+        departure_airport: depAirport,
+        arrival_airport: arrAirport,
+        departure_city: depCity,
+        arrival_city: arrCity,
+        departure_time: depTime,
+        arrival_time: arrTime,
+        duration,
+        stops,
+        layover_city: layoverCity,
+        layover_duration: layoverDuration,
+        price,
+        booking_link: bookingLink,
+        is_round_trip: params.is_round_trip,
+        departure_lat: depCoords?.lat,
+        departure_lng: depCoords?.lng,
+        arrival_lat: arrCoords?.lat,
+        arrival_lng: arrCoords?.lng,
+      };
+    };
+
+    const parsed = allFlights
+      .map((entry, idx) => parseFlightEntry(entry, idx))
+      .filter((f): f is Flight => f !== null);
+
+    // Group: direct x3, 1-stop x1, 2-stop x1 (or direct x5 if prefer_direct)
+    const direct = parsed.filter((f) => f.stops === 0).slice(0, params.prefer_direct ? 5 : 3);
+    const oneStop = params.prefer_direct ? [] : parsed.filter((f) => f.stops === 1).slice(0, 1);
+    const twoStop = params.prefer_direct ? [] : parsed.filter((f) => f.stops >= 2).slice(0, 1);
+
+    return [...direct, ...oneStop, ...twoStop].slice(0, params.maxResults ?? 5);
+  } catch (err) {
+    console.warn("searchFlights error:", err);
     return [];
   }
 }

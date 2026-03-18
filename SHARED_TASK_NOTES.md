@@ -1,7 +1,7 @@
 # Shared Task Notes
 
 ## Status
-Phase 7 complete. Build passes cleanly. All PLAN.md phases (1–7) done.
+Phase 8 complete. Build passes cleanly. All PLAN.md phases (1–8) done.
 
 ## Architecture notes
 - `FlyToController` is a render-null react-leaflet child component
@@ -14,49 +14,50 @@ Phase 7 complete. Build passes cleanly. All PLAN.md phases (1–7) done.
 - `--bg: #1C1C1C`, `--card: #242424`, `--card-2: #2A2A2A`
 - `--text-primary: #F0EAD6`, `--text-secondary: #8A8070`, `--gold: #C9A84C`
 
-## Phase 7 features (implemented this iteration)
+## Phase 8 features (implemented this iteration)
 
-### Phase 7.1 — Two-layer Intent Architecture
-- `CategoryType`, `BaseIntent`, `RestaurantIntent`, `HotelIntent`, `ParsedIntent` in `lib/types.ts`
-- `detectCategory()` in `lib/agent.ts` — keyword-based hotel detection (instant, no AI call)
-- `parseRestaurantIntent()` — renamed from old `parseIntent`, unexported
-- `parseHotelIntent()` — AI-driven extraction of check_in/check_out/nights/guests/star_rating/amenities
-- New exported `parseIntent()` dispatches to restaurant or hotel branch
-- `runAgent()` routes hotel intents to `runHotelPipeline()` before the restaurant pipeline
+### Three-category Intent Architecture
+- `CategoryType = "restaurant" | "hotel" | "flight" | "unknown"`
+- `FlightIntent extends BaseIntent` in `lib/types.ts`
+- `Flight`, `FlightRecommendationCard` types in `lib/types.ts`
+- `detectCategory()` in `lib/agent.ts` checks flight keywords before hotel keywords
 
-### Phase 7.2 — Hotel Search Pipeline
-- `Hotel`, `HotelRecommendationCard` types in `lib/types.ts`
-- `searchHotels()` in `lib/tools.ts` — calls SerpApi `google_hotels` engine
-- `HOTEL_DEFAULT_WEIGHTS` in `lib/agent.ts` (budget_match 30%, scene_match 25%, review_quality 20%, location_convenience 20%, preference_match 5%)
-- `runHotelPipeline()` in `lib/agent.ts` — search → pre-filter → AI rank/explain
-- `runAgent()` returns `{ category, recommendations, hotelRecommendations, suggested_refinements }`
-- `/api/chat/route.ts` SSE `complete` event now includes `category` and `hotelRecommendations`
+### Flight Search Pipeline
+- `searchFlights()` in `lib/tools.ts` — calls SerpApi `google_flights` engine
+- Result grouping: direct×3, 1-stop×1, 2-stop×1 (or direct×5 if `prefer_direct`)
+- `AIRPORT_COORDS` lookup table for 30 major US airports (for map arc rendering)
+- `runFlightPipeline()` in `lib/agent.ts` — checks missing fields, calls searchFlights, builds cards
+- Missing fields (departure/arrival/date) trigger a follow-up question to the user
 
-### Phase 7.3 — Date Range Picker
-- `components/DateRangePicker.tsx` — mobile-friendly bottom-sheet with native date inputs
-- Auto-advances check-out when check-in is changed past it
-- Shows nights summary before confirming
-- Shown in chat when `resultCategory === "hotel"`
+### FlightCard UI (`components/FlightCard.tsx`)
+- Rank badge, airline logo/icon, nonstop/1-stop/2-stop badge
+- Departure time → arrival time with arc SVG + duration
+- Layover city + duration shown if applicable
+- Price + "Book on Google Flights →" deep link (pre-filled with airports + date)
 
-### Phase 7.4 — Homepage Examples Updated
-- Example 1: `"Romantic dinner for two, ~$80/person, quiet, no chains, Manhattan"`
-- Example 2: `"4-star hotel in Chicago downtown, $200/night, check in Friday, 2 nights, business trip"`
+### Map Mode for Flights
+- `MapView` accepts `flightCards?: FlightRecommendationCard[]` prop
+- Renders great-circle arc (dashed gold Polyline) between departure + arrival airports
+- Departure marker: dark badge with IATA code; Arrival marker: gold badge with IATA code
+- Bottom strip shows flight cards; selecting one updates the arc
 
-### Phase 7.5 — Hotel Card UI
-- `components/HotelCard.tsx` — hotel placeholder SVG, rank badge, star rating, price, Why it fits, Watch out, amenity chips, Map + Book buttons
-- `page.tsx` renders `HotelCard` when `chat.resultCategory === "hotel"`
-- `useChat.ts` tracks `allHotelCards: HotelRecommendationCard[]` and `resultCategory: CategoryType`
-- `Message` type updated with `hotelCards?` and `category?` fields
+### SSE Response
+- `complete` event now includes `flightRecommendations` and `missing_flight_fields`
+- `useChat.ts` tracks `allFlightCards: FlightRecommendationCard[]`
+
+## To activate flight search
+Add `SERPAPI_KEY` to `.env.local` (same key used for hotel search).
+Without the key, flight queries return empty results gracefully with a message.
 
 ## To activate hotel search
 Add `SERPAPI_KEY` to `.env.local` (register at https://serpapi.com — 250 free searches/month).
 Without the key, hotel queries return empty results gracefully.
-
-## Remaining work
-All PLAN.md phases (1–7) complete. Future backlog: Itinerary Builder, community reviews.
 
 ## To activate Clerk/accounts
 1. Create project at https://clerk.com
 2. Add `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` and `CLERK_SECRET_KEY` to `.env.local`
 3. Provision Vercel Postgres (or Neon) and add `POSTGRES_URL`
 4. Run SQL in `lib/schema.sql` to create tables
+
+## Remaining work
+All PLAN.md phases (1–8) complete. Future backlog: Itinerary Builder, community reviews.

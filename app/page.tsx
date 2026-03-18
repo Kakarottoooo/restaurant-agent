@@ -4,6 +4,7 @@ import { useRef, useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import RecommendationCard from "@/components/RecommendationCard";
 import HotelCard from "@/components/HotelCard";
+import FlightCard from "@/components/FlightCard";
 import DateRangePicker from "@/components/DateRangePicker";
 import { CITIES_SORTED } from "@/lib/cities";
 import { useChat, LOADING_STEPS } from "@/app/hooks/useChat";
@@ -125,10 +126,10 @@ export default function Home() {
   const hasMessages = chat.messages.length > 0;
   const lastUserQuery =
     [...chat.messages].reverse().find((m) => m.role === "user")?.content ?? "";
-  const hasResults = chat.allCards.length > 0 || chat.allHotelCards.length > 0;
+  const hasResults = chat.allCards.length > 0 || chat.allHotelCards.length > 0 || chat.allFlightCards.length > 0;
   const isMapMode = chat.viewMode === "map" && hasResults;
 
-  // Unified map pins for both restaurants and hotels
+  // Unified map pins for restaurants and hotels (flights use arc lines, not pins)
   const mapPins: MapPin[] = chat.resultCategory === "hotel"
     ? chat.allHotelCards
         .filter((c) => c.hotel.lat != null && c.hotel.lng != null)
@@ -1228,7 +1229,12 @@ export default function Home() {
             {filterViewBar}
           </div>
           <div style={{ flex: 1, minHeight: 0 }}>
-            <MapView pins={mapPins} center={location.mapCenter} label={chat.resultCategory === "hotel" ? "Hotel" : "Restaurant"} />
+            <MapView
+              pins={mapPins}
+              center={location.mapCenter}
+              label={chat.resultCategory === "hotel" ? "Hotel" : "Restaurant"}
+              flightCards={chat.resultCategory === "flight" ? chat.allFlightCards : undefined}
+            />
           </div>
         </div>
       )}
@@ -1457,6 +1463,15 @@ export default function Home() {
                   <div className="flex flex-col gap-3">
                     {chat.allHotelCards.map((card, i) => (
                       <HotelCard key={card.hotel.id} card={card} index={i} />
+                    ))}
+                  </div>
+                )}
+
+                {/* Flight Results */}
+                {chat.resultCategory === "flight" && chat.allFlightCards.length > 0 && (
+                  <div className="flex flex-col gap-3">
+                    {chat.allFlightCards.map((card, i) => (
+                      <FlightCard key={card.flight.id} card={card} index={i} />
                     ))}
                   </div>
                 )}
