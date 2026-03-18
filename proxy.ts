@@ -1,10 +1,13 @@
-import { NextResponse } from "next/server";
-import type { NextRequest } from "next/server";
+import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 
-// Minimal pass-through middleware — Clerk auth added once deployment is stable.
-export default function middleware(_req: NextRequest) {
-  return NextResponse.next();
-}
+// Only /api/user/* routes require authentication
+const isProtectedRoute = createRouteMatcher(["/api/user(.*)"]);
+
+export default clerkMiddleware(async (auth, req) => {
+  if (isProtectedRoute(req)) {
+    await auth.protect();
+  }
+});
 
 export const config = {
   matcher: [
