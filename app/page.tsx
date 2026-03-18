@@ -210,8 +210,94 @@ export default function Home() {
   const cityLabel = isNearMe ? "Nearby" : city?.label ?? "";
   const mapCenter = isNearMe && gpsCoords ? gpsCoords : city?.center;
 
+  const isMapMode = viewMode === "map" && allCards.length > 0;
+
+  // Shared filter/view bar rendered in both list and map contexts
+  const filterViewBar = allCards.length > 0 && (
+    <div className="flex flex-col gap-2">
+      <div className="flex items-center justify-between">
+        {/* View toggle */}
+        <div className="flex gap-1 rounded-xl p-1" style={{ backgroundColor: "var(--card)", border: "0.5px solid var(--border)" }}>
+          {(["list", "map"] as const).map((mode) => (
+            <button
+              key={mode}
+              onClick={() => setViewMode(mode)}
+              className="px-3 py-1 rounded-lg text-xs font-medium transition-all capitalize"
+              style={{
+                backgroundColor: viewMode === mode ? "var(--gold)" : "transparent",
+                color: viewMode === mode ? "#fff" : "var(--text-secondary)",
+                fontFamily: "var(--font-dm-sans)",
+              }}
+            >
+              {mode}
+            </button>
+          ))}
+        </div>
+
+        {/* Share button */}
+        <button
+          onClick={() => shareResults(lastUserQuery)}
+          className="flex items-center gap-1.5 text-xs rounded-xl px-3 py-1.5 transition-colors"
+          style={{
+            color: "var(--text-secondary)",
+            border: "0.5px solid var(--border)",
+            fontFamily: "var(--font-dm-sans)",
+            backgroundColor: "var(--card)",
+          }}
+        >
+          ↗ Share
+        </button>
+      </div>
+
+      {/* Filter chips — hidden in map mode to save vertical space */}
+      {!isMapMode && (
+        <div className="flex gap-2 flex-wrap">
+          {priceOptions.map((price) => (
+            <button
+              key={price}
+              onClick={() => setActivePrice(activePrice === price ? null : price)}
+              style={{
+                backgroundColor: activePrice === price ? "var(--gold)" : "var(--card)",
+                color: activePrice === price ? "#fff" : "var(--text-secondary)",
+                border: `0.5px solid ${activePrice === price ? "var(--gold)" : "var(--border)"}`,
+                fontFamily: "var(--font-dm-sans)",
+                borderRadius: "20px",
+                padding: "5px 12px",
+                fontSize: "12px",
+                cursor: "pointer",
+              }}
+            >
+              {price}
+            </button>
+          ))}
+          {cuisineOptions.map((cuisine) => (
+            <button
+              key={cuisine}
+              onClick={() => setActiveCuisine(activeCuisine === cuisine ? null : cuisine)}
+              style={{
+                backgroundColor: activeCuisine === cuisine ? "var(--gold)" : "var(--card)",
+                color: activeCuisine === cuisine ? "#fff" : "var(--text-secondary)",
+                border: `0.5px solid ${activeCuisine === cuisine ? "var(--gold)" : "var(--border)"}`,
+                fontFamily: "var(--font-dm-sans)",
+                borderRadius: "20px",
+                padding: "5px 12px",
+                fontSize: "12px",
+                cursor: "pointer",
+              }}
+            >
+              {cuisine}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+
   return (
-    <main className="min-h-screen flex flex-col" style={{ backgroundColor: "var(--bg)" }}>
+    <main
+      className="flex flex-col"
+      style={{ height: "100dvh", backgroundColor: "var(--bg)", overflow: "hidden" }}
+    >
       {/* GPS Error Toast */}
       {gpsError && (
         <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-xl text-sm shadow-lg"
@@ -229,7 +315,7 @@ export default function Home() {
       )}
 
       {/* ─── Header ───────────────────────────────────────────── */}
-      <header className="sticky top-0 z-20 border-b" style={{ backgroundColor: "var(--card)", borderColor: "var(--border)", height: "52px" }}>
+      <header className="flex-shrink-0 border-b z-20" style={{ backgroundColor: "var(--card)", borderColor: "var(--border)", height: "52px" }}>
         <div className="max-w-2xl mx-auto h-full flex items-center gap-3 px-4">
           {/* Brand */}
           <span style={{ fontFamily: "var(--font-playfair)", fontSize: "18px", fontWeight: 700, color: "var(--text-primary)", letterSpacing: "-0.01em", flexShrink: 0 }}>
@@ -275,265 +361,202 @@ export default function Home() {
         </div>
       </header>
 
-      {/* ─── Content ──────────────────────────────────────────── */}
-      <div className="flex-1 max-w-2xl mx-auto w-full px-4 py-6">
-        {!hasMessages ? (
-          /* Welcome / Hero State */
-          <div className="flex flex-col items-center justify-center min-h-[60vh] text-center">
-            <h2 style={{
-              fontFamily: "var(--font-playfair)",
-              fontSize: "clamp(28px, 5vw, 42px)",
-              fontWeight: 700,
-              color: "var(--text-primary)",
-              lineHeight: 1.15,
-              marginBottom: "16px",
-            }}>
-              Find your perfect<br />{cityLabel} restaurant.
-            </h2>
-            <p style={{
-              color: "var(--text-secondary)",
-              fontSize: "15px",
-              lineHeight: 1.7,
-              maxWidth: "340px",
-              marginBottom: "40px",
-              fontFamily: "var(--font-dm-sans)",
-            }}>
-              Tell me what you&apos;re looking for. I&apos;ll find the best options and explain exactly why each one fits.
-            </p>
-            <div className="flex flex-col gap-2 w-full max-w-sm">
-              {DEFAULT_EXAMPLES.map((ex) => (
-                <button
-                  key={ex}
-                  onClick={() => sendMessage(ex)}
-                  className="text-left rounded-2xl px-4 py-3 transition-all"
-                  style={{
-                    backgroundColor: "var(--card)",
-                    border: "0.5px solid var(--border)",
-                    color: "var(--text-secondary)",
-                    fontFamily: "var(--font-dm-sans)",
-                    fontSize: "13px",
-                    lineHeight: 1.5,
-                  }}
-                  onMouseEnter={(e) => {
-                    (e.currentTarget as HTMLElement).style.borderColor = "var(--gold)";
-                  }}
-                  onMouseLeave={(e) => {
-                    (e.currentTarget as HTMLElement).style.borderColor = "var(--border)";
-                  }}
-                >
-                  &quot;{ex}&quot;
-                </button>
-              ))}
-            </div>
+      {/* ─── Map Mode: full-width, fills remaining height ─────── */}
+      {isMapMode && (
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
+          {/* Filter/view bar above map */}
+          <div className="flex-shrink-0 px-4 py-2 border-b" style={{ borderColor: "var(--border)", backgroundColor: "var(--card)" }}>
+            {filterViewBar}
           </div>
-        ) : (
-          <div className="flex flex-col gap-4">
-            {/* Message Thread */}
-            {messages.map((msg, i) => (
-              <div key={i}>
-                {msg.role === "user" ? (
-                  <div className="flex justify-end">
-                    <div className="px-4 py-3 max-w-xs" style={{
-                      backgroundColor: "var(--text-primary)",
-                      color: "var(--bg)",
-                      borderRadius: "18px 18px 4px 18px",
-                      fontFamily: "var(--font-dm-sans)",
-                      fontSize: "14px",
-                      lineHeight: 1.5,
-                    }}>
-                      {msg.content}
-                    </div>
-                  </div>
-                ) : (
-                  <p style={{
-                    color: "var(--text-secondary)",
-                    fontSize: "13px",
-                    fontFamily: "var(--font-dm-sans)",
-                    paddingTop: "4px",
-                    paddingBottom: "4px",
-                  }}>
-                    {msg.content}
-                  </p>
-                )}
-              </div>
-            ))}
+          {/* Map fills rest */}
+          <div style={{ flex: 1, minHeight: 0 }}>
+            <MapView cards={allCards} center={mapCenter} />
+          </div>
+        </div>
+      )}
 
-            {/* 4-Step Loading Progress */}
-            {loading && (
-              <div className="rounded-2xl p-5 space-y-4" style={{ backgroundColor: "var(--card)", border: "0.5px solid var(--border)" }}>
-                {LOADING_STEPS.map((step, i) => {
-                  const done = i < loadingStep;
-                  const active = i === loadingStep;
-                  const pct = done ? 100 : active ? 55 : 0;
-                  return (
-                    <div key={i} className="flex items-center gap-3">
-                      <span style={{
-                        width: "52px",
-                        fontSize: "11px",
+      {/* ─── List Mode: scrollable content ────────────────────── */}
+      {!isMapMode && (
+        <div className="flex-1 overflow-y-auto" style={{ minHeight: 0 }}>
+          <div className="max-w-2xl mx-auto w-full px-4 py-6">
+            {!hasMessages ? (
+              /* Welcome / Hero State */
+              <div className="flex flex-col items-center justify-center min-h-[60vh] text-center">
+                <h2 style={{
+                  fontFamily: "var(--font-playfair)",
+                  fontSize: "clamp(28px, 5vw, 42px)",
+                  fontWeight: 700,
+                  color: "var(--text-primary)",
+                  lineHeight: 1.15,
+                  marginBottom: "16px",
+                }}>
+                  Find your perfect<br />{cityLabel} restaurant.
+                </h2>
+                <p style={{
+                  color: "var(--text-secondary)",
+                  fontSize: "15px",
+                  lineHeight: 1.7,
+                  maxWidth: "340px",
+                  marginBottom: "40px",
+                  fontFamily: "var(--font-dm-sans)",
+                }}>
+                  Tell me what you&apos;re looking for. I&apos;ll find the best options and explain exactly why each one fits.
+                </p>
+                <div className="flex flex-col gap-2 w-full max-w-sm">
+                  {DEFAULT_EXAMPLES.map((ex) => (
+                    <button
+                      key={ex}
+                      onClick={() => sendMessage(ex)}
+                      className="text-left rounded-2xl px-4 py-3 transition-all"
+                      style={{
+                        backgroundColor: "var(--card)",
+                        border: "0.5px solid var(--border)",
+                        color: "var(--text-secondary)",
                         fontFamily: "var(--font-dm-sans)",
-                        color: "var(--text-muted)",
-                        flexShrink: 0,
-                      }}>
-                        {i + 1}&thinsp;/&thinsp;4
-                      </span>
-                      <div className="flex-1 h-1 rounded-full overflow-hidden" style={{ backgroundColor: "var(--bg)" }}>
-                        <div
-                          className="h-full rounded-full transition-all duration-700"
-                          style={{
-                            width: `${pct}%`,
-                            backgroundColor: "var(--gold)",
-                          }}
-                        />
-                      </div>
-                      <span
-                        className={active ? "animate-pulse-gold" : ""}
-                        style={{
-                          fontSize: "12px",
-                          fontFamily: "var(--font-dm-sans)",
-                          color: done ? "var(--gold)" : active ? "var(--text-primary)" : "var(--text-muted)",
-                          minWidth: "170px",
-                        }}
-                      >
-                        {done ? "✓ " : ""}{step}
-                      </span>
-                    </div>
-                  );
-                })}
+                        fontSize: "13px",
+                        lineHeight: 1.5,
+                      }}
+                      onMouseEnter={(e) => {
+                        (e.currentTarget as HTMLElement).style.borderColor = "var(--gold)";
+                      }}
+                      onMouseLeave={(e) => {
+                        (e.currentTarget as HTMLElement).style.borderColor = "var(--border)";
+                      }}
+                    >
+                      &quot;{ex}&quot;
+                    </button>
+                  ))}
+                </div>
               </div>
-            )}
-
-            {/* Filter / View Bar */}
-            {allCards.length > 0 && (
-              <div className="flex flex-col gap-2">
-                <div className="flex items-center justify-between">
-                  {/* View toggle */}
-                  <div className="flex gap-1 rounded-xl p-1" style={{ backgroundColor: "var(--card)", border: "0.5px solid var(--border)" }}>
-                    {(["list", "map"] as const).map((mode) => (
-                      <button
-                        key={mode}
-                        onClick={() => setViewMode(mode)}
-                        className="px-3 py-1 rounded-lg text-xs font-medium transition-all capitalize"
-                        style={{
-                          backgroundColor: viewMode === mode ? "var(--gold)" : "transparent",
-                          color: viewMode === mode ? "#fff" : "var(--text-secondary)",
+            ) : (
+              <div className="flex flex-col gap-4">
+                {/* Message Thread */}
+                {messages.map((msg, i) => (
+                  <div key={i}>
+                    {msg.role === "user" ? (
+                      <div className="flex justify-end">
+                        <div className="px-4 py-3 max-w-xs" style={{
+                          backgroundColor: "var(--text-primary)",
+                          color: "var(--bg)",
+                          borderRadius: "18px 18px 4px 18px",
                           fontFamily: "var(--font-dm-sans)",
-                        }}
-                      >
-                        {mode}
-                      </button>
+                          fontSize: "14px",
+                          lineHeight: 1.5,
+                        }}>
+                          {msg.content}
+                        </div>
+                      </div>
+                    ) : (
+                      <p style={{
+                        color: "var(--text-secondary)",
+                        fontSize: "13px",
+                        fontFamily: "var(--font-dm-sans)",
+                        paddingTop: "4px",
+                        paddingBottom: "4px",
+                      }}>
+                        {msg.content}
+                      </p>
+                    )}
+                  </div>
+                ))}
+
+                {/* 4-Step Loading Progress */}
+                {loading && (
+                  <div className="rounded-2xl p-5 space-y-4" style={{ backgroundColor: "var(--card)", border: "0.5px solid var(--border)" }}>
+                    {LOADING_STEPS.map((step, i) => {
+                      const done = i < loadingStep;
+                      const active = i === loadingStep;
+                      const pct = done ? 100 : active ? 55 : 0;
+                      return (
+                        <div key={i} className="flex items-center gap-3">
+                          <span style={{
+                            width: "52px",
+                            fontSize: "11px",
+                            fontFamily: "var(--font-dm-sans)",
+                            color: "var(--text-muted)",
+                            flexShrink: 0,
+                          }}>
+                            {i + 1}&thinsp;/&thinsp;4
+                          </span>
+                          <div className="flex-1 h-1 rounded-full overflow-hidden" style={{ backgroundColor: "var(--bg)" }}>
+                            <div
+                              className="h-full rounded-full transition-all duration-700"
+                              style={{
+                                width: `${pct}%`,
+                                backgroundColor: "var(--gold)",
+                              }}
+                            />
+                          </div>
+                          <span
+                            className={active ? "animate-pulse-gold" : ""}
+                            style={{
+                              fontSize: "12px",
+                              fontFamily: "var(--font-dm-sans)",
+                              color: done ? "var(--gold)" : active ? "var(--text-primary)" : "var(--text-muted)",
+                              minWidth: "170px",
+                            }}
+                          >
+                            {done ? "✓ " : ""}{step}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Filter / View Bar */}
+                {filterViewBar}
+
+                {/* List View */}
+                {displayCards.length > 0 && (
+                  <div className="flex flex-col gap-3">
+                    {displayCards.map((card, i) => (
+                      <RecommendationCard
+                        key={card.restaurant?.id ?? i}
+                        card={card}
+                        index={i}
+                        isFavorite={favorites.has(card.restaurant?.id ?? "")}
+                        onToggleFavorite={() => toggleFavorite(card.restaurant?.id ?? "")}
+                      />
                     ))}
                   </div>
+                )}
 
-                  {/* Share button */}
-                  <button
-                    onClick={() => shareResults(lastUserQuery)}
-                    className="flex items-center gap-1.5 text-xs rounded-xl px-3 py-1.5 transition-colors"
-                    style={{
-                      color: "var(--text-secondary)",
-                      border: "0.5px solid var(--border)",
-                      fontFamily: "var(--font-dm-sans)",
-                      backgroundColor: "var(--card)",
-                    }}
-                  >
-                    ↗ Share
-                  </button>
-                </div>
-
-                {/* Filter chips */}
-                <div className="flex gap-2 flex-wrap">
-                  {priceOptions.map((price) => (
-                    <button
-                      key={price}
-                      onClick={() => setActivePrice(activePrice === price ? null : price)}
-                      style={{
-                        backgroundColor: activePrice === price ? "var(--gold)" : "var(--card)",
-                        color: activePrice === price ? "#fff" : "var(--text-secondary)",
-                        border: `0.5px solid ${activePrice === price ? "var(--gold)" : "var(--border)"}`,
-                        fontFamily: "var(--font-dm-sans)",
-                        borderRadius: "20px",
-                        padding: "5px 12px",
-                        fontSize: "12px",
-                        cursor: "pointer",
-                      }}
-                    >
-                      {price}
-                    </button>
-                  ))}
-                  {cuisineOptions.map((cuisine) => (
-                    <button
-                      key={cuisine}
-                      onClick={() => setActiveCuisine(activeCuisine === cuisine ? null : cuisine)}
-                      style={{
-                        backgroundColor: activeCuisine === cuisine ? "var(--gold)" : "var(--card)",
-                        color: activeCuisine === cuisine ? "#fff" : "var(--text-secondary)",
-                        border: `0.5px solid ${activeCuisine === cuisine ? "var(--gold)" : "var(--border)"}`,
-                        fontFamily: "var(--font-dm-sans)",
-                        borderRadius: "20px",
-                        padding: "5px 12px",
-                        fontSize: "12px",
-                        cursor: "pointer",
-                      }}
-                    >
-                      {cuisine}
-                    </button>
-                  ))}
-                </div>
+                {/* Degraded empty-filter state */}
+                {visibleCards.length > 0 && displayCards.length === 0 && (
+                  <div className="rounded-2xl p-6 text-center" style={{ backgroundColor: "var(--card)", border: "0.5px solid var(--border)" }}>
+                    <p style={{ color: "var(--text-secondary)", fontSize: "14px", fontFamily: "var(--font-dm-sans)", marginBottom: "12px" }}>
+                      No exact matches — showing closest results instead.
+                    </p>
+                    <div className="flex gap-2 justify-center flex-wrap">
+                      {activePrice && (
+                        <button
+                          onClick={() => setActivePrice(null)}
+                          style={{ border: "0.5px solid var(--gold)", color: "var(--gold)", fontFamily: "var(--font-dm-sans)", borderRadius: "20px", padding: "5px 14px", fontSize: "12px", cursor: "pointer" }}
+                        >
+                          Clear price filter
+                        </button>
+                      )}
+                      {activeCuisine && (
+                        <button
+                          onClick={() => setActiveCuisine(null)}
+                          style={{ border: "0.5px solid var(--gold)", color: "var(--gold)", fontFamily: "var(--font-dm-sans)", borderRadius: "20px", padding: "5px 14px", fontSize: "12px", cursor: "pointer" }}
+                        >
+                          Clear cuisine filter
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
-
-            {/* Map View */}
-            {viewMode === "map" && allCards.length > 0 && (
-              <MapView cards={allCards} center={mapCenter} />
-            )}
-
-            {/* List View */}
-            {viewMode === "list" && displayCards.length > 0 && (
-              <div className="flex flex-col gap-3">
-                {displayCards.map((card, i) => (
-                  <RecommendationCard
-                    key={card.restaurant?.id ?? i}
-                    card={card}
-                    index={i}
-                    isFavorite={favorites.has(card.restaurant?.id ?? "")}
-                    onToggleFavorite={() => toggleFavorite(card.restaurant?.id ?? "")}
-                  />
-                ))}
-              </div>
-            )}
-
-            {/* Degraded empty-filter state */}
-            {viewMode === "list" && visibleCards.length > 0 && displayCards.length === 0 && (
-              <div className="rounded-2xl p-6 text-center" style={{ backgroundColor: "var(--card)", border: "0.5px solid var(--border)" }}>
-                <p style={{ color: "var(--text-secondary)", fontSize: "14px", fontFamily: "var(--font-dm-sans)", marginBottom: "12px" }}>
-                  No exact matches — showing closest results instead.
-                </p>
-                <div className="flex gap-2 justify-center flex-wrap">
-                  {activePrice && (
-                    <button
-                      onClick={() => setActivePrice(null)}
-                      style={{ border: "0.5px solid var(--gold)", color: "var(--gold)", fontFamily: "var(--font-dm-sans)", borderRadius: "20px", padding: "5px 14px", fontSize: "12px", cursor: "pointer" }}
-                    >
-                      Clear price filter
-                    </button>
-                  )}
-                  {activeCuisine && (
-                    <button
-                      onClick={() => setActiveCuisine(null)}
-                      style={{ border: "0.5px solid var(--gold)", color: "var(--gold)", fontFamily: "var(--font-dm-sans)", borderRadius: "20px", padding: "5px 14px", fontSize: "12px", cursor: "pointer" }}
-                    >
-                      Clear cuisine filter
-                    </button>
-                  )}
-                </div>
-              </div>
-            )}
+            <div ref={bottomRef} />
           </div>
-        )}
-        <div ref={bottomRef} />
-      </div>
+        </div>
+      )}
 
       {/* ─── Bottom Input Bar ─────────────────────────────────── */}
-      <div className="sticky bottom-0 border-t px-4 py-3 z-10" style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}>
+      <div className="flex-shrink-0 border-t px-4 py-3 z-10" style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}>
         <div className="max-w-2xl mx-auto flex gap-2 items-center">
           <input
             type="text"
