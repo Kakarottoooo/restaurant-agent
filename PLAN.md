@@ -1460,3 +1460,46 @@ Phase 5.3 用户账号系统（约 5-7 天）
 | 匿名可用 | 是（默认） | 是（依然默认） |
 | 可分析的用户数据 | 零 | 偏好分布、留存率、反馈模式 |
 | 与通用 AI 差异化 | 中（评论信号可疑） | 高（真实评论 + 个人记忆） |
+
+---
+
+## 阶段六：生产部署 & 基础设施打通
+
+> 完成日期：2026-03-18
+> 状态：✅ 全部完成，线上可访问
+
+### 完成内容
+
+**6.1 Vercel 生产部署**
+- 连接 GitHub 仓库（`Kakarottoooo/restaurant-agent`），master 分支自动部署
+- 生产 URL：`https://folio-7k2fjudb1-kakarottos-projects-a3fbf575.vercel.app`
+- 每次 `git push origin master` 自动触发 Redeploy
+
+**6.2 Bug 修复**
+- `proxy.ts`（Next.js 16 middleware 文件名约定）Clerk middleware 用占位符 key 时导致全站 500 → 修复为真实 key + `createRouteMatcher` 只保护 `/api/user/*`
+- Reserve 按钮之前条件渲染（依赖 `opentable_url`，实际从未有值）→ 改为始终显示，链接至 Google Maps：`google.com/maps/search/?query_place_id=<place_id>`
+
+**6.3 Clerk + Neon 全链路打通**
+- Clerk Development Instance 配置完成（Google OAuth）
+- Neon Postgres 数据库建表（`preference_profiles` / `favorites` / `feedback`）
+- 登录、收藏、数据写入 Neon 全部验证通过
+
+### 当前完整技术栈
+
+| 层次 | 服务 |
+|------|------|
+| 前端 + API | Next.js 16 on Vercel |
+| AI 推荐引擎 | MiniMax-Text-01（Anthropic 备用）|
+| 地点数据 | Google Places API (New) |
+| 评论信号 | Google Places Reviews + Tavily |
+| 身份认证 | Clerk（Google OAuth + Email Magic Link）|
+| 数据库 | Neon Postgres |
+| 部署 | Vercel（GitHub 自动触发）|
+
+### 下一阶段优先级
+
+| 顺序 | 任务 |
+|------|------|
+| 1 | 邀请 3-5 个真实用户试用，收集反馈 |
+| 2 | 根据真实反馈调整推荐 prompt 和评分权重 |
+| 3 | 建立基础 eval 框架（固定 10 个 query，每周手工评估结果质量）|
