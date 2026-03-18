@@ -1,36 +1,103 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Folio.
 
-## Getting Started
+AI-powered restaurant recommendation app. Tell it what you're looking for in natural language — occasion, budget, vibe — and it returns curated picks with personalized "why it fits" explanations.
 
-First, run the development server:
+## How it works
+
+Three-layer AI pipeline on every search:
+
+1. **Intent parsing** (MiniMax) — extracts structured requirements from your message (cuisine, budget, atmosphere, occasion, location)
+2. **Parallel data gathering** — Google Places API for real restaurant data + Tavily web search for editorial context, run concurrently
+3. **Ranking & explanation** (MiniMax) — scores candidates against your requirements and generates personalized explanations, watch-outs, and "skip if" notes
+
+## Features
+
+- Natural language search with multi-turn refinement
+- 27 US cities + GPS-based "Near Me" mode + custom landmark search
+- List view and full-screen interactive map view
+- Filter chips by price and cuisine
+- Share results via URL
+- Save favorites (localStorage)
+- Dark mode (system preference)
+- PWA-installable with offline support
+
+## Prerequisites
+
+- Node.js 20+
+- API keys for:
+  - `MINIMAX_API_KEY` — MiniMax platform
+  - `GOOGLE_PLACES_API_KEY` — Google Cloud Console (Places API + Geocoding API enabled)
+  - `TAVILY_API_KEY` — Tavily
+
+## Local setup
 
 ```bash
+# 1. Install dependencies
+npm install
+
+# 2. Create environment file
+cp .env.local.example .env.local
+# Fill in your API keys in .env.local
+
+# 3. Start dev server
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Available scripts
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| Script | Description |
+|--------|-------------|
+| `npm run dev` | Start development server |
+| `npm run build` | Production build (also versions the service worker) |
+| `npm run start` | Start production server |
+| `npm run lint` | Run ESLint |
+| `npm test` | Run tests with Vitest |
+| `npm run test:coverage` | Run tests with coverage report |
 
-## Learn More
+## Project structure
 
-To learn more about Next.js, take a look at the following resources:
+```
+app/
+  api/chat/route.ts     # API endpoint — rate limiting, Zod validation, agent call
+  hooks/
+    useChat.ts          # AI pipeline state, sendMessage, filter chips
+    useLocation.ts      # City selection, GPS, near-location, SW registration
+    useFavorites.ts     # Favorites with localStorage persistence
+  page.tsx              # Root UI (rendering only, ~300 lines)
+  globals.css           # Design tokens, dark mode, animations
+  layout.tsx            # Fonts, metadata
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+lib/
+  agent.ts              # 3-layer AI pipeline (parseIntent → gatherCandidates → rankAndExplain)
+  tools.ts              # Google Places, Tavily, Geocoding API wrappers
+  schemas.ts            # Zod schemas for request validation and AI response validation
+  types.ts              # TypeScript interfaces
+  cities.ts             # 27 US cities config
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+components/
+  RecommendationCard.tsx  # Restaurant card with image, explanations, reserve link
+  MapView.tsx             # Leaflet map with interactive markers and thumbnail strip
 
-## Deploy on Vercel
+public/
+  sw.js                 # Service worker (cache name versioned on build)
+  manifest.json         # PWA manifest
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+scripts/
+  inject-sw-version.mjs  # Postbuild: injects BUILD_ID into sw.js cache name
+  generate-icons.mjs     # Generates PWA icons (192px, 512px)
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Deployment
+
+Deploy to Vercel — it's a standard Next.js app. Set the three environment variables in your project settings.
+
+**Note:** The rate limiter in `app/api/chat/route.ts` is in-memory (10 req/min per IP). For multi-replica deployments, replace it with `@upstash/ratelimit` backed by Redis.
+
+## Known limitations
+
+- No user accounts — favorites are stored in localStorage only
+- English-language searches only
+- Restaurant data sourced from Google Places (US coverage best)
+- Tavily search enrichment is additive and non-fatal; recommendations still work without it

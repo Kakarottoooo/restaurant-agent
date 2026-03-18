@@ -1,4 +1,4 @@
-import { Restaurant } from "./types";
+import { Restaurant, ReviewSignals } from "./types";
 
 // ─── Geocoding ────────────────────────────────────────────────────────────────
 
@@ -85,6 +85,7 @@ export async function googlePlacesSearch(params: {
 
   const data = await res.json();
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const results: Restaurant[] = (data.places ?? []).map((p: any) => ({
     id: p.id,
     name: p.displayName?.text ?? "",
@@ -117,6 +118,118 @@ export async function googlePlacesSearch(params: {
   return results;
 }
 
+// ─── Review Signal Extraction ─────────────────────────────────────────────────
+
+export async function fetchReviewSignals(
+  restaurants: Restaurant[],
+  query: string,
+  cityFullName: string
+): Promise<Map<string, ReviewSignals>> {
+  if (restaurants.length === 0) return new Map();
+
+  const names = restaurants
+    .slice(0, 12)
+    .map((r) => r.name)
+    .join(", ");
+  const searchQuery = `${names} reviews ${cityFullName} noise atmosphere date experience`;
+
+  // Fetch review content from Tavily with advanced depth
+  let reviewText = "";
+  try {
+    const res = await fetch("https://api.tavily.com/search", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        api_key: process.env.TAVILY_API_KEY,
+        query: searchQuery,
+        search_depth: "advanced",
+        max_results: 10,
+        include_domains: [
+          "yelp.com",
+          "tripadvisor.com",
+          "reddit.com",
+          "google.com",
+        ],
+      }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      reviewText = (data.results ?? [])
+        .map((r: { title: string; content: string }) => `${r.title}: ${r.content}`)
+        .join("\n\n");
+    }
+  } catch {
+    // non-fatal
+  }
+
+  if (!reviewText) return new Map();
+
+  // Use MiniMax to extract structured signals
+  const MINIMAX_API_URL = "https://api.minimaxi.chat/v1/chat/completions";
+  const restaurantList = restaurants
+    .slice(0, 12)
+    .map((r) => r.name)
+    .join(", ");
+
+  const systemPrompt = `You are extracting review signals for restaurants. For each restaurant mentioned below, analyze the provided review text and extract structured signals. Return a JSON object where keys are exact restaurant names and values match the ReviewSignals schema. If a signal cannot be determined from the text, use "unknown" for noise_level/wait_time/service_pace, 5 for date_suitability, and [] for arrays. Only report signals that have clear evidence in the text.
+
+ReviewSignals schema:
+{
+  "noise_level": "quiet" | "moderate" | "loud" | "unknown",
+  "wait_time": string,
+  "date_suitability": number (1-10),
+  "service_pace": string,
+  "notable_dishes": string[],
+  "red_flags": string[],
+  "best_for": string[],
+  "review_confidence": "high" | "medium" | "low"
+}`;
+
+  try {
+    const res = await fetch(MINIMAX_API_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${process.env.MINIMAX_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: "MiniMax-Text-01",
+        messages: [
+          { role: "system", content: systemPrompt },
+          {
+            role: "user",
+            content: `Restaurants to analyze: ${restaurantList}
+
+Review text:
+${reviewText.slice(0, 8000)}
+
+User query context: "${query}"
+
+Return ONLY a JSON object with restaurant names as keys and ReviewSignals as values.`,
+          },
+        ],
+        max_tokens: 2048,
+      }),
+    });
+
+    if (!res.ok) return new Map();
+
+    const data = await res.json();
+    const text = data.choices?.[0]?.message?.content ?? "";
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) return new Map();
+
+    const parsed = JSON.parse(jsonMatch[0]);
+    const result = new Map<string, ReviewSignals>();
+    for (const [name, signals] of Object.entries(parsed)) {
+      result.set(name, signals as ReviewSignals);
+    }
+    return result;
+  } catch {
+    return new Map();
+  }
+}
+
 function priceLevelToSymbol(level?: string): string {
   const map: Record<string, string> = {
     PRICE_LEVEL_FREE: "$",
@@ -130,7 +243,9 @@ function priceLevelToSymbol(level?: string): string {
 
 // ─── Tavily ──────────────────────────────────────────────────────────────────
 
-export async function tavilySearch(query: string): Promise<string> {
+export async function tavilySearch(
+  query: string
+): Promise<{ results: string; failed: boolean }> {
   const res = await fetch("https://api.tavily.com/search", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -142,10 +257,14 @@ export async function tavilySearch(query: string): Promise<string> {
     }),
   });
 
-  if (!res.ok) return "";
+  if (!res.ok) {
+    console.warn(`Tavily search failed (${res.status})`);
+    return { results: "", failed: true };
+  }
 
   const data = await res.json();
-  return (data.results ?? [])
-    .map((r: any) => `${r.title}: ${r.content}`)
+  const results = (data.results ?? [])
+    .map((r: { title: string; content: string }) => `${r.title}: ${r.content}`)
     .join("\n\n");
+  return { results, failed: false };
 }

@@ -5,7 +5,6 @@ import { MapContainer, TileLayer, Marker, useMap } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import type { RecommendationCard } from "@/lib/types";
 
-// FlyTo controller: flies to the selected restaurant's coordinates
 function FlyToController({
   lat,
   lng,
@@ -36,7 +35,7 @@ export default function MapView({
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [L, setL] = useState<any>(null);
   const stripRef = useRef<HTMLDivElement>(null);
-  const cardRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const cardRefs = useRef<(HTMLButtonElement | null)[]>([]);
 
   useEffect(() => {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -50,6 +49,7 @@ export default function MapView({
       shadowUrl:
         "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
     });
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setL(leaflet);
   }, []);
 
@@ -69,7 +69,11 @@ export default function MapView({
     return (
       <div
         className="h-full flex items-center justify-center text-sm"
-        style={{ backgroundColor: "var(--card-2)", color: "var(--text-muted)", fontFamily: "var(--font-dm-sans)" }}
+        style={{
+          backgroundColor: "var(--card-2)",
+          color: "var(--text-muted)",
+          fontFamily: "var(--font-dm-sans)",
+        }}
       >
         No location data available for map view
       </div>
@@ -108,7 +112,15 @@ export default function MapView({
   }
 
   return (
-    <div style={{ position: "relative", width: "100%", height: "100%", display: "flex", flexDirection: "column" }}>
+    <div
+      style={{
+        position: "relative",
+        width: "100%",
+        height: "100%",
+        display: "flex",
+        flexDirection: "column",
+      }}
+    >
       {/* Map area */}
       <div style={{ flex: 1, minHeight: 0 }}>
         {L && (
@@ -117,6 +129,8 @@ export default function MapView({
             zoom={13}
             style={{ height: "100%", width: "100%" }}
             zoomControl={false}
+            keyboard={true}
+            aria-label="Restaurant location map"
           >
             <TileLayer
               attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
@@ -139,15 +153,33 @@ export default function MapView({
           </MapContainer>
         )}
         {!L && (
-          <div style={{ height: "100%", backgroundColor: "var(--card-2)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <span style={{ color: "var(--text-muted)", fontFamily: "var(--font-dm-sans)", fontSize: "13px" }}>Loading map…</span>
+          <div
+            style={{
+              height: "100%",
+              backgroundColor: "var(--card-2)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <span
+              style={{
+                color: "var(--text-muted)",
+                fontFamily: "var(--font-dm-sans)",
+                fontSize: "13px",
+              }}
+            >
+              Loading map…
+            </span>
           </div>
         )}
       </div>
 
-      {/* Bottom thumbnail strip */}
+      {/* Bottom thumbnail strip — Task 10: <div onClick> → <button> for keyboard access */}
       <div
         ref={stripRef}
+        role="listbox"
+        aria-label="Restaurant list"
         style={{
           display: "flex",
           overflowX: "auto",
@@ -164,80 +196,111 @@ export default function MapView({
           const r = card.restaurant;
           const isSelected = i === selectedIndex;
           return (
-            <div
+            <button
               key={r.id}
-              ref={(el) => { cardRefs.current[i] = el; }}
+              ref={(el) => {
+                cardRefs.current[i] = el;
+              }}
+              role="option"
+              aria-selected={isSelected}
+              aria-label={`Select ${r.name}, rank ${i + 1}`}
               onClick={() => selectCard(i)}
               style={{
                 flexShrink: 0,
                 width: "200px",
                 borderRadius: "12px",
-                border: isSelected ? "1.5px solid #C9A84C" : "0.5px solid var(--border)",
+                border: isSelected
+                  ? "1.5px solid #C9A84C"
+                  : "0.5px solid var(--border)",
                 backgroundColor: isSelected ? "var(--bg)" : "var(--card)",
                 padding: "10px 12px",
                 cursor: "pointer",
                 scrollSnapAlign: "center",
                 transition: "border-color 0.2s, background-color 0.2s",
                 boxShadow: isSelected ? "0 0 0 1px #C9A84C22" : "none",
+                textAlign: "left",
               }}
             >
               {/* Rank + name */}
-              <div style={{ display: "flex", alignItems: "flex-start", gap: "8px", marginBottom: "4px" }}>
-                <div style={{
-                  width: "20px",
-                  height: "20px",
-                  borderRadius: "50%",
-                  backgroundColor: isSelected ? "#C9A84C" : "var(--text-primary)",
-                  color: isSelected ? "#fff" : "var(--bg)",
+              <div
+                style={{
                   display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  fontSize: "10px",
-                  fontWeight: 700,
-                  fontFamily: "var(--font-dm-sans)",
-                  flexShrink: 0,
-                  marginTop: "1px",
-                }}>
+                  alignItems: "flex-start",
+                  gap: "8px",
+                  marginBottom: "4px",
+                }}
+              >
+                <div
+                  style={{
+                    width: "20px",
+                    height: "20px",
+                    borderRadius: "50%",
+                    backgroundColor: isSelected
+                      ? "#C9A84C"
+                      : "var(--text-primary)",
+                    color: isSelected ? "#fff" : "var(--bg)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: "10px",
+                    fontWeight: 700,
+                    fontFamily: "var(--font-dm-sans)",
+                    flexShrink: 0,
+                    marginTop: "1px",
+                  }}
+                >
                   {i + 1}
                 </div>
-                <span style={{
-                  fontFamily: "var(--font-playfair)",
-                  fontSize: "13px",
-                  fontWeight: 600,
-                  color: "var(--text-primary)",
-                  lineHeight: 1.3,
-                  overflow: "hidden",
-                  display: "-webkit-box",
-                  WebkitLineClamp: 2,
-                  WebkitBoxOrient: "vertical",
-                }}>
+                <span
+                  style={{
+                    fontFamily: "var(--font-playfair)",
+                    fontSize: "13px",
+                    fontWeight: 600,
+                    color: "var(--text-primary)",
+                    lineHeight: 1.3,
+                    overflow: "hidden",
+                    display: "-webkit-box",
+                    WebkitLineClamp: 2,
+                    WebkitBoxOrient: "vertical",
+                  }}
+                >
                   {r.name}
                 </span>
               </div>
               {/* Cuisine + rating */}
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <span style={{
-                  fontFamily: "var(--font-dm-sans)",
-                  fontSize: "11px",
-                  color: "var(--text-muted)",
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                  whiteSpace: "nowrap",
-                  maxWidth: "110px",
-                }}>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                }}
+              >
+                <span
+                  style={{
+                    fontFamily: "var(--font-dm-sans)",
+                    fontSize: "11px",
+                    color: "var(--text-muted)",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                    maxWidth: "110px",
+                  }}
+                >
                   {r.cuisine}
                 </span>
-                <span style={{
-                  fontFamily: "var(--font-dm-sans)",
-                  fontSize: "11px",
-                  fontWeight: 600,
-                  color: "#C9A84C",
-                  flexShrink: 0,
-                }}>
+                <span
+                  style={{
+                    fontFamily: "var(--font-dm-sans)",
+                    fontSize: "11px",
+                    fontWeight: 600,
+                    color: "#C9A84C",
+                    flexShrink: 0,
+                  }}
+                >
                   ★ {r.rating}
                 </span>
               </div>
-            </div>
+            </button>
           );
         })}
       </div>
