@@ -1,21 +1,58 @@
-import Anthropic from "@anthropic-ai/sdk";
+// import Anthropic from "@anthropic-ai/sdk";
+// const client = new Anthropic();
+
 import { googlePlacesSearch, tavilySearch } from "./tools";
 import { UserRequirements, Restaurant, RecommendationCard } from "./types";
+import { CITIES, DEFAULT_CITY } from "./cities";
 
-const client = new Anthropic();
+const MINIMAX_API_URL = "https://api.minimaxi.chat/v1/chat/completions";
+const MINIMAX_MODEL = "MiniMax-Text-01";
+
+async function minimaxChat(params: {
+  system?: string;
+  messages: Array<{ role: "user" | "assistant"; content: string }>;
+  max_tokens?: number;
+}): Promise<string> {
+  const messages = params.system
+    ? [{ role: "system" as const, content: params.system }, ...params.messages]
+    : params.messages;
+
+  const res = await fetch(MINIMAX_API_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${process.env.MINIMAX_API_KEY}`,
+    },
+    body: JSON.stringify({
+      model: MINIMAX_MODEL,
+      messages,
+      max_tokens: params.max_tokens ?? 1024,
+    }),
+  });
+
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`MiniMax API error: ${err}`);
+  }
+
+  const data = await res.json();
+  return data.choices?.[0]?.message?.content ?? "";
+}
 
 // ─── Layer 1: Intent Parsing ──────────────────────────────────────────────────
 
-export async function parseIntent(userMessage: string): Promise<UserRequirements> {
-  const response = await client.messages.create({
-    model: "claude-sonnet-4-6",
-    max_tokens: 1024,
+export async function parseIntent(
+  userMessage: string,
+  cityFullName: string
+): Promise<UserRequirements> {
+  const text = await minimaxChat({
     messages: [
       {
         role: "user",
         content: `Extract structured requirements from this restaurant request. Return ONLY valid JSON.
 
 User request: "${userMessage}"
+City: ${cityFullName}
 
 Return JSON with these fields (omit fields that aren't mentioned):
 {
@@ -25,7 +62,7 @@ Return JSON with these fields (omit fields that aren't mentioned):
   "budget_total": number or null,
   "atmosphere": ["romantic", "quiet", "lively", "cozy", "trendy", etc],
   "noise_level": "quiet|moderate|lively|any",
-  "location": "SF neighborhood or 'San Francisco, CA'",
+  "location": "${cityFullName}",
   "neighborhood": "specific neighborhood or null",
   "party_size": number or null,
   "constraints": ["no chains", "no tourist traps", "no wait", etc],
@@ -35,7 +72,6 @@ Return JSON with these fields (omit fields that aren't mentioned):
     ],
   });
 
-  const text = response.content[0].type === "text" ? response.content[0].text : "{}";
   try {
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     return jsonMatch ? JSON.parse(jsonMatch[0]) : {};
@@ -47,13 +83,20 @@ Return JSON with these fields (omit fields that aren't mentioned):
 // ─── Layer 2+3: Search & Collect (parallel) ──────────────────────────────────
 
 async function gatherCandidates(
-  requirements: UserRequirements
+  requirements: UserRequirements,
+  cityId: string,
+  gpsCoords: { lat: number; lng: number } | null = null
 ): Promise<{ restaurants: Restaurant[]; semanticSignals: string }> {
-  const location = requirements.neighborhood
-    ? `${requirements.neighborhood}, San Francisco, CA`
-    : requirements.location ?? "San Francisco, CA";
+  const city = CITIES[cityId] ?? CITIES[DEFAULT_CITY];
+  const cityCenter = gpsCoords ?? city.center;
 
-  // Map budget to Yelp price filter
+  const location = gpsCoords
+    ? "Nearby"
+    : requirements.neighborhood
+    ? `${requirements.neighborhood}, ${city.fullName}`
+    : city.fullName;
+
+  // Map budget to price filter
   let priceFilter: string | undefined;
   const bpp = requirements.budget_per_person;
   if (bpp) {
@@ -76,7 +119,7 @@ async function gatherCandidates(
 
   const tavilyQuery = [
     requirements.cuisine,
-    "restaurant San Francisco",
+    `restaurant ${city.fullName}`,
     requirements.purpose === "date" ? "romantic date night" : "",
     requirements.atmosphere?.join(" "),
     requirements.noise_level === "quiet" ? "quiet atmosphere" : "",
@@ -86,7 +129,12 @@ async function gatherCandidates(
 
   // Parallel: Google Places + Tavily
   const [restaurants, semanticSignals] = await Promise.all([
-    googlePlacesSearch({ query: searchQuery, location, maxResults: 20 }),
+    googlePlacesSearch({
+      query: searchQuery,
+      location,
+      cityCenter,
+      maxResults: 20,
+    }),
     tavilySearch(`best ${tavilyQuery} reviews 2024`),
   ]);
 
@@ -106,7 +154,8 @@ async function rankAndExplain(
   requirements: UserRequirements,
   restaurants: Restaurant[],
   semanticSignals: string,
-  conversationHistory: Array<{ role: "user" | "assistant"; content: string }>
+  conversationHistory: Array<{ role: "user" | "assistant"; content: string }>,
+  cityFullName: string
 ): Promise<RecommendationCard[]> {
   const restaurantList = restaurants
     .map(
@@ -115,7 +164,7 @@ async function rankAndExplain(
     )
     .join("\n");
 
-  const systemPrompt = `You are an expert SF restaurant advisor. Your job is to pick the best restaurants for the user's specific needs and explain exactly why each one fits or doesn't fit.
+  const systemPrompt = `You are an expert ${cityFullName} restaurant advisor. Your job is to pick the best restaurants for the user's specific needs and explain exactly why each one fits or doesn't fit.
 
 Be honest about downsides. Don't recommend places that don't fit. Quality of matching matters more than quantity.`;
 
@@ -149,14 +198,12 @@ Return ONLY the JSON array, no other text.`,
     },
   ];
 
-  const response = await client.messages.create({
-    model: "claude-sonnet-4-6",
-    max_tokens: 4096,
+  const text = await minimaxChat({
     system: systemPrompt,
     messages,
+    max_tokens: 4096,
   });
 
-  const text = response.content[0].type === "text" ? response.content[0].text : "[]";
   try {
     const jsonMatch = text.match(/\[[\s\S]*\]/);
     if (!jsonMatch) return [];
@@ -175,30 +222,36 @@ Return ONLY the JSON array, no other text.`,
 
 export async function runAgent(
   userMessage: string,
-  conversationHistory: Array<{ role: "user" | "assistant"; content: string }> = []
+  conversationHistory: Array<{ role: "user" | "assistant"; content: string }> = [],
+  cityId: string = DEFAULT_CITY,
+  gpsCoords: { lat: number; lng: number } | null = null
 ): Promise<{
   requirements: UserRequirements;
   recommendations: RecommendationCard[];
 }> {
+  const city = CITIES[cityId] ?? CITIES[DEFAULT_CITY];
+  const cityFullName = gpsCoords ? "your current location" : city.fullName;
+
   // Layer 1: Parse intent
-  const requirements = await parseIntent(userMessage);
+  const requirements = await parseIntent(userMessage, cityFullName);
 
   // Layer 2+3: Gather candidates (parallel search)
-  const { restaurants, semanticSignals } = await gatherCandidates(requirements);
+  const { restaurants, semanticSignals } = await gatherCandidates(requirements, cityId, gpsCoords);
 
   // Layer 4+5+6: Rank and explain
   const recommendations = await rankAndExplain(
     requirements,
     restaurants,
     semanticSignals,
-    conversationHistory
+    conversationHistory,
+    cityFullName
   );
 
   // Add OpenTable search URLs
   const withOpenTable = recommendations.map((card) => ({
     ...card,
     opentable_url: card.restaurant?.name
-      ? `https://www.opentable.com/s?term=${encodeURIComponent(card.restaurant.name)}&metroId=4&covers=${requirements.party_size ?? 2}`
+      ? `https://www.opentable.com/s?term=${encodeURIComponent(card.restaurant.name + " " + city.fullName)}&covers=${requirements.party_size ?? 2}`
       : undefined,
   }));
 

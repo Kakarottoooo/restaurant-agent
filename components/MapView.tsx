@@ -5,7 +5,13 @@ import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import type { RecommendationCard } from "@/lib/types";
 
-export default function MapView({ cards }: { cards: RecommendationCard[] }) {
+export default function MapView({
+  cards,
+  center: cityCenter,
+}: {
+  cards: RecommendationCard[];
+  center?: { lat: number; lng: number };
+}) {
   useEffect(() => {
     // Fix Leaflet default marker icon paths in Next.js
     // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -33,7 +39,9 @@ export default function MapView({ cards }: { cards: RecommendationCard[] }) {
     );
   }
 
-  const center: [number, number] = [37.7749, -122.4194];
+  const center: [number, number] = cityCenter
+    ? [cityCenter.lat, cityCenter.lng]
+    : [validCards[0].restaurant.lat!, validCards[0].restaurant.lng!];
 
   return (
     <div className="rounded-2xl overflow-hidden border border-gray-100 shadow-sm">

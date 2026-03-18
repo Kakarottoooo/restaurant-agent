@@ -1,35 +1,52 @@
 @import "tailwindcss";
 
+/* ─── Design Tokens (Light Mode) ─────────────────────── */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --gold: #C9A84C;
+  --amber: #E8A020;
+  --bg: #F5F0E8;
+  --card: #FFFFFF;
+  --card-2: #F9F6EF;
+  --text-primary: #2C2416;
+  --text-secondary: #6B5E45;
+  --text-muted: #B4A89A;
+  --border: rgba(201, 168, 76, 0.25);
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
+/* ─── Dark Mode ───────────────────────────────────────── */
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --bg: #0F0F0F;
+    --card: #1C1C1C;
+    --card-2: #242424;
+    --text-primary: #F0EAD6;
+    --text-secondary: #8A8070;
+    --text-muted: #5A5040;
+    --border: rgba(201, 168, 76, 0.15);
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@theme inline {
+  --font-sans: var(--font-dm-sans);
+  --font-serif: var(--font-playfair);
+  --color-gold: #C9A84C;
 }
 
+body {
+  background-color: var(--bg);
+  color: var(--text-primary);
+  font-family: var(--font-dm-sans, "DM Sans", sans-serif);
+}
+
+/* ─── Animations ──────────────────────────────────────── */
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(8px); }
   to   { opacity: 1; transform: translateY(0); }
 }
+.animate-fadeIn { animation: fadeIn 0.3s ease-out forwards; }
 
-.animate-fadeIn {
-  animation: fadeIn 0.3s ease-out forwards;
+@keyframes pulseGold {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.4; }
 }
+.animate-pulse-gold { animation: pulseGold 1.5s ease-in-out infinite; }
