@@ -9,121 +9,170 @@ interface Props {
   onToggleFavorite?: () => void;
 }
 
-export default function RecommendationCard({
-  card,
-  index,
-  isFavorite,
-  onToggleFavorite,
-}: Props) {
+export default function RecommendationCard({ card, index, isFavorite, onToggleFavorite }: Props) {
   const { restaurant: r } = card;
 
-  const priceColor: Record<string, string> = {
-    $: "text-green-600",
-    $$: "text-yellow-600",
-    $$$: "text-orange-600",
-    $$$$: "text-red-600",
-  };
-
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden animate-fadeIn">
-      {r.image_url && (
+    <div
+      className="animate-fadeIn overflow-hidden"
+      style={{
+        backgroundColor: "var(--card)",
+        borderRadius: "16px",
+        border: "0.5px solid var(--border)",
+      }}
+    >
+      {/* Image */}
+      {r.image_url ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={r.image_url}
-          alt={r.name}
-          className="w-full h-40 object-cover"
-        />
+        <img src={r.image_url} alt={r.name} className="w-full object-cover" style={{ height: "180px" }} />
+      ) : (
+        <div className="w-full flex items-center justify-center" style={{ height: "180px", backgroundColor: "var(--card-2)" }}>
+          <svg width="48" height="48" viewBox="0 0 48 48" fill="none" opacity={0.25}>
+            <path d="M8 40V16l16-8 16 8v24H8z" stroke="var(--text-secondary)" strokeWidth="1.5" strokeLinejoin="round" />
+            <path d="M18 40v-12h12v12" stroke="var(--text-secondary)" strokeWidth="1.5" strokeLinejoin="round" />
+            <circle cx="24" cy="22" r="3" stroke="var(--text-secondary)" strokeWidth="1.5" />
+          </svg>
+        </div>
       )}
-      <div className="flex gap-4 p-4">
-        {/* Rank badge */}
-        <div className="flex-shrink-0 w-8 h-8 bg-gray-900 text-white rounded-full flex items-center justify-center text-sm font-bold">
-          {index + 1}
+
+      <div style={{ padding: "16px" }}>
+        {/* Card Header: rank badge + name + rating + favorite */}
+        <div className="flex items-start gap-3 mb-2">
+          {/* Rank badge */}
+          <div className="flex-shrink-0 flex items-center justify-center" style={{
+            width: "26px",
+            height: "26px",
+            borderRadius: "50%",
+            backgroundColor: "var(--text-primary)",
+            color: "var(--bg)",
+            fontFamily: "var(--font-dm-sans)",
+            fontSize: "12px",
+            fontWeight: 600,
+            marginTop: "2px",
+          }}>
+            {index + 1}
+          </div>
+
+          <div className="flex-1 min-w-0">
+            <h3 style={{
+              fontFamily: "var(--font-playfair)",
+              fontSize: "18px",
+              fontWeight: 600,
+              color: "var(--text-primary)",
+              lineHeight: 1.2,
+            }}>
+              {r.name}
+            </h3>
+          </div>
+
+          {/* Rating + Favorite */}
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <span style={{
+              fontFamily: "var(--font-dm-sans)",
+              fontSize: "13px",
+              fontWeight: 600,
+              color: "var(--gold)",
+            }}>
+              ★ {r.rating}
+            </span>
+            {onToggleFavorite && (
+              <button
+                onClick={onToggleFavorite}
+                aria-label={isFavorite ? "Remove from favorites" : "Save to favorites"}
+                className="transition-transform hover:scale-110 active:scale-95"
+                style={{ fontSize: "16px", lineHeight: 1, background: "none", border: "none", cursor: "pointer" }}
+              >
+                {isFavorite ? "❤️" : "🤍"}
+              </button>
+            )}
+          </div>
         </div>
 
-        <div className="flex-1 min-w-0">
-          {/* Header */}
-          <div className="flex items-start justify-between gap-2">
-            <div>
-              <h3 className="font-semibold text-gray-900 text-lg leading-tight">
-                {r.name}
-              </h3>
-              <p className="text-sm text-gray-500 mt-0.5">{r.cuisine}</p>
-            </div>
-            <div className="flex items-center gap-2 flex-shrink-0">
-              <span
-                className={`font-medium text-sm ${priceColor[r.price] ?? "text-gray-600"}`}
-              >
-                {r.price}
-              </span>
-              <span className="text-sm font-medium text-gray-700">
-                ⭐ {r.rating}
-              </span>
-              {onToggleFavorite && (
-                <button
-                  onClick={onToggleFavorite}
-                  aria-label={isFavorite ? "Remove from favorites" : "Save to favorites"}
-                  className="text-lg leading-none transition-transform hover:scale-110 active:scale-95"
-                >
-                  {isFavorite ? "❤️" : "🤍"}
-                </button>
-              )}
-            </div>
-          </div>
+        {/* Cuisine + price */}
+        <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: "13px", color: "var(--text-secondary)", marginBottom: "4px" }}>
+          {r.cuisine} &middot; {r.price}
+        </p>
 
-          {/* Address */}
-          <p className="text-xs text-gray-400 mt-1 truncate">{r.address}</p>
+        {/* Address */}
+        <p className="truncate" style={{ fontFamily: "var(--font-dm-sans)", fontSize: "12px", color: "var(--text-muted)", marginBottom: "12px" }}>
+          {r.address}
+        </p>
 
-          {/* Description */}
-          {r.description && (
-            <p className="text-xs text-gray-500 mt-1 italic">{r.description}</p>
-          )}
+        {/* Gold divider */}
+        <div style={{ width: "32px", height: "2px", backgroundColor: "var(--gold)", marginBottom: "12px" }} />
 
-          {/* Why recommended */}
-          <div className="mt-3 p-3 bg-green-50 rounded-xl">
-            <p className="text-xs font-semibold text-green-700 mb-1">
-              ✅ Why it fits
-            </p>
-            <p className="text-sm text-green-900">{card.why_recommended}</p>
-          </div>
-
-          {/* Best for */}
-          <p className="text-xs text-gray-500 mt-2">
-            <span className="font-medium">Best for:</span> {card.best_for}
+        {/* Description */}
+        {r.description && (
+          <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: "13px", color: "var(--text-secondary)", fontStyle: "italic", lineHeight: 1.5, marginBottom: "12px" }}>
+            {r.description}
           </p>
+        )}
 
-          {/* Watch out */}
-          {card.watch_out && (
-            <div className="mt-2 p-2.5 bg-amber-50 rounded-xl">
-              <p className="text-xs font-semibold text-amber-700 mb-0.5">
-                ⚠️ Watch out
-              </p>
-              <p className="text-xs text-amber-900">{card.watch_out}</p>
-            </div>
-          )}
-
-          {/* Not great if */}
-          {card.not_great_if && (
-            <p className="text-xs text-gray-400 mt-2">
-              <span className="font-medium">Skip if:</span> {card.not_great_if}
-            </p>
-          )}
-
-          {/* Price estimate */}
-          <p className="text-xs text-gray-500 mt-2">
-            <span className="font-medium">Est. total:</span>{" "}
-            {card.estimated_total}
+        {/* Why it fits */}
+        <div style={{
+          backgroundColor: "var(--card-2)",
+          borderLeft: "3px solid var(--gold)",
+          borderRadius: "0 8px 8px 0",
+          padding: "10px 12px",
+          marginBottom: "10px",
+        }}>
+          <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: "12px", fontWeight: 500, color: "#8B6914", marginBottom: "4px" }}>
+            Why it fits
           </p>
+          <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: "13px", color: "#4A3F2F", lineHeight: 1.5 }}>
+            {card.why_recommended}
+          </p>
+        </div>
 
-          {/* Actions */}
-          <div className="flex gap-2 mt-3">
+        {/* Watch out */}
+        {card.watch_out && (
+          <div style={{
+            backgroundColor: "#FDF6EC",
+            borderLeft: "3px solid var(--amber)",
+            borderRadius: "0 8px 8px 0",
+            padding: "10px 12px",
+            marginBottom: "10px",
+          }}>
+            <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: "12px", fontWeight: 500, color: "#8B5E14", marginBottom: "4px" }}>
+              Watch out
+            </p>
+            <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: "13px", color: "#6B4A1A", lineHeight: 1.5 }}>
+              {card.watch_out}
+            </p>
+          </div>
+        )}
+
+        {/* Skip if */}
+        {card.not_great_if && (
+          <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: "12px", color: "var(--text-muted)", marginBottom: "10px", lineHeight: 1.5 }}>
+            <span style={{ fontWeight: 500 }}>Skip if:</span> {card.not_great_if}
+          </p>
+        )}
+
+        {/* Card footer */}
+        <div className="flex items-center justify-between" style={{ borderTop: "0.5px solid var(--border)", paddingTop: "12px", marginTop: "4px" }}>
+          <span style={{ fontFamily: "var(--font-dm-sans)", fontSize: "13px", fontWeight: 500, color: "var(--text-primary)" }}>
+            Est. {card.estimated_total}
+          </span>
+          <div className="flex gap-2">
             {r.url && (
               <a
                 href={r.url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex-1 text-center text-xs bg-gray-900 text-white py-2 px-3 rounded-xl hover:bg-gray-700 transition-colors"
+                style={{
+                  fontFamily: "var(--font-dm-sans)",
+                  fontSize: "13px",
+                  color: "var(--text-secondary)",
+                  border: "0.5px solid var(--border)",
+                  borderRadius: "8px",
+                  padding: "7px 14px",
+                  textDecoration: "none",
+                  display: "inline-block",
+                  backgroundColor: "transparent",
+                }}
               >
-                Visit Website
+                Map
               </a>
             )}
             {card.opentable_url && (
@@ -131,7 +180,16 @@ export default function RecommendationCard({
                 href={card.opentable_url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex-1 text-center text-xs bg-orange-500 text-white py-2 px-3 rounded-xl hover:bg-orange-400 transition-colors"
+                style={{
+                  fontFamily: "var(--font-dm-sans)",
+                  fontSize: "13px",
+                  color: "#fff",
+                  backgroundColor: "var(--gold)",
+                  borderRadius: "8px",
+                  padding: "7px 14px",
+                  textDecoration: "none",
+                  display: "inline-block",
+                }}
               >
                 Reserve →
               </a>

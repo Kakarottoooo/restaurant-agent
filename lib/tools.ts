@@ -5,10 +5,12 @@ import { Restaurant } from "./types";
 export async function googlePlacesSearch(params: {
   query: string;
   location?: string;
+  cityCenter?: { lat: number; lng: number };
   maxResults?: number;
 }): Promise<Restaurant[]> {
   const location = params.location ?? "San Francisco, CA";
   const textQuery = `${params.query} in ${location}`;
+  const center = params.cityCenter ?? { lat: 37.7749, lng: -122.4194 };
 
   const res = await fetch(
     "https://places.googleapis.com/v1/places:searchText",
@@ -25,7 +27,7 @@ export async function googlePlacesSearch(params: {
         maxResultCount: params.maxResults ?? 20,
         locationBias: {
           circle: {
-            center: { latitude: 37.7749, longitude: -122.4194 },
+            center: { latitude: center.lat, longitude: center.lng },
             radius: 20000,
           },
         },
