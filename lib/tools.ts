@@ -537,10 +537,13 @@ export async function searchFlights(params: {
   }
 
   // Build SerpApi Google Flights URL
+  const depIATA = normalizeToIATA(params.departure_city);
+  const arrIATA = normalizeToIATA(params.arrival_city);
+  console.log(`[searchFlights] ${depIATA} → ${arrIATA} on ${params.date}`);
   const url = new URL("https://serpapi.com/search");
   url.searchParams.set("engine", "google_flights");
-  url.searchParams.set("departure_id", normalizeToIATA(params.departure_city));
-  url.searchParams.set("arrival_id", normalizeToIATA(params.arrival_city));
+  url.searchParams.set("departure_id", depIATA);
+  url.searchParams.set("arrival_id", arrIATA);
   url.searchParams.set("outbound_date", params.date);
   if (params.is_round_trip && params.return_date) {
     url.searchParams.set("return_date", params.return_date);

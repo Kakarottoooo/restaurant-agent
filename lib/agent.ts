@@ -721,7 +721,10 @@ async function runFlightPipeline(
   if (!intent.arrival_city) missing.push("destination city");
   if (!intent.date) missing.push("travel date");
 
+  console.log("[flight-pipeline] intent:", JSON.stringify({ dep: intent.departure_city, arr: intent.arrival_city, date: intent.date, prefer_direct: intent.prefer_direct }));
+
   if (missing.length > 0) {
+    console.log("[flight-pipeline] missing fields:", missing);
     return { flightRecommendations: [], missing_fields: missing, no_direct_available: false };
   }
 
