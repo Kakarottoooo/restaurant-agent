@@ -487,6 +487,32 @@ const CITY_TO_IATA: Record<string, string> = {
 };
 
 /** Normalize a city name or IATA code to an IATA code for SerpAPI. */
+/** Normalize various date formats to YYYY-MM-DD for SerpAPI. */
+export function normalizeDate(input: string | null | undefined): string | null {
+  if (!input) return null;
+  const s = input.trim();
+  // Already YYYY-MM-DD
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  // MM/DD/YYYY or M/D/YYYY
+  const mdy = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (mdy) return `${mdy[3]}-${mdy[1].padStart(2, "0")}-${mdy[2].padStart(2, "0")}`;
+  // MM/DD (no year) — assume current or next year
+  const md = s.match(/^(\d{1,2})\/(\d{1,2})$/);
+  if (md) {
+    const now = new Date();
+    const year = now.getFullYear();
+    const candidate = `${year}-${md[1].padStart(2, "0")}-${md[2].padStart(2, "0")}`;
+    // If the date is in the past, use next year
+    return candidate < now.toISOString().split("T")[0]
+      ? `${year + 1}-${md[1].padStart(2, "0")}-${md[2].padStart(2, "0")}`
+      : candidate;
+  }
+  // Try JS Date parsing as last resort
+  const d = new Date(s);
+  if (!isNaN(d.getTime())) return d.toISOString().split("T")[0];
+  return null;
+}
+
 export function normalizeToIATA(input: string): string {
   const trimmed = input.trim();
   const lower = trimmed.toLowerCase();
@@ -550,12 +576,13 @@ export async function searchFlights(params: {
   // Build SerpApi Google Flights URL
   const depIATA = normalizeToIATA(params.departure_city);
   const arrIATA = normalizeToIATA(params.arrival_city);
-  console.log(`[searchFlights] ${depIATA} → ${arrIATA} on ${params.date}`);
+  const normalizedDate = normalizeDate(params.date) ?? params.date;
+  console.log(`[searchFlights] ${depIATA} → ${arrIATA} on ${normalizedDate} (raw date: ${params.date})`);
   const url = new URL("https://serpapi.com/search");
   url.searchParams.set("engine", "google_flights");
   url.searchParams.set("departure_id", depIATA);
   url.searchParams.set("arrival_id", arrIATA);
-  url.searchParams.set("outbound_date", params.date);
+  url.searchParams.set("outbound_date", normalizedDate);
   if (params.is_round_trip && params.return_date) {
     url.searchParams.set("return_date", params.return_date);
     url.searchParams.set("type", "1"); // round trip
