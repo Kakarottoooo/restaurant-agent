@@ -337,10 +337,11 @@ export default function MapView({
             };
             const groupLabel: Record<typeof card.group, string> = {
               direct: "Nonstop",
-              one_stop: `1 Stop${f.layover_city ? ` · ${f.layover_city}` : ""}`,
+              one_stop: "1 Stop",
               two_stop: `${f.stops} Stops`,
-              cheapest: `Best Price · ${f.stops === 0 ? "Nonstop" : f.stops === 1 ? `1 stop${f.layover_city ? ` · ${f.layover_city}` : ""}` : `${f.stops} stops`}`,
+              cheapest: "Best Price",
             };
+            const stopDetail = f.stops === 0 ? "Nonstop" : f.stops === 1 ? `1 stop${f.layover_city ? ` · ${f.layover_city}` : ""}` : `${f.stops} stops`;
             const accentColor = groupColor[card.group];
             return (
               <button
@@ -362,13 +363,16 @@ export default function MapView({
                   textAlign: "left",
                 }}
               >
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
-                  <div style={{ fontFamily: "var(--font-playfair)", fontSize: "13px", fontWeight: 600, color: "var(--text-primary)" }}>
-                    {f.departure_airport} → {f.arrival_airport}
-                  </div>
-                  <span style={{ fontSize: "10px", fontWeight: 700, color: accentColor, background: `${accentColor}22`, borderRadius: "4px", padding: "1px 6px", fontFamily: "var(--font-dm-sans)", whiteSpace: "nowrap", marginLeft: 6 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+                  <span style={{ fontSize: "10px", fontWeight: 700, color: accentColor, background: `${accentColor}22`, borderRadius: "4px", padding: "1px 6px", fontFamily: "var(--font-dm-sans)", whiteSpace: "nowrap", flexShrink: 0 }}>
                     {groupLabel[card.group]}
                   </span>
+                  <span style={{ fontFamily: "var(--font-dm-sans)", fontSize: "10px", color: "var(--text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {stopDetail}
+                  </span>
+                </div>
+                <div style={{ fontFamily: "var(--font-playfair)", fontSize: "13px", fontWeight: 600, color: "var(--text-primary)", marginBottom: 2 }}>
+                  {f.departure_airport} → {f.arrival_airport}
                 </div>
                 <div style={{ fontFamily: "var(--font-dm-sans)", fontSize: "11px", color: "var(--text-secondary)", marginBottom: 2 }}>
                   {f.departure_time} → {f.arrival_time} · {f.duration}
