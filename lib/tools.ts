@@ -437,6 +437,15 @@ const AIRPORT_COORDS: Record<string, { lat: number; lng: number }> = {
   SLC: { lat: 40.7884, lng: -111.978 }, PDX: { lat: 45.5898, lng: -122.591 },
   SAN: { lat: 32.7338, lng: -117.190 }, HNL: { lat: 21.3245, lng: -157.925 },
   AUS: { lat: 30.1975, lng: -97.6664 }, MCO: { lat: 28.4312, lng: -81.3081 },
+  BNA: { lat: 36.1263, lng: -86.6774 }, OAK: { lat: 37.7213, lng: -122.221 },
+  SJC: { lat: 37.3626, lng: -121.929 }, TPA: { lat: 27.9755, lng: -82.5332 },
+  RDU: { lat: 35.8776, lng: -78.7875 }, MSY: { lat: 29.9934, lng: -90.2580 },
+  MCI: { lat: 39.2976, lng: -94.7139 }, STL: { lat: 38.7487, lng: -90.3700 },
+  PIT: { lat: 40.4915, lng: -80.2329 }, CLE: { lat: 41.4117, lng: -81.8498 },
+  CVG: { lat: 39.0488, lng: -84.6678 }, IND: { lat: 39.7173, lng: -86.2944 },
+  MEM: { lat: 35.0424, lng: -89.9767 }, SAT: { lat: 29.5337, lng: -98.4698 },
+  DAL: { lat: 32.8473, lng: -96.8517 }, HOU: { lat: 29.6454, lng: -95.2789 },
+  ANC: { lat: 61.1743, lng: -149.996 },
 };
 
 function getAirportCoords(iata: string): { lat: number; lng: number } | undefined {
