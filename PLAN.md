@@ -1813,3 +1813,246 @@ Phase 7.5 酒店卡片 UI（约 2 天）
 - 地图视图：出发地 → 目的地**航线连线** + 两端标注起飞/降落时间
 - 新增 `resultCategory = "flight"`，MapView 接收航线数据渲染弧线
 - SerpApi `q` 参数从 `"Las Vegas"` 改为 `"hotels in Las Vegas"`，提升搜索精准度
+
+---
+
+## Phase 9 — 信用卡 Agent（Credit Card Recommender）
+
+> 设计定稿日期：2026-03-18
+> 核心差异点：个性化净收益计算，而非泛泛评分排序
+
+### 背景与定位
+
+现有产品（NerdWallet、The Points Guy）推荐信用卡的方式是"旅行类最佳：Amex Platinum"——基于通用评分，与用户真实消费结构无关。本模块的差异点是：
+
+> 用户输入消费结构 → 系统计算每张卡对该用户的**实际年度净收益**（返现/积分价值 − 年费）→ 输出"适合你的前5张卡 + 具体多赚多少 + 开卡奖励值多少 + 注意事项"
+
+---
+
+### 9.1 数据层
+
+#### 信用卡静态数据库
+
+自己维护 `lib/creditCards.ts`（或 `data/credit-cards.json`），覆盖美国市场 30–50 张主流卡（Chase、Amex、Citi、Capital One、Discover）。
+
+每张卡的数据结构：
+
+```ts
+interface CreditCard {
+  id: string;
+  name: string;                         // e.g. "Chase Sapphire Preferred"
+  issuer: string;                       // e.g. "Chase"
+  annual_fee: number;                   // USD，如 95
+  rewards_currency: string;             // e.g. "Chase UR", "Amex MR", "cash"
+  // 各消费类别积分倍率
+  category_rates: {
+    dining: number;                     // e.g. 3
+    groceries: number;
+    travel: number;
+    gas: number;
+    online_shopping: number;
+    streaming: number;
+    pharmacy: number;
+    other: number;
+  };
+  // 积分货币兑换率（固定保守估值）
+  point_value_cash: number;             // 换现金，e.g. 0.01
+  point_value_travel: number;           // 换旅行，e.g. 0.015
+  // 开卡奖励（与经常性收益分开）
+  signup_bonus_points: number;          // e.g. 60000
+  signup_bonus_spend_requirement: number; // 3个月内需消费额，e.g. 4000
+  signup_bonus_timeframe_months: number; // e.g. 3
+  // 注意事项
+  foreign_transaction_fee: boolean;
+  min_credit_score?: number;            // e.g. 700
+  notes?: string[];                     // 其他坑
+  // 数据时效
+  last_verified: string;                // ISO date, e.g. "2026-02-01"
+}
+```
+
+#### 数据维护策略
+
+- **稳定数据**（积分率、年费）：人工录入，每季度扫一遍更新
+- **开卡奖励**：定期参考 NerdWallet / The Points Guy 页面更新，标注 `last_verified`
+- **不使用爬虫或第三方 API**：数据准确性是核心竞争力，宁可保守也不要引入不可控来源
+
+#### 消费类别（与卡数据对齐）
+
+| 类别 | 英文 key |
+|------|---------|
+| 餐饮 | `dining` |
+| 超市 | `groceries` |
+| 旅行（机票+酒店） | `travel` |
+| 加油 | `gas` |
+| 网购 | `online_shopping` |
+| 流媒体 | `streaming` |
+| 药店 | `pharmacy` |
+| 其他 | `other` |
+
+---
+
+### 9.2 计算逻辑
+
+#### 核心算法：边际价值计算
+
+```
+现有卡组合年度净收益 =
+  Σ 每个消费类别 × 当前组合中该类别最高积分率 × 月均消费 × 12 × 积分价值
+  − Σ 现有所有卡年费
+
+候选新卡边际价值 =
+  加入该卡后重新计算的年度净收益 − 现有卡组合年度净收益
+```
+
+推荐列表按**边际价值从高到低**排序，输出前5张。
+
+#### 积分价值估值（固定保守值）
+
+| 积分货币 | 换现金 | 换旅行 |
+|---------|--------|--------|
+| Chase UR | $0.010/pt | $0.015/pt |
+| Amex MR | $0.010/pt | $0.015/pt |
+| Citi TY | $0.010/pt | $0.014/pt |
+| Capital One Miles | $0.010/pt | $0.013/pt |
+| 纯现金返还卡 | 直接按比例 | — |
+
+用户在对话开始时选择偏好（换现金 / 换旅行），计算时使用对应列。
+
+#### 开卡奖励展示规则
+
+**经常性年度净收益**与**开卡奖励**完全分开展示，不合并，不摊销：
+
+```
+年度经常性净收益：+$340/年（持卡每年稳定获得）
+首年开卡奖励：60,000 点 ≈ $900（一次性，需3个月内消费 $4,000）
+```
+
+原因：合并会让数字虚高，用户第二年发现收益骤降体验很差；分开展示对 churner 和长期持卡用户都诚实。
+
+---
+
+### 9.3 用户流程
+
+#### 首次进入（2问题快速推荐）
+
+```
+问题1：你每个月大概在哪几个类别花钱？各花多少？
+       （主要类别直接列出让用户填金额，其余归入"其他"）
+
+问题2：你现在有哪些信用卡？
+       （主流卡多选列表，10秒完成）
+
+→ 立即给出推荐结果（30秒以内）
+→ 结果页底部："细化你的消费结构，让推荐更准确" 入口
+```
+
+#### 结果卡片字段
+
+每张推荐卡展示：
+- 卡名 + 发卡行 + 年费
+- **加入后哪些类别分工改变**（e.g. "你的超市消费从 2x 升至 4x"）
+- **每个类别具体多赚多少**
+- **年度经常性净收益**（含年费抵扣后）
+- **开卡奖励**（积分数 + 估值 + 消费门槛 + 时限）
+- 注意事项（外汇手续费、信用分要求等）
+
+#### 积分盘活场景（与机票/酒店联动）
+
+当用户在机票或酒店流程中出现时，系统发出提示：
+
+> "你之前办过 Chase Sapphire Preferred，如果告诉我你现在有多少 UR 积分，我可以帮你看能否抵扣这次旅行费用。"
+
+- 用户提供积分余额 → 计算是否够兑换 + 差多少
+- 用户忽略 → 正常走机票/酒店搜索流程，不重复追问
+
+---
+
+### 9.4 架构设计（与现有系统集成）
+
+遵循现有多品类架构模式（参见 Phase 7），信用卡作为独立 module：
+
+#### 新增类型（`lib/types.ts`）
+
+```ts
+export interface CreditCardIntent extends BaseIntent {
+  category: "credit_card";
+  spending_profile?: SpendingProfile;   // 用户消费结构
+  existing_cards?: string[];            // 现有卡 id 列表
+  reward_preference?: "cash" | "travel"; // 积分偏好
+}
+
+export interface SpendingProfile {
+  dining: number;           // 月均消费 USD
+  groceries: number;
+  travel: number;
+  gas: number;
+  online_shopping: number;
+  streaming: number;
+  pharmacy: number;
+  other: number;
+}
+
+export interface CreditCardRecommendationCard {
+  card: CreditCard;
+  rank: number;
+  annual_net_benefit: number;           // 经常性年度净收益
+  marginal_value: number;               // vs 当前卡组合
+  category_breakdown: {                 // 各类别收益明细
+    category: string;
+    old_rate: number;
+    new_rate: number;
+    monthly_spend: number;
+    annual_gain: number;
+  }[];
+  signup_bonus_value: number;           // 开卡奖励估值
+  why_recommended: string;
+  watch_out: string[];
+}
+```
+
+#### 新增文件
+
+| 文件 | 职责 |
+|------|------|
+| `data/credit-cards.json` | 信用卡静态数据库 |
+| `lib/creditCardEngine.ts` | 边际价值计算核心逻辑 |
+| `components/CreditCardCard.tsx` | 推荐结果卡片渲染 |
+| `app/api/chat/route.ts` | 新增 `credit_card` 分支（复用现有 SSE 框架） |
+
+#### 意图识别
+
+在现有 `parseIntent()` 中新增 `credit_card` 分支。关键词：
+- "信用卡"、"credit card"、"哪张卡好"、"积分卡"、"返现卡"、"推荐卡"
+
+意图识别升级为**模型分类**（不用关键词匹配），避免与餐厅/酒店/机票意图产生歧义。
+
+---
+
+### 9.5 责任边界处理
+
+**数据透明（比免责声明更重要）**
+
+- 每张卡数据旁标注：`最后验证：2026年2月`
+- 推荐结果末尾注明：`积分率和开卡奖励以银行官网为准，建议办卡前确认`
+
+**页脚免责声明**
+
+```
+本工具提供信息参考，不构成金融建议，最终决策请以银行官方条款为准。
+```
+
+简短，不吓人，但必须存在。前台体验不受影响，不在每个推荐结果上堆警告。
+
+---
+
+### Phase 9 成功标准
+
+| 指标 | 完成后 |
+|------|--------|
+| 意图识别 | 用户说"帮我找适合的信用卡"→ 走信用卡 pipeline，不误触其他品类 |
+| 计算准确 | 边际价值与手算结果一致，经常性收益与开卡奖励分开展示 |
+| 30秒首结果 | 用户回答2个问题后立即看到推荐，无需填完所有细项 |
+| 积分联动 | 机票/酒店流程中正确触发积分余额提示，用户忽略时不阻塞流程 |
+| 现有功能 | 餐厅、酒店、机票功能完全不受影响，回归测试全过 |
+| 数据时效 | 每张卡标注 `last_verified`，用户可感知数据新鲜度 |
