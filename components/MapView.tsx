@@ -329,10 +329,19 @@ export default function MapView({
           {flightCards.map((card, i) => {
             const isSelected = i === selectedFlightIndex;
             const { flight: f } = card;
-            const isCheapest = card.group === "cheapest";
-            const stopLabel = isCheapest
-              ? `Best Price · ${f.stops === 0 ? "Nonstop" : f.stops === 1 ? `1 stop${f.layover_city ? ` · ${f.layover_city}` : ""}` : `${f.stops} stops`}`
-              : f.stops === 0 ? "Nonstop" : f.stops === 1 ? `1 stop${f.layover_city ? ` · ${f.layover_city}` : ""}` : `${f.stops} stops`;
+            const groupColor: Record<typeof card.group, string> = {
+              direct: "#2D6A4F",
+              one_stop: "#8B5E14",
+              two_stop: "#7B3F00",
+              cheapest: "#1a5fa8",
+            };
+            const groupLabel: Record<typeof card.group, string> = {
+              direct: "Nonstop",
+              one_stop: `1 Stop${f.layover_city ? ` · ${f.layover_city}` : ""}`,
+              two_stop: `${f.stops} Stops`,
+              cheapest: `Best Price · ${f.stops === 0 ? "Nonstop" : f.stops === 1 ? `1 stop${f.layover_city ? ` · ${f.layover_city}` : ""}` : `${f.stops} stops`}`,
+            };
+            const accentColor = groupColor[card.group];
             return (
               <button
                 key={f.id}
@@ -344,25 +353,30 @@ export default function MapView({
                   flexShrink: 0,
                   width: "220px",
                   borderRadius: "12px",
-                  border: isSelected ? "1.5px solid #C9A84C" : "0.5px solid var(--border)",
-                  backgroundColor: isSelected ? "var(--bg)" : "var(--card)",
+                  border: isSelected ? `1.5px solid ${accentColor}` : `0.5px solid ${accentColor}44`,
+                  backgroundColor: isSelected ? `${accentColor}18` : "var(--card)",
                   padding: "10px 12px",
                   cursor: "pointer",
                   scrollSnapAlign: "center",
-                  transition: "border-color 0.2s",
+                  transition: "border-color 0.2s, background-color 0.2s",
                   textAlign: "left",
                 }}
               >
-                <div style={{ fontFamily: "var(--font-playfair)", fontSize: "13px", fontWeight: 600, color: "var(--text-primary)", marginBottom: 2 }}>
-                  {f.departure_airport} → {f.arrival_airport}
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+                  <div style={{ fontFamily: "var(--font-playfair)", fontSize: "13px", fontWeight: 600, color: "var(--text-primary)" }}>
+                    {f.departure_airport} → {f.arrival_airport}
+                  </div>
+                  <span style={{ fontSize: "10px", fontWeight: 700, color: accentColor, background: `${accentColor}22`, borderRadius: "4px", padding: "1px 6px", fontFamily: "var(--font-dm-sans)", whiteSpace: "nowrap", marginLeft: 6 }}>
+                    {groupLabel[card.group]}
+                  </span>
                 </div>
                 <div style={{ fontFamily: "var(--font-dm-sans)", fontSize: "11px", color: "var(--text-secondary)", marginBottom: 2 }}>
                   {f.departure_time} → {f.arrival_time} · {f.duration}
                 </div>
-                <div style={{ fontFamily: "var(--font-dm-sans)", fontSize: "10px", color: "var(--text-muted)", marginBottom: 4 }}>
-                  {f.airline} · {stopLabel}
+                <div style={{ fontFamily: "var(--font-dm-sans)", fontSize: "11px", color: "var(--text-muted)", marginBottom: 4 }}>
+                  {f.airline}
                 </div>
-                <div style={{ fontFamily: "var(--font-dm-sans)", fontSize: "13px", fontWeight: 700, color: "#C9A84C" }}>
+                <div style={{ fontFamily: "var(--font-dm-sans)", fontSize: "14px", fontWeight: 700, color: accentColor }}>
                   {f.price > 0 ? `$${f.price}` : "—"}
                 </div>
               </button>
