@@ -329,21 +329,12 @@ export default function MapView({
           {flightCards.map((card, i) => {
             const isSelected = i === selectedFlightIndex;
             const { flight: f } = card;
-            const groupColor: Record<typeof card.group, string> = {
-              direct: "#2D6A4F",
-              one_stop: "#8B5E14",
-              two_stop: "#7B3F00",
-              cheapest: "#1a5fa8",
-            };
-            const groupLabel: Record<typeof card.group, string> = {
-              direct: "Nonstop",
-              one_stop: "1 Stop",
-              two_stop: `${f.stops} Stops`,
-              cheapest: "Best Price",
-            };
-            // Only show layover city as supplemental info (badge already shows stop count)
+            const isCheapest = card.group === "cheapest";
+            // Always show real stop type; cheapest gets blue accent
+            const stopColor = f.stops === 0 ? "#2D6A4F" : f.stops === 1 ? "#8B5E14" : "#7B3F00";
+            const accentColor = isCheapest ? "#1a5fa8" : stopColor;
+            const stopLabel = f.stops === 0 ? "Nonstop" : f.stops === 1 ? "1 Stop" : `${f.stops} Stops`;
             const stopDetail = f.layover_city ?? "";
-            const accentColor = groupColor[card.group];
             return (
               <button
                 key={f.id}
@@ -365,8 +356,8 @@ export default function MapView({
                 }}
               >
                 <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
-                  <span style={{ fontSize: "10px", fontWeight: 700, color: accentColor, background: `${accentColor}22`, borderRadius: "4px", padding: "1px 6px", fontFamily: "var(--font-dm-sans)", whiteSpace: "nowrap", flexShrink: 0 }}>
-                    {groupLabel[card.group]}
+                  <span style={{ fontSize: "10px", fontWeight: 700, color: stopColor, background: `${stopColor}22`, borderRadius: "4px", padding: "1px 6px", fontFamily: "var(--font-dm-sans)", whiteSpace: "nowrap", flexShrink: 0 }}>
+                    {stopLabel}
                   </span>
                   {stopDetail && (
                     <span style={{ fontFamily: "var(--font-dm-sans)", fontSize: "10px", color: "var(--text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
@@ -383,8 +374,15 @@ export default function MapView({
                 <div style={{ fontFamily: "var(--font-dm-sans)", fontSize: "11px", color: "var(--text-muted)", marginBottom: 4 }}>
                   {f.airline}
                 </div>
-                <div style={{ fontFamily: "var(--font-dm-sans)", fontSize: "14px", fontWeight: 700, color: accentColor }}>
-                  {f.price > 0 ? `$${f.price}` : "—"}
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <div style={{ fontFamily: "var(--font-dm-sans)", fontSize: "14px", fontWeight: 700, color: accentColor }}>
+                    {f.price > 0 ? `$${f.price}` : "—"}
+                  </div>
+                  {isCheapest && (
+                    <span style={{ fontSize: "9px", fontWeight: 700, color: "#fff", background: "#1a5fa8", borderRadius: "4px", padding: "2px 5px", fontFamily: "var(--font-dm-sans)", whiteSpace: "nowrap" }}>
+                      💰 Best Price
+                    </span>
+                  )}
                 </div>
               </button>
             );
