@@ -129,6 +129,7 @@ export interface AgentResponse {
   hotelRecommendations?: HotelRecommendationCard[];
   flightRecommendations?: FlightRecommendationCard[];
   creditCardRecommendations?: CreditCardRecommendationCard[];
+  laptopRecommendations?: LaptopRecommendationCard[];
   category?: CategoryType;
 }
 
@@ -139,12 +140,13 @@ export interface Message {
   hotelCards?: HotelRecommendationCard[];
   flightCards?: FlightRecommendationCard[];
   creditCardCards?: CreditCardRecommendationCard[];
+  laptopCards?: LaptopRecommendationCard[];
   category?: CategoryType;
 }
 
 // ─── Phase 7: Multi-category types ───────────────────────────────────────────
 
-export type CategoryType = "restaurant" | "hotel" | "flight" | "credit_card" | "unknown";
+export type CategoryType = "restaurant" | "hotel" | "flight" | "credit_card" | "laptop" | "unknown";
 
 export interface BaseIntent {
   category: CategoryType;
@@ -193,7 +195,7 @@ export interface FlightIntent extends BaseIntent {
   max_stops?: number | null; // null = no preference, 0 = nonstop only, 1 = max 1 stop
 }
 
-export type ParsedIntent = RestaurantIntent | HotelIntent | FlightIntent | CreditCardIntent;
+export type ParsedIntent = RestaurantIntent | HotelIntent | FlightIntent | CreditCardIntent | LaptopIntent;
 
 export interface Hotel {
   id: string;
@@ -287,7 +289,9 @@ export interface SpendingProfile {
   gas: number;
   online_shopping: number;
   streaming: number;
+  entertainment: number; // movies, concerts, sports, kids activities — SavorOne earns 3x here
   pharmacy: number;
+  rent: number;          // monthly rent — only Bilt earns points on this
   other: number;
 }
 
@@ -295,7 +299,12 @@ export interface CreditCardIntent extends BaseIntent {
   category: "credit_card";
   spending_profile?: SpendingProfile;
   existing_cards?: string[];           // card ids
+  has_existing_cards?: boolean;        // true if user mentioned having cards but didn't name them
   reward_preference?: "cash" | "travel";
+  credit_score?: number;               // 0 = no credit history
+  prefer_no_annual_fee?: "hard" | "soft" | false; // hard=exclude, soft=show with note, false=no pref
+  prefer_flat_rate?: boolean;          // "don't track categories, give me one card"
+  needs_spending_info?: boolean;       // true = user didn't provide spending details, ask first
 }
 
 export interface CreditCard {
@@ -311,7 +320,9 @@ export interface CreditCard {
     gas: number;
     online_shopping: number;
     streaming: number;
+    entertainment: number;
     pharmacy: number;
+    rent: number;
     other: number;
   };
   point_value_cash: number;
@@ -322,6 +333,8 @@ export interface CreditCard {
   foreign_transaction_fee: boolean;
   min_credit_score?: number;
   notes?: string[];
+  eligibility_notes?: string[];         // hard prerequisites (Costco membership, Prime, etc.)
+  mutually_exclusive_with?: string[];   // card ids that cannot be held simultaneously
   last_verified: string;
 }
 
@@ -338,6 +351,109 @@ export interface CreditCardRecommendationCard {
     annual_gain: number;
   }[];
   signup_bonus_value: number;       // estimated dollar value of signup bonus
+  reward_preference: "cash" | "travel";
   why_recommended: string;
   watch_out: string[];
+}
+
+// ─── Phase 10: Laptop Recommendation types ───────────────────────────────────
+
+export type LaptopUseCase =
+  | "light_productivity"
+  | "software_dev"
+  | "video_editing"
+  | "3d_creative"
+  | "gaming"
+  | "data_science"
+  | "business_travel";
+
+export interface LaptopIntent extends BaseIntent {
+  category: "laptop";
+  use_cases: LaptopUseCase[];
+  budget_usd_max: number | null;
+  budget_usd_min: number | null;
+  os_preference: "mac" | "windows" | "linux" | "any";
+  portability_priority: "critical" | "preferred" | "flexible";
+  gaming_required: boolean;
+  display_size_preference: "<14" | "14-15" | "15+" | "any";
+  avoid_brands: string[];
+  needs_use_case_info: boolean;
+}
+
+export interface LaptopSKU {
+  id: string;
+  ram_gb: number;
+  storage_gb: number;
+  price_usd: number;
+  notes?: string;
+}
+
+export interface LaptopSignalValue {
+  value_raw: string | number;
+  value_label: string;
+  value_normalized: number; // 0-10
+  raw_quote?: string;
+  source: string;
+  months_old: number;
+}
+
+export interface LaptopPortSelection {
+  usb_c: number;
+  usb_a: number;
+  hdmi: boolean;
+  sd_card: boolean;
+  thunderbolt: boolean;
+  value_normalized: number;
+}
+
+export interface LaptopDevice {
+  id: string;
+  name: string;
+  brand: string;
+  os: "mac" | "windows" | "linux";
+  price_usd: number;         // base MSRP
+  display_size: number;      // inches
+  weight_kg: number;
+  ram_gb: number;            // base config
+  storage_gb: number;        // base config
+  cpu: string;
+  gpu: string;
+  skus: LaptopSKU[];
+  signals: {
+    battery_life: LaptopSignalValue;
+    display_quality: LaptopSignalValue;
+    display_brightness: LaptopSignalValue;
+    keyboard_feel: LaptopSignalValue;
+    trackpad_feel: LaptopSignalValue;
+    thermal_performance: LaptopSignalValue;
+    fan_noise: LaptopSignalValue;
+    build_quality: LaptopSignalValue;
+    port_selection: LaptopPortSelection;
+    weight_portability: LaptopSignalValue;
+    value_for_money: LaptopSignalValue;
+    cpu_benchmark: number;   // 0-10 log-scale
+    gpu_benchmark: number;   // 0-10 log-scale
+  };
+  last_verified: string;
+}
+
+export interface LaptopSignalBreakdownItem {
+  signal_type: string;
+  label: string;
+  score: number;       // 0-10
+  weight: number;      // for primary use case
+  raw_quote?: string;
+  source?: string;
+}
+
+export interface LaptopRecommendationCard {
+  device: LaptopDevice;
+  rank: number;
+  final_score: number;
+  use_case_scores: Partial<Record<LaptopUseCase, number>>;
+  signal_breakdown: LaptopSignalBreakdownItem[];
+  recommended_sku: LaptopSKU | null;
+  why_recommended: string;
+  watch_out: string[];
+  data_staleness_warning: boolean;
 }

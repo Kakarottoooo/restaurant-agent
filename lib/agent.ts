@@ -2,10 +2,11 @@
 // const client = new Anthropic();
 
 import { googlePlacesSearch, tavilySearch, geocodeLocation, fetchReviewSignals, searchHotels, searchFlights, resolveMultiAirport } from "./tools";
-import { UserRequirements, Restaurant, RecommendationCard, SessionPreferences, ScoringDimensions, HotelIntent, RestaurantIntent, FlightIntent, CreditCardIntent, ParsedIntent, HotelRecommendationCard, FlightRecommendationCard, CreditCardRecommendationCard, SpendingProfile, CategoryType, Flight } from "./types";
+import { UserRequirements, Restaurant, RecommendationCard, SessionPreferences, ScoringDimensions, HotelIntent, RestaurantIntent, FlightIntent, CreditCardIntent, LaptopIntent, LaptopUseCase, ParsedIntent, HotelRecommendationCard, FlightRecommendationCard, CreditCardRecommendationCard, LaptopRecommendationCard, SpendingProfile, CategoryType, Flight } from "./types";
 import { CITIES, DEFAULT_CITY } from "./cities";
 import { UserRequirementsSchema, RankedItemArraySchema } from "./schemas";
 import { recommendCreditCards } from "./creditCardEngine";
+import { recommendLaptops } from "./laptopEngine";
 
 const MINIMAX_API_URL = "https://api.minimaxi.chat/v1/chat/completions";
 const MINIMAX_MODEL = "MiniMax-Text-01";
@@ -135,10 +136,27 @@ async function detectCategory(message: string): Promise<CategoryType> {
   const creditCardKeywords = [
     "credit card", "credit cards", "cash back", "cashback", "rewards card",
     "points card", "travel card", "which card", "best card", "card recommendation",
+    "what card", "recommend a card", "suggest a card", "get a card", "apply for",
     "signup bonus", "sign-up bonus", "annual fee", "no annual fee",
+    "spend on", "i spend", "monthly spend", "per month", "spending profile",
+    "rewards points", "earn points", "points on", "miles on",
     "chase sapphire", "amex gold", "amex platinum", "venture x", "capital one",
+    "no cards currently", "no card", "first card", "open to business cards",
+    "prefer points", "prefer cash", "prefer travel rewards",
     "信用卡", "哪张卡", "积分卡", "返现卡", "推荐卡", "开卡奖励",
   ];
+
+  // Spending-context signals: if user describes their monthly spend breakdown
+  // AND asks for a recommendation, it's almost certainly a credit card query
+  const hasSpendingContext = /\$[\d,]+\s*(\/month|per month|a month|monthly)/.test(lower)
+    || /\d+[k]?\s*(\/month|per month|a month)/.test(lower)
+    || lower.includes("monthly spend") || lower.includes("i spend about");
+  const hasCardRecommendationAsk = lower.includes("recommend") || lower.includes("what should")
+    || lower.includes("which") || lower.includes("suggest") || lower.includes("best")
+    || lower.includes("what card") || lower.includes("open to");
+
+  if (hasSpendingContext && hasCardRecommendationAsk) return "credit_card";
+
   const flightKeywords = [
     "flight", "flights", "fly", "flying", "plane", "airline", "airport",
     "ticket", "tickets", "one way", "round trip", "roundtrip", "nonstop",
@@ -152,8 +170,22 @@ async function detectCategory(message: string): Promise<CategoryType> {
     "stay at", "book a room", "accommodation", "suite", "booking",
     "酒店", "旅馆", "住", "入住", "退房", "晚", "客房",
   ];
+  const laptopKeywords = [
+    "laptop", "notebooks", "notebook computer", "macbook", "thinkpad", "chromebook",
+    "ultrabook", "gaming laptop", "business laptop", "laptop recommendation",
+    "which laptop", "best laptop", "what laptop", "recommend a laptop", "suggest a laptop",
+    "looking for a laptop", "need a laptop", "buy a laptop", "purchase a laptop",
+    "software development laptop", "video editing laptop", "coding laptop",
+    "work from home laptop", "wfh laptop", "college laptop", "student laptop",
+    "light laptop", "portable laptop", "budget laptop", "laptop under",
+    "笔记本", "笔记本电脑", "电脑推荐", "哪款电脑", "苹果电脑", "游戏本",
+    "轻薄本", "商务本", "编程用什么电脑", "剪辑用什么电脑",
+  ];
+
   // Credit card check first to avoid collision with "travel card" → hotel
   if (creditCardKeywords.some((kw) => lower.includes(kw))) return "credit_card";
+  // Laptop check before flight/hotel to avoid collision
+  if (laptopKeywords.some((kw) => lower.includes(kw))) return "laptop";
   if (flightKeywords.some((kw) => lower.includes(kw))) return "flight";
   if (hotelKeywords.some((kw) => lower.includes(kw))) return "hotel";
   return "restaurant";
@@ -339,8 +371,13 @@ ${context ? `Recent conversation:\n${context}` : ""}
 Return JSON:
 {
   "category": "credit_card",
+  "has_spending_info": true or false,
   "reward_preference": "cash" | "travel" | null,
   "existing_cards": ["card id string", ...] or [],
+  "credit_score": number or null,
+  "prefer_no_annual_fee": "hard" | "soft" | false,
+  "prefer_flat_rate": true or false,
+  "has_existing_cards": true or false,
   "spending_profile": {
     "dining": monthly_usd or 0,
     "groceries": monthly_usd or 0,
@@ -348,13 +385,56 @@ Return JSON:
     "gas": monthly_usd or 0,
     "online_shopping": monthly_usd or 0,
     "streaming": monthly_usd or 0,
+    "entertainment": monthly_usd or 0,
     "pharmacy": monthly_usd or 0,
+    "rent": monthly_usd or 0,
     "other": monthly_usd or 0
   }
 }
 
-For existing_cards, use these ids if mentioned: chase-sapphire-preferred, chase-sapphire-reserve, chase-freedom-unlimited, chase-freedom-flex, amex-platinum, amex-gold, amex-blue-cash-preferred, citi-strata-premier, citi-double-cash, capital-one-venture-x, capital-one-venture, capital-one-savor-one, discover-it-cash-back, wells-fargo-active-cash, bilt-mastercard.
-If user has not provided spending details, use these defaults: dining=300, groceries=400, travel=200, gas=100, online_shopping=150, streaming=30, pharmacy=50, other=200.
+SPENDING CATEGORY MAPPING RULES:
+- "entertainment", "bars", "nightlife", "concerts" → split between dining and other
+- "subscriptions", "streaming services", "Netflix/Spotify/etc" → streaming
+- "transit", "subway", "metro", "Uber", "Lyft", "commuting", "train", "bus" → travel (NOT gas; transit earns under travel on most cards)
+- "gas", "gas station", "fuel" → gas
+- "rent", "monthly rent", "apartment", "lease payment", "housing cost", "place costs", "my apartment costs" → rent (NOT other)
+- "Amazon", "Amazon.com" → online_shopping
+- "Whole Foods" → groceries
+- "software", "SaaS", "online tools", "cloud services" → online_shopping
+- "office supplies", "home office" → other
+- "entertainment", "movies", "concerts", "sports events", "theme parks", "activities" → entertainment
+- "kids activities" → entertainment
+- "childcare", "education", "tuition" → other
+- "client entertainment" → dining
+- IMPORTANT: do not invent spending categories. If amounts don't add up to total, put remainder in "other"
+
+CREDIT SCORE:
+- Set credit_score to the number if user mentions their score (e.g. "my score is 720" → 720)
+- "no credit history" / "first card" / "never had a card" → credit_score: 0
+- "fair credit" → 640, "good credit" → 700, "excellent credit" → 750
+- If not mentioned → null
+
+PREFER NO ANNUAL FEE:
+- "hard" if user says "no annual fee", "no yearly fee", "free card only", "must be free"
+- "soft" if user says "no annual fee if possible", "prefer no fee", "ideally no fee"
+- false if not mentioned
+
+PREFER FLAT RATE:
+- true if user says "flat rate", "same rate everywhere", "don't want to track categories", "one card for everything", "simple", "just one card"
+- false otherwise
+
+HAS EXISTING CARDS:
+- true if user mentions having any cards (even without naming them), e.g. "I have 4 cards", "I already have some cards", "my current cards"
+- false if user says they have no cards or this is their first card
+
+SPENDING INFO:
+- Set has_spending_info to true if user gave ANY dollar amounts OR described spending patterns with enough detail to estimate (e.g. "3-4 flights a month", "eat out daily", "mostly Amazon shopping")
+- Set to false ONLY if user gave zero spending context at all
+
+For existing_cards, use these ids: chase-sapphire-preferred, chase-sapphire-reserve, chase-freedom-unlimited, chase-freedom-flex, amex-platinum, amex-gold, amex-blue-cash-preferred (6% groceries, $95/yr fee), amex-blue-cash-everyday (3% groceries, no fee), citi-strata-premier, citi-double-cash, capital-one-venture-x, capital-one-venture, capital-one-savor-one, discover-it-cash-back, wells-fargo-active-cash, bilt-mastercard, chase-ink-business-preferred, amex-business-gold.
+If user says "Amex Blue" without specifying → amex-blue-cash-everyday. If user says "a Visa/Mastercard/card but doesn't know the name" → ignore (don't add to existing_cards).
+
+If user has not provided spending details, use these defaults: dining=300, groceries=400, travel=200, gas=100, online_shopping=150, streaming=30, pharmacy=50, rent=0, other=200.
 If user has not stated reward_preference, default to "travel".`,
       },
     ],
@@ -373,16 +453,19 @@ If user has not stated reward_preference, default to "travel".`,
         gas: 100,
         online_shopping: 150,
         streaming: 30,
+        entertainment: 0,
         pharmacy: 50,
+        rent: 0,
         other: 200,
       },
     };
   }
   try {
     const parsed = JSON.parse(jsonMatch[0]);
-    return { category: "credit_card", ...parsed };
+    const needs_spending_info = parsed.has_spending_info === false;
+    return { category: "credit_card", ...parsed, needs_spending_info };
   } catch {
-    return { category: "credit_card", reward_preference: "travel", existing_cards: [] };
+    return { category: "credit_card", reward_preference: "travel", existing_cards: [], needs_spending_info: true };
   }
 }
 
@@ -398,19 +481,124 @@ async function runCreditCardPipeline(
     gas: 100,
     online_shopping: 150,
     streaming: 30,
+    entertainment: 0,
     pharmacy: 50,
+    rent: 0,
     other: 200,
   };
   const existingCards = intent.existing_cards ?? [];
   const rewardPreference = intent.reward_preference ?? "travel";
+  // null means MiniMax said "not mentioned" → no filtering; undefined means field missing → same
+  const creditScore = (intent.credit_score !== null && intent.credit_score !== undefined)
+    ? intent.credit_score
+    : undefined;
+  const preferNoAnnualFee = intent.prefer_no_annual_fee ?? false;
+  const preferFlatRate = intent.prefer_flat_rate ?? false;
+  const hasExistingCards = intent.has_existing_cards ?? (existingCards.length > 0);
 
   const creditCardRecommendations = recommendCreditCards(
     spending,
     existingCards,
-    rewardPreference
+    rewardPreference,
+    creditScore,
+    preferNoAnnualFee,
+    preferFlatRate,
+    hasExistingCards
   );
 
   return { creditCardRecommendations };
+}
+
+// ─── Phase 10: Laptop Intent Parsing ─────────────────────────────────────────
+
+async function parseLaptopIntent(
+  userMessage: string,
+  conversationHistory: Array<{ role: "user" | "assistant"; content: string }>
+): Promise<LaptopIntent> {
+  const recentHistory = conversationHistory.slice(-6);
+  try {
+    const text = await minimaxChat({
+      system: `You are a laptop recommendation assistant. Extract structured intent from user messages.
+Return ONLY a valid JSON object with exactly these fields:
+{
+  "use_cases": [],           // array of: "light_productivity","software_dev","video_editing","3d_creative","gaming","data_science","business_travel"
+  "budget_usd_max": null,    // number or null
+  "budget_usd_min": null,    // number or null
+  "os_preference": "any",    // "mac","windows","linux","any"
+  "portability_priority": "flexible",  // "critical","preferred","flexible"
+  "gaming_required": false,  // boolean
+  "display_size_preference": "any",    // "<14","14-15","15+","any"
+  "avoid_brands": [],        // e.g. ["Dell","HP"]
+  "needs_use_case_info": false  // true if user didn't clearly specify what they'll use it for
+}
+
+Rules:
+- If user says "for coding" or "developer" → use_cases: ["software_dev"]
+- If user says "video editing" → use_cases: ["video_editing"]
+- If user says "gaming" → use_cases: ["gaming"], gaming_required: true
+- If user says "data science","ML","AI" → use_cases: ["data_science"]
+- If user says "travel","on the go","lightweight","portable" → use_cases: ["business_travel"], portability_priority: "critical" or "preferred"
+- If user says "everyday","general use","Office" → use_cases: ["light_productivity"]
+- Multiple use cases are allowed
+- If user says "MacBook" or "Mac" or "Apple" → os_preference: "mac"
+- If user says "Windows" → os_preference: "windows"
+- Extract budget: "$1000-1500" → budget_usd_min:1000, budget_usd_max:1500; "under $1200" → budget_usd_max:1200; "budget" → budget_usd_max:800
+- If user doesn't mention what they'll use it for, set needs_use_case_info: true`,
+      messages: [
+        ...recentHistory,
+        { role: "user" as const, content: userMessage },
+      ],
+      max_tokens: 512,
+    });
+
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) throw new Error("No JSON in response");
+    const parsed = JSON.parse(jsonMatch[0]);
+
+    const use_cases: LaptopUseCase[] = (parsed.use_cases ?? []).filter((u: string) =>
+      ["light_productivity","software_dev","video_editing","3d_creative","gaming","data_science","business_travel"].includes(u)
+    );
+
+    return {
+      category: "laptop",
+      use_cases: use_cases.length > 0 ? use_cases : [],
+      budget_usd_max: parsed.budget_usd_max ?? null,
+      budget_usd_min: parsed.budget_usd_min ?? null,
+      os_preference: parsed.os_preference ?? "any",
+      portability_priority: parsed.portability_priority ?? "flexible",
+      gaming_required: parsed.gaming_required ?? false,
+      display_size_preference: parsed.display_size_preference ?? "any",
+      avoid_brands: parsed.avoid_brands ?? [],
+      needs_use_case_info: parsed.needs_use_case_info ?? (use_cases.length === 0),
+    };
+  } catch {
+    return {
+      category: "laptop",
+      use_cases: [],
+      budget_usd_max: null,
+      budget_usd_min: null,
+      os_preference: "any",
+      portability_priority: "flexible",
+      gaming_required: false,
+      display_size_preference: "any",
+      avoid_brands: [],
+      needs_use_case_info: true,
+    };
+  }
+}
+
+// ─── Phase 10: Laptop Pipeline ────────────────────────────────────────────────
+
+async function runLaptopPipeline(
+  intent: LaptopIntent
+): Promise<{ laptopRecommendations: LaptopRecommendationCard[] }> {
+  // Default to light_productivity if no use case specified
+  const effectiveIntent: LaptopIntent = {
+    ...intent,
+    use_cases: intent.use_cases.length > 0 ? intent.use_cases : ["light_productivity"],
+  };
+  const laptopRecommendations = recommendLaptops(effectiveIntent);
+  return { laptopRecommendations };
 }
 
 export async function parseIntent(
@@ -423,6 +611,9 @@ export async function parseIntent(
   const category = await detectCategory(userMessage);
   if (category === "credit_card") {
     return parseCreditCardIntent(userMessage, conversationHistory ?? []);
+  }
+  if (category === "laptop") {
+    return parseLaptopIntent(userMessage, conversationHistory ?? []);
   }
   if (category === "flight") {
     return parseFlightIntent(userMessage, cityFullName);
@@ -957,11 +1148,13 @@ export async function runAgent(
   streamCallbacks?: StreamCallbacks,
   customWeights?: Partial<typeof DEFAULT_WEIGHTS>
 ): Promise<{
-  requirements: UserRequirements | HotelIntent | FlightIntent | CreditCardIntent;
+  requirements: UserRequirements | HotelIntent | FlightIntent | CreditCardIntent | LaptopIntent;
   recommendations: RecommendationCard[];
   hotelRecommendations: HotelRecommendationCard[];
   flightRecommendations: FlightRecommendationCard[];
   creditCardRecommendations: CreditCardRecommendationCard[];
+  laptopRecommendations: LaptopRecommendationCard[];
+  missing_credit_card_fields: string[];
   missing_flight_fields: string[];
   no_direct_available: boolean;
   suggested_refinements: string[];
@@ -981,6 +1174,21 @@ export async function runAgent(
 
   // Route to credit card pipeline if needed
   if (intent.category === "credit_card") {
+    if (intent.needs_spending_info) {
+      return {
+        requirements: intent,
+        recommendations: [],
+        hotelRecommendations: [],
+        flightRecommendations: [],
+        creditCardRecommendations: [],
+        laptopRecommendations: [],
+        missing_credit_card_fields: ["monthly spending by category", "cash back or travel rewards preference", "any cards you already hold"],
+        missing_flight_fields: [],
+        no_direct_available: false,
+        suggested_refinements: [],
+        category: "credit_card",
+      };
+    }
     const { creditCardRecommendations } = await runCreditCardPipeline(intent);
     return {
       requirements: intent,
@@ -988,10 +1196,45 @@ export async function runAgent(
       hotelRecommendations: [],
       flightRecommendations: [],
       creditCardRecommendations,
+      laptopRecommendations: [],
+      missing_credit_card_fields: [],
       missing_flight_fields: [],
       no_direct_available: false,
       suggested_refinements: [],
       category: "credit_card",
+    };
+  }
+
+  // Route to laptop pipeline if needed
+  if (intent.category === "laptop") {
+    if (intent.needs_use_case_info) {
+      return {
+        requirements: intent,
+        recommendations: [],
+        hotelRecommendations: [],
+        flightRecommendations: [],
+        creditCardRecommendations: [],
+        laptopRecommendations: [],
+        missing_credit_card_fields: [],
+        missing_flight_fields: ["use_case"],
+        no_direct_available: false,
+        suggested_refinements: [],
+        category: "laptop",
+      };
+    }
+    const { laptopRecommendations } = await runLaptopPipeline(intent);
+    return {
+      requirements: intent,
+      recommendations: [],
+      hotelRecommendations: [],
+      flightRecommendations: [],
+      creditCardRecommendations: [],
+      laptopRecommendations,
+      missing_credit_card_fields: [],
+      missing_flight_fields: [],
+      no_direct_available: false,
+      suggested_refinements: [],
+      category: "laptop",
     };
   }
 
@@ -1004,6 +1247,8 @@ export async function runAgent(
       hotelRecommendations: [],
       flightRecommendations,
       creditCardRecommendations: [],
+      laptopRecommendations: [],
+      missing_credit_card_fields: [],
       missing_flight_fields: missing_fields,
       no_direct_available,
       suggested_refinements: [],
@@ -1024,6 +1269,8 @@ export async function runAgent(
       hotelRecommendations,
       flightRecommendations: [],
       creditCardRecommendations: [],
+      laptopRecommendations: [],
+      missing_credit_card_fields: [],
       missing_flight_fields: [],
       no_direct_available: false,
       suggested_refinements,
@@ -1095,5 +1342,5 @@ export async function runAgent(
       : undefined,
   }));
 
-  return { requirements, recommendations: withOpenTable, hotelRecommendations: [], flightRecommendations: [], creditCardRecommendations: [], missing_flight_fields: [], no_direct_available: false, suggested_refinements, category: "restaurant" };
+  return { requirements, recommendations: withOpenTable, hotelRecommendations: [], flightRecommendations: [], creditCardRecommendations: [], laptopRecommendations: [], missing_credit_card_fields: [], missing_flight_fields: [], no_direct_available: false, suggested_refinements, category: "restaurant" };
 }

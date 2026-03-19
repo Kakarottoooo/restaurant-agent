@@ -6,6 +6,7 @@ import RecommendationCard from "@/components/RecommendationCard";
 import HotelCard from "@/components/HotelCard";
 import FlightCard from "@/components/FlightCard";
 import CreditCardCard from "@/components/CreditCardCard";
+import LaptopCard from "@/components/LaptopCard";
 import DateRangePicker from "@/components/DateRangePicker";
 import { CITIES_SORTED } from "@/lib/cities";
 import { useChat, LOADING_STEPS } from "@/app/hooks/useChat";
@@ -127,7 +128,7 @@ export default function Home() {
   const hasMessages = chat.messages.length > 0;
   const lastUserQuery =
     [...chat.messages].reverse().find((m) => m.role === "user")?.content ?? "";
-  const hasResults = chat.allCards.length > 0 || chat.allHotelCards.length > 0 || chat.allFlightCards.length > 0 || chat.allCreditCardCards.length > 0;
+  const hasResults = chat.allCards.length > 0 || chat.allHotelCards.length > 0 || chat.allFlightCards.length > 0 || chat.allCreditCardCards.length > 0 || chat.allLaptopCards.length > 0;
   const isMapMode = chat.viewMode === "map" && hasResults;
 
   // Unified map pins for restaurants and hotels (flights use arc lines, not pins)
@@ -1503,6 +1504,36 @@ export default function Home() {
                       }}
                     >
                       This tool provides information for reference only and does not constitute financial advice. Confirm current terms at the issuer&apos;s website before applying.
+                    </div>
+                  </div>
+                )}
+
+                {/* Laptop Results */}
+                {chat.resultCategory === "laptop" && chat.allLaptopCards.length > 0 && (
+                  <div className="flex flex-col gap-3">
+                    <div
+                      style={{
+                        fontSize: "11px",
+                        color: "var(--text-secondary)",
+                        fontFamily: "var(--font-dm-sans)",
+                        padding: "0 2px 4px",
+                      }}
+                    >
+                      Ranked by weighted signal score for your use case · Specs from Wirecutter, NotebookCheck, The Verge · Prices are MSRP
+                    </div>
+                    {chat.allLaptopCards.map((card, i) => (
+                      <LaptopCard key={card.device.id} card={card} index={i} />
+                    ))}
+                    <div
+                      style={{
+                        fontSize: "11px",
+                        color: "var(--text-secondary)",
+                        fontFamily: "var(--font-dm-sans)",
+                        padding: "4px 2px 0",
+                        fontStyle: "italic",
+                      }}
+                    >
+                      Recommendations are based on static review data and may not reflect the latest models or price changes. Always verify specs and pricing before purchase.
                     </div>
                   </div>
                 )}

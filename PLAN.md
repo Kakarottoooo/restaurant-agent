@@ -2056,3 +2056,644 @@ export interface CreditCardRecommendationCard {
 | 积分联动 | 机票/酒店流程中正确触发积分余额提示，用户忽略时不阻塞流程 |
 | 现有功能 | 餐厅、酒店、机票功能完全不受影响，回归测试全过 |
 | 数据时效 | 每张卡标注 `last_verified`，用户可感知数据新鲜度 |
+
+---
+
+## Phase 9 实现总结：信用卡推荐系统架构
+
+> 更新日期：2026-03-19
+> 状态：已完成并通过 10 个场景测试验证
+
+---
+
+### 数据流全貌
+
+```
+用户自然语言输入
+        │
+        ▼
+detectCategory()           ← lib/agent.ts
+  关键词 + 正则双重识别
+  spending context regex → "credit_card"
+        │
+        ▼
+parseCreditCardIntent()    ← lib/agent.ts
+  MiniMax LLM 解析，返回 CreditCardIntent：
+  · spending_profile (10 个类别，月均 USD)
+  · reward_preference: "cash" | "travel"
+  · existing_cards: string[]        (已知卡 id)
+  · has_existing_cards: boolean     (是否提过有卡但未命名)
+  · credit_score: number | null     (0 = 无信用记录)
+  · prefer_no_annual_fee: "hard" | "soft" | false
+  · prefer_flat_rate: boolean
+  · needs_spending_info: boolean    (消费信息不足 → 触发追问)
+        │
+        ▼  (needs_spending_info = true 时提前返回，UI 展示追问)
+        │
+        ▼
+runCreditCardPipeline()    ← lib/agent.ts
+  调用 recommendCreditCards()，聚合结果
+        │
+        ▼
+recommendCreditCards()     ← lib/creditCardEngine.ts
+  ┌─────────────────────────────────────────────┐
+  │  1. 数据加载：ALL_CARDS = JSON → normalizeCard()  │
+  │  2. 过滤层（按顺序）：                            │
+  │     · 已持有的卡排除                             │
+  │     · 信用分过滤（effectiveScore + 10 buffer）    │
+  │     · 年费过滤（hard = 严格排除，soft = 保留+提示）│
+  │     · 奖励类型过滤（travel → 排除纯 cash + CDCash）│
+  │     · 平单率过滤（prefer_flat_rate）              │
+  │     · 互斥卡过滤（CSP ↔ CSR 不可同时持有）        │
+  │  3. 对每张候选卡调用 computeMarginalValue()       │
+  │  4. 按 marginalValue 降序，取 Top 5              │
+  └─────────────────────────────────────────────┘
+        │
+        ▼
+SSE complete event         ← app/api/chat/route.ts
+  · creditCardRecommendations: CreditCardRecommendationCard[]
+  · missing_credit_card_fields / missing_flight_fields
+  · category: "credit_card"
+        │
+        ▼
+useChat.ts → UI 分支判断
+  · needs_spending_info → 3 个追问问题
+  · creditScore === 0   → 无信用记录提示 + 入门卡建议
+  · creditScore < 650   → 低信用分拦截提示
+  · hasUnnamedCards     → 1× 基准免责声明
+  · portfolioOptimized  → "当前组合已优化"提示
+  · 正常推荐            → Top N 卡片 + CreditCardCard 组件
+```
+
+---
+
+### 核心模块说明
+
+#### normalizeCard() — 原始数据标准化
+
+将 `credit-cards.json` 的富结构（嵌套 sub-key、portal 费率、cap 字段）转换为引擎统一使用的扁平 `CreditCard` 结构。
+
+**关键规则：**
+
+| 规则 | 说明 |
+|------|------|
+| `maxByPrefix(rates, prefix)` | 取所有以该前缀开头的 key 的最大值 |
+| `excludePortal = true`（travel） | 排除 `*_portal*` key，避免 Venture X 10x / Chase 5x 误算 |
+| `isCapField()` | `value > 20` 或含 `_cap/_limit/_max` → 是上限字段，不是倍率 |
+| `isSpecialtyMerchant()` | `_whole_foods/_costco/_warehouse` → 特定商户费率，不计入通用类别 |
+| `rent / entertainment` | 默认 0（大多数卡不在这两项上赚积分） |
+
+**portal 排除的影响：**
+- Capital One Venture X: travel 10x → **2x**（直接订票正确费率）
+- Chase Sapphire Reserve: travel 8x → **4x**
+- Chase Freedom Unlimited: travel 5x → **1x**
+- Amex Platinum: `travel_flights_direct_or_amex` 5x 保留 ✓
+
+---
+
+#### computeMarginalValue() — 边际价值计算
+
+**核心思路：** 投资组合 delta 法
+
+```
+marginalValue = portfolioNetBenefit([...currentCards, candidate])
+              - portfolioNetBenefit(currentCards)
+```
+
+**基准费率 (oldRate) 规则：**
+
+| 场景 | 基准 |
+|------|------|
+| 用户已命名现有卡 | 现有卡组合对该类别的最高费率 |
+| 有卡但未命名（hasExistingCards=true） | 1x（泛型 1% 现金返还卡） |
+| 真正无卡（noCardsAtAll=true） | 0x（所有类别，包括 dining/groceries） |
+| 租金 / 娱乐类别 | 0x（无论是否有卡，大多数卡不赚） |
+
+**annualGain 精确计算（已修正）：**
+
+```
+annualGain = monthlySpend × 12 × (newRate × candidateCpp − oldRate × oldCpp)
+```
+
+`oldCpp` 取现有组合中该类别最优卡的积分价值，而非 candidateCpp。  
+修正前为 `(newRate − oldRate) × candidateCpp`，当候选卡积分价值高于现有卡时会低估收益（Bilt 1.25cpp vs 普通卡 1.0cpp 相差 $9/yr）。
+
+---
+
+#### buildWatchOut() — 风险提示生成
+
+按以下顺序追加提示（均为 string[]，UI 全量展示）：
+
+1. **资质前置条件**（`eligibility_notes`）— 始终第一条，不可省略  
+   例："Business card — requires business income"
+2. **信用分风险**（`userCreditScore > 0 && score < min_credit_score`）  
+   无信用记录（score=0）不触发，UI 层已有专属提示
+3. **开卡奖励消费门槛**（`totalMonthlySpend × months < requirement`）  
+   例：Amex Business Gold $15k/3 个月对月消费 $3.2k 用户的警告
+4. **年费软偏好**（preferNoAnnualFee = "soft"）
+5. **可转积分 ≠ 现金返还**（cash 用户看到可转积分卡时）
+6. **外汇手续费**
+7. **信用分要求 ≥ 720**（优质信用提示）
+8. **年费 ≥ $400**（高年费提示）
+9. **卡片 notes 中的上限/限制条款**（含 "up to" / "only" / "limit" / "require"）
+10. **数据验证日期**（始终最后一条）
+
+---
+
+#### 过滤层详解
+
+```
+候选卡集合 = ALL_CARDS（34张）
+      ↓ 排除已持有的卡
+      ↓ 信用分过滤
+          effectiveScore = max(creditScore, 640)
+          通过条件：min_credit_score ≤ effectiveScore + 10
+          注意：Discover it / C1 Quicksilver / C1 SavorOne min_credit_score = 640
+                （Capital One / Discover 明确接受 fair credit 申请人）
+      ↓ 年费过滤（hard）
+          仅保留 annual_fee = 0 的卡
+      ↓ 奖励类型过滤
+          travel 用户：排除 rewards_currency = "cash" 及 EFFECTIVE_CASH_CARDS（citi-double-cash）
+          cash 用户：排除 HOTEL_AIRLINE_CURRENCIES（hilton_honors / marriott_bonvoy / delta_skymiles）
+      ↓ 平单率过滤（prefer_flat_rate）
+          保留所有非零 category_rates 值相同的卡
+      ↓ 互斥过滤
+          CSP 与 CSR 不可同时持有（mutually_exclusive_with 字段）
+```
+
+---
+
+#### 消费类别映射规则（LLM Prompt）
+
+| 用户描述 | 映射类别 | 说明 |
+|---------|---------|------|
+| transit / subway / Uber / Lyft | `travel` | 不是 gas；Bilt/CSR 在 travel 下赚积分 |
+| rent / apartment / housing cost | `rent` | 明确排除 other，Bilt 唯一在 rent 上赚积分的卡 |
+| software / SaaS / cloud / AWS | `online_shopping` | IBP 3x internet/advertising 类别 |
+| client entertainment | `dining` | 不进 entertainment 类别 |
+| streaming services | `streaming` | |
+| gas station / fuel | `gas` | 与 transit 分开 |
+| 剩余金额 | `other` | 不要凭空发明类别 |
+
+---
+
+#### 数据库（credit-cards.json）结构
+
+```
+{
+  "meta": { "last_updated": "..." },
+  "point_currencies": {
+    "chase_ur":          { cpp_cash, cpp_travel_portal }
+    "amex_mr":           { cpp_cash, cpp_travel }
+    "capital_one_miles": { cpp_cash, cpp_travel }
+    "bilt_points":       { cpp_cash: 0.0125, cpp_travel: 0.015 }
+    "cash":              { cpp_cash: 0.01 }
+    ...
+  },
+  "cards": [  // 34 张卡
+    {
+      "id": "chase-sapphire-preferred",
+      "annual_fee": 95,
+      "rewards_currency": "chase_ur",
+      "category_rates": {
+        "dining": 3,
+        "travel_chase_portal": 5,   // portal 费率（normalizeCard 时排除）
+        "travel_other": 3,          // 直接订票费率（实际使用）
+        ...
+      },
+      "signup_bonus": { "points", "spend_requirement", "timeframe_months" },
+      "eligibility_notes": ["Subject to Chase 5/24 rule"],
+      "mutually_exclusive_with": ["chase-sapphire-reserve"],
+      "min_credit_score": 700,
+      "last_verified": "2026-03-19"
+    },
+    ...
+  ]
+}
+```
+
+**关键设计决策：**
+- portal 费率保存在 JSON 中（如 `travel_chase_portal: 5`），但 `normalizeCard` 时用 `excludePortal=true` 排除，确保比较的是真实直接订票费率
+- `online_advertising` key（Ink Business Preferred / Amex Business Gold）等价于 `online_shopping`，在引擎中通过共同前缀匹配合并
+- `top_two_categories_auto_4x` 等复杂机制在 JSON 中保留为数字，引擎按固定费率处理，watch_out 补充说明动态规则
+
+---
+
+### 已验证的 10 个场景
+
+| # | 场景 | 关键验证点 | 状态 |
+|---|------|-----------|------|
+| 1 | 重度差旅，已有 Amex Plat + CSR | 边际价值接近 0，不推重复卡 | ✅ |
+| 2 | 学生，第一张卡，无信用记录 | noHistory 提示 + 入门卡推荐 | ✅ |
+| 3 | 家庭主力，软拒年费，娱乐消费 | entertainment 类别，SavorOne 排名 | ✅ |
+| 4 | 有 4 张卡但不知名字 | hasUnnamedCards 免责声明，1x 基准 | ✅ |
+| 5 | Freelancer，软件支出 $1.5k | IBP 3x 确认 + SaaS watch-out | ✅ |
+| 6 | 夫妻共同消费，组合优化 | 多卡协同边际值 | ✅ |
+| 7 | 信用分 650，无卡，要现金返还 | lowCredit 拦截 + 仅推 640 门槛卡 | ✅ |
+| 8 | NYC 租房，外出就餐，偏好积分 | Bilt #1，transit→travel 映射 | ✅ |
+| 9 | 已有完整卡组合测试边际价值 | 开卡奖励门槛 watch-out，边际≈0 | ✅ |
+| 10 | 信息模糊，容错测试 | 基准卡推断，has_spending_info 追问 | ✅ |
+
+---
+
+### 已知边界与局限
+
+| 问题 | 当前处理 | 理想方案 |
+|------|---------|---------|
+| Amex Business Gold "top 2 categories" 动态机制 | 按固定 4x 处理 + watch_out 说明 | 需对每月消费动态计算 top 2 |
+| 用户描述的卡无法匹配 existing_cards id | MiniMax 解析失败时退化为 hasExistingCards=true | 模糊匹配或更完整卡名映射表 |
+| Case 10 卡片推断不透明 | 接受推断结果 | UI 展示"我们假设你持有 X 卡，基于..." |
+| CDCash TY 积分对 travel 用户的价值 | 过滤掉（EFFECTIVE_CASH_CARDS） | 若配合 Strata Premier 则可转积分，需要联动判断 |
+| 门店 portal 费率（C1/Chase portal 5x/10x） | normalizeCard 排除，watch_out 说明 | 可对"习惯通过 portal 订票"用户展示 portal 费率版本 |
+
+---
+
+---
+
+## Phase 10：笔记本电脑推荐系统
+
+Phase 10
+笔记本电脑推荐系统
+执行计划 v2  ·  2026-03-19
+状态：设计完成，开始实现前必读
+在写第一行代码之前，必须先完成三件事
+1.  填完本文档中的归一化规则表（每个 signal_type 的 0-10 换算规则）
+2.  填完权重矩阵表（7 种用途 × 8 种信号维度 = 56 个数字）
+3.  手动跑 5 台机器的信号提取流程，验证 LLM prompt 质量
+
+这三件事不做，Milestone 2 和 3 写到一半会因为基础没打好返工。
+
+
+0  相对原计划的改动
+
+改动汇总（相对原 Phase 10 文档）
+① raw_quote 字段  —  device_review_signals 补加 raw_quote TEXT，Watch Out 展示和 debug 必须
+② Milestone 顺序调整  —  手动验证前置于爬虫自动化之前，避免带着 bug 跑自动化
+③ Milestone 3+4 并行  —  意图解析和评分引擎接口定义后可同时开发，不再串行
+④ 归一化规则表  —  补全所有 signal_type 的具体换算规则（原文档缺失）
+⑤ 权重矩阵  —  补全全部 7 种用途的权重（原文档仅有 software_dev 示例）
+⑥ Fallback 逻辑  —  补充信号不足时的降级处理规则（原文档未覆盖）
+⑦ Citi Double Cash 警告修正  —  等价于 cash back，Watch Out 不应标注为 transferable points
+
+
+1  数据库 Schema
+
+1.1  四张核心表
+
+与原文档一致，新增 raw_quote 字段。
+
+device_review_signals  —  新增字段
+raw_quote  TEXT  —  提取来源的原始句子，用于 Watch Out 展示和人工 debug
+示例："The keyboard feels mushy and the key travel is disappointingly shallow"
+
+此字段是 Watch Out 功能的基础。没有 raw_quote，用户只能看到一个数字，无法判断来源是否可信。
+
+1.2  sku_performance_signals  的 applies_to 字段
+
+原文档 sku_performance_signals 挂在 sku_id 下，但评测文章里的配置建议通常是范围性的（"8GB 不够"而非针对某个具体 SKU）。建议改为挂在 device_id + ram 范围下：
+
+•applies_to_ram_max: INTEGER  —  适用上限，NULL 表示不限
+•applies_to_ram_min: INTEGER  —  适用下限，NULL 表示不限
+•applies_to_storage_min: INTEGER  —  存储下限，NULL 表示不限
+•use_case: VARCHAR  —  适用用途标签，NULL 表示通用
+
+⚠ sku_id 作为 FK 保留，但 applies_to 范围字段是主要查询路径。8GB 的 MacBook Air M3 做视频剪辑这类查询应走范围查询而非 sku_id 精确匹配。
+
+
+2  归一化规则表（实现前必须填完）
+
+为什么单独列出这张表
+原文档写了"各 signal_type 独立规则"但没有写规则内容。
+提取层输出 value_raw，归一化层独立运行 —— 两步必须分开，否则出错时无法定位。
+LLM 提取时不直接输出 value_normalized，只输出 value_raw + value_label。
+
+Signal Type	原始值形式	归一化规则
+battery_life	小时数  e.g. "11.5h"	≥12h=10 / 10-12h=8 / 8-10h=6 / 6-8h=4 / <6h=2
+display_brightness	nits  e.g. "1200 nits"	≥1000=10 / 800-1000=8 / 600-800=6 / 400-600=4 / <400=2
+display_quality	标签  excellent/good/average/poor	excellent=9 / good=7 / average=5 / poor=2
+keyboard_feel	标签  excellent/good/mediocre/poor	excellent=9 / good=7 / mediocre=3.5 / poor=2
+trackpad_feel	标签  excellent/good/average/poor	excellent=9 / good=7 / average=5 / poor=2
+thermal_performance	标签 + 噪音 dB	无限速+静音=10 / 轻微限速=7 / 明显限速=4 / 严重=2
+fan_noise	dB 或标签	静音(<35dB)=10 / 轻(35-40)=7 / 中(40-45)=5 / 响(>45)=2
+build_quality	标签  premium/solid/plasticky/flimsy	premium=9 / solid=7 / plasticky=4 / flimsy=2
+port_selection	接口数量 + 类型	USB-C×2+USB-A+HDMI+SD=10，每缺一项-1.5，无 USB-A=-2
+weight_portability	kg 实测值	≤1.2kg=10 / 1.2-1.5=8 / 1.5-1.8=6 / 1.8-2.2=4 / >2.2=2
+value_for_money	LLM 综合判断	exceptional=9 / good=7 / fair=5 / poor=2
+repairability	iFixit 分或标签	≥8=10 / 6-7=8 / 4-5=5 / ≤3=2
+
+⚠ CPU/GPU 跑分使用 log-scale 归一化（见原文档 1.6 节），不在此表重复。
+
+
+3  权重矩阵（实现前必须填完）
+
+7 种用途 × 8 个信号维度。绿色 = 高权重（≥0.20），红色 = 低权重（≤0.05）。所有行横向加总应等于 1.00。
+
+用途	续航	散热/噪音	键盘	屏幕	做工	接口	重量	性价比
+light_productivity	0.20	0.05	0.15	0.15	0.10	0.10	0.15	0.10
+software_dev	0.20	0.20	0.15	0.10	0.10	0.10	0.10	0.05
+video_editing	0.10	0.25	0.10	0.20	0.10	0.05	0.10	0.10
+3d_creative	0.05	0.30	0.10	0.15	0.10	0.05	0.10	0.15
+gaming	0.05	0.30	0.10	0.15	0.15	0.05	0.05	0.15
+data_science	0.15	0.25	0.10	0.10	0.10	0.10	0.10	0.10
+business_travel	0.25	0.05	0.15	0.10	0.15	0.10	0.15	0.05
+
+⚠ 此矩阵是初始版本，基于领域判断手工填写。积累用户反馈后可替换为数据驱动的权重。
+
+
+4  Fallback 逻辑（原文档缺失）
+
+MVP 初期数据稀疏，信号不足是常态而非边缘情况。必须在实现前定义降级规则。
+
+4.1  信号覆盖度惩罚
+
+•1 条信号：score × 0.6，UI 展示「仅 1 个来源，仅供参考」
+•2 条信号：score × 0.8
+•3 条及以上：不惩罚
+•0 条信号：该维度权重转移给 value_for_money，不显示该维度评分
+
+4.2  信号全部超过 6 个月
+
+•time_decay 已经处理分数衰减
+•UI 额外显示橙色 badge「评测数据较旧，建议查阅最新评测」
+•不阻止推荐，但降低该设备的整体排名置信度
+
+4.3  用途匹配信号为 0
+
+•use_case_fit 退化为纯规格参数估算
+•CPU 基准分 × 0.5 + 内存规格分 × 0.3 + 存储速度 × 0.2
+•UI 标注「基于规格估算，无实测评价」
+
+4.4  数据库中无匹配设备
+
+•返回「当前数据库未收录符合条件的机型」提示
+•引导用户放宽预算或调整用途
+•不允许返回空列表而不给任何说明
+
+
+5  信号冲突处理（补充细节）
+
+原文档已定义变异系数阈值，此处补充 Watch Out 展示规则。
+
+5.1  加权合并公式
+
+weighted_score 计算
+score = Σ(value_normalized × source_weight × signal_type_weight × time_decay)
+         / Σ(source_weight × signal_type_weight × time_decay)
+
+time_decay = e^(-0.1 × months_since_review)
+signal_type_weight = 来源 × signal_type 的交叉权重（不同媒体在不同维度专长不同）
+
+示例：RTINGS 的 display_brightness 权重 = 0.98，keyboard_feel 权重 = 0.70
+      Wirecutter 的 keyboard_feel 权重 = 0.88
+
+5.2  冲突披露规则
+
+•conflict_score = std_dev(values) / mean(values)  （变异系数）
+•conflict_score > 0.4：不合并为单一分数，改为展示区间
+•展示格式：「键盘手感：Wirecutter 评分 8.2 / NotebookCheck 评分 5.1 — 评测存在分歧，建议亲自试用」
+•同时展示各来源 raw_quote，让用户判断哪个评测条件和自己更接近
+
+⚠ 冲突本身是有价值的信息。隐藏分歧然后给用户一个平均值，比展示分歧更容易误导用户。
+
+
+6  手动验证流程（Milestone 0）
+
+为什么手动验证要单独列为 Milestone 0
+爬虫自动化是在手动验证跑通之后才值得做的事。
+先跑通 5 台机器，发现 prompt 问题 → 修 prompt → 再跑 → 确认稳定 → 再做自动化。
+不做这一步，Milestone 2 的爬虫跑出来的数据质量无法保证。
+
+执行步骤
+
+选 5 台有代表性的机器（建议：MacBook Air M3 / ThinkPad X1 Carbon / Dell XPS 15 / ASUS Zenbook 14 / Lenovo IdeaPad Slim 5）
+
+•手动找每台机器的 Wirecutter 和 NotebookCheck 评测全文
+•把评测全文喂给 LLM，运行 signal 提取 prompt
+•检查输出：value_raw 准确吗？value_label 合理吗？raw_quote 有没有截断？
+•把 value_raw 手动代入归一化规则，确认 value_normalized 计算正确
+•把两个来源的信号 INSERT 进数据库，运行 weighted_score 函数
+•检查最终评分是否符合直觉（MacBook Air 续航应该高，XPS 15 散热应该中等）
+•发现问题 → 修 prompt 或归一化规则 → 重跑 → 确认稳定
+
+⚠ 整个流程大概 1-2 天。这是最便宜的返工机会 — 比写完爬虫之后发现数据质量不对要便宜得多。
+
+Phase 10 扩展架构：多品类支持
+核心设计原则
+引擎不知道品类，品类不知道引擎。所有品类特定的知识（信号类型、归一化规则、权重矩阵、来源列表）都封装在 CategoryConfig 里，引擎只接收配置和数据，执行计算。新增品类 = 新增一个 CategoryConfig 模块，引擎代码零改动。
+
+数据库层改动
+device_models 和 device_review_signals 加一个 category 字段：
+sqlALTER TABLE device_models ADD COLUMN category TEXT NOT NULL DEFAULT 'laptop';
+-- 取值: laptop / smartphone / headphones / monitor / tablet
+
+ALTER TABLE device_review_signals ADD COLUMN category TEXT NOT NULL DEFAULT 'laptop';
+signal_type 不再是全局枚举，改为品类内有效值由 CategoryConfig 校验。数据库层只存字符串，校验逻辑在应用层。
+device_skus 不需要改，SKU 的差异化字段（ram、storage、cpu_variant）已经足够通用，手机/耳机的 SKU 差异（颜色、存储容量）也能用同样的字段表达。
+
+CategoryConfig 接口定义
+typescriptinterface CategoryConfig {
+  // 品类标识
+  category: CategoryType;
+  displayName: string;
+
+  // 该品类支持的信号类型（枚举）
+  signalTypes: string[];
+
+  // 归一化规则：value_raw → value_normalized (0-10)
+  // 每个 signal_type 一个函数
+  normalizers: Record<string, (raw: string | number) => number>;
+
+  // 来源权重（该品类专属，同一媒体在不同品类专长不同）
+  sourceWeights: Record<string, number>;
+
+  // 来源 × signal_type 的交叉权重
+  sourceSignalWeights: Record<string, Record<string, number>>;
+
+  // 用途标签
+  useCaseLabels: string[];
+
+  // 权重矩阵：用途 → signal_type → 权重
+  useCaseWeightMatrix: Record<string, Record<string, number>>;
+
+  // Intent 解析的 prompt 片段（品类特定的字段提取规则）
+  intentParseHints: string;
+
+  // 爬取来源列表（评测媒体的文章列表页 URL）
+  crawlSources: CrawlSource[];
+}
+
+interface CrawlSource {
+  name: string;
+  listPageUrl: string;
+  tier: 1 | 2 | 3;  // 1=权威 2=专业 3=用户
+}
+
+评分引擎接口
+引擎函数签名加一个 config 参数，其余逻辑不变：
+typescriptfunction recommendDevices(
+  intent: DeviceIntent,
+  config: CategoryConfig,      // 新增，替代原来硬编码的笔记本逻辑
+  spending?: SpendingProfile   // 信用卡场景复用，设备场景不用
+): DeviceRecommendationCard[]
+
+function computeWeightedScore(
+  signals: ReviewSignal[],
+  signalType: string,
+  config: CategoryConfig       // 从 config 取 sourceWeights 和 normalizers
+): SignalScore
+
+function computeUseCaseFit(
+  device: DeviceModel,
+  signals: ReviewSignal[],
+  useCases: string[],
+  config: CategoryConfig       // 从 config 取 useCaseWeightMatrix
+): number
+
+各品类的 CategoryConfig 填写时机
+现在填（笔记本）：就是执行计划正文第 2、3 节的归一化规则表和权重矩阵，笔记本作为第一个 CategoryConfig 实现。
+等笔记本跑稳后再填：
+品类核心 signal_type 差异主要来源建议启动时机smartphonecamera_main / camera_video / 5g_performance / gaming_performance / software_support_yearsMKBHD / GSMArena / The Verge / AnandTech笔记本 MVP 上线后headphonesnoise_cancellation / soundstage / bass_response / comfort_long_wear / call_quality / codec_supportRTINGS / The Verge / WirecutterAudio / rtings.com笔记本 MVP 上线后monitorcolor_accuracy / response_time / refresh_rate / hdr_quality / reflection_handling / input_lagRTINGS / TFTCentral / Hardware Unboxed有用户需求时tabletapple_pencil_latency / keyboard_cover_quality / software_ecosystem / battery_life / portabilityThe Verge / Wirecutter / NotebookCheck有用户需求时
+耳机之所以和手机同优先级，是因为 RTINGS 对耳机的数据覆盖是所有品类里最完整的，信号提取质量最容易保证，冷启动成本低。
+
+意图解析层的扩展方式
+每个品类有自己的 IntentType，但共用同一个 detectCategory 路由函数：
+typescripttype DeviceCategory = 'laptop' | 'smartphone' | 'headphones' | 'monitor' | 'tablet';
+
+// 路由函数，按关键词判断品类，复用现有 detectCategory 模式
+async function detectDeviceCategory(message: string): Promise<DeviceCategory>
+
+// 每个品类独立的 Intent 类型
+interface LaptopIntent extends BaseDeviceIntent {
+  os_preference: 'mac' | 'windows' | 'linux' | 'any';
+  gaming_required: boolean;
+  display_size_preference: '<14' | '14-15' | '15+' | 'any';
+}
+
+interface SmartphoneIntent extends BaseDeviceIntent {
+  os_preference: 'ios' | 'android' | 'any';
+  camera_priority: 'critical' | 'preferred' | 'flexible';
+  size_preference: 'compact' | 'standard' | 'large' | 'any';
+}
+
+interface HeadphonesIntent extends BaseDeviceIntent {
+  form_factor: 'over_ear' | 'in_ear' | 'on_ear' | 'any';
+  anc_required: boolean;
+  primary_use: 'commute' | 'office' | 'gym' | 'studio' | 'any';
+  wired_ok: boolean;
+}
+
+interface BaseDeviceIntent {
+  category: DeviceCategory;
+  budget_usd_max: number | null;
+  budget_usd_min: number | null;
+  use_cases: string[];
+  portability_priority: 'critical' | 'preferred' | 'flexible';
+  avoid_brands?: string[];
+  existing_device?: string;
+}
+
+新增品类的完整工作量
+以后要加手机，需要做的事情：
+
+填写 SmartphoneCategoryConfig（signal 枚举 + 归一化规则 + 权重矩阵 + 来源列表），参考笔记本的格式
+手动验证 5 台手机的信号提取（同 Milestone 0 的流程）
+填写 SmartphoneIntent 的 parse prompt hints
+在 detectDeviceCategory 里加手机关键词
+加 UI 的 SmartphoneCard 组件
+
+引擎代码、爬虫框架、数据库 schema、评分函数——全部不动。
+
+
+7  执行 Milestones
+
+共 6 个 Milestone。M0 和 M1 串行，M3 和 M4 并行，M5 依赖 M3+M4。
+
+Milestone 0  手动验证	前置必做
+
+目标：在写爬虫之前，手动跑通 5 台机器的完整链路，验证 prompt 质量和归一化规则。
+
+□选定 5 台测试机型
+□填完第 2 节归一化规则表（本文档）
+□填完第 3 节权重矩阵（本文档）
+□手动提取 5 × 2 来源 = 10 篇评测的信号
+□INSERT 进数据库，运行 weighted_score，检查结果符合直觉
+□修复 prompt 问题，重跑直到 5 台机器结果稳定
+
+Milestone 1  数据层	待实现
+
+目标：建好数据库，填入初始数据。价格先用 MSRP，不等 API。
+
+□建立 PostgreSQL schema（四张核心表 + source_sitemap 表）
+□device_models 初始数据录入（20 款主流机型）
+□device_skus 初始数据录入（每款 2-3 个 SKU）
+□价格字段填入 MSRP，price_source = "msrp"
+□source_sitemap 表建立，录入 Wirecutter / NotebookCheck / RTINGS 的文章列表页 URL
+□把 M0 手动验证的 10 条信号导入 device_review_signals
+
+Milestone 2  爬取与提取 Pipeline	待实现
+
+目标：自动化信号采集。在 M0 验证 prompt 稳定后才开始此 Milestone。
+
+□实现列表页爬虫（抓取文章索引，对比 source_sitemap，发现新 URL）
+□实现单文章爬取 + content_hash 计算
+□实现 LLM 信号提取 Prompt（输入：文章全文；输出：signal JSON 含 value_raw + value_label + raw_quote）
+□提取层与归一化层分离 — 提取层只输出 raw，归一化层独立运行
+□实现归一化函数（按第 2 节规则表，每个 signal_type 独立）
+□实现 30 天重爬调度（cron job + content_hash diff + is_stale 标记）
+□实现新 URL 发现 → 加入爬取队列的逻辑
+□冲突监控：conflict_score 从 <0.3 升到 >0.5 时触发 review_needed 标记
+
+Milestone 3 和 4 可并行开发  —  接口定义后互不阻塞
+
+Milestone 3  评分与排序引擎	待实现
+
+目标：给定用户的 LaptopIntent，输出排序后的推荐列表。
+
+□实现 weighted_score() 聚合函数（含 time_decay + source_weight + signal_type_weight）
+□实现覆盖度惩罚（1 条信号 × 0.6，2 条 × 0.8，0 条转移权重）
+□实现冲突检测（变异系数 > 0.4 触发分歧披露，保留 raw_quote 供展示）
+□实现权重矩阵加载（按第 3 节，7 用途 × 8 信号）
+□实现 use_case_fit 计算
+□实现 final_score 排序（含 portability_priority 动态权重调整）
+□实现 Fallback 逻辑（按第 4 节规则）
+□实现 CPU/GPU 基准归一化（log-scale 相对参考点）
+□单元测试：5 台手动验证机型的评分结果符合预期
+
+Milestone 4  意图解析	待实现
+
+目标：把用户自然语言转成结构化 LaptopIntent，复用 credit card agent 的 parse 模式。
+
+□实现 LaptopIntent 解析 Prompt
+□实现用途多标签分类（一次查询可包含多个用途）
+□实现 os_preference / budget / portability_priority / display_size 提取
+□实现追问逻辑：budget 缺失时追问，用途完全模糊时给选项让用户选
+□接口对齐：LaptopIntent → recommendLaptops(intent) 输入格式确认
+
+Milestone 5  UI 组件	待实现
+
+目标：把推荐结果渲染成可用的卡片界面。依赖 M3 + M4 完成。
+
+□LaptopCard 组件：型号名 / 用途匹配分 / 价格 / 关键信号条形图
+□信号冲突 Watch Out 展开区域（各来源原始值 + raw_quote + 分歧区间）
+□低覆盖度提示 badge（1 个来源 / 数据较旧）
+□last_verified 日期 badge + 「数据有误？」反馈入口
+□价格展示：MSRP + Associates 链接，注明「参考价，点击查看最新」
+□SKU 升级提示：检测到 sku_performance_signals 负面信号时，自动展示「建议升级到 16GB 版本 +$200」
+
+
+8  已解决的关键设计决策
+
+决策点	选定方案	原因
+设备粒度	device_models + device_skus 两层	型号属性稳定，SKU 价格每日变动，评测信号挂在 model 层
+raw_quote	必须存储，不可省略	Watch Out 展示和 debug 的基础，没有它分数无法被用户验证
+信号冲突	变异系数 >0.4 触发披露，展示区间而非强制合并	保留信息完整性，隐藏分歧比展示分歧更容易误导用户
+过时检测	content_hash + 30 天重爬 + 列表页发现 + 冲突异常监控	无法实时感知无声修改，组合防御将伤害控制在可接受范围
+价格冷启动	MSRP 硬编码，Associates 申请中，Keepa API 备选	PA API 门槛高，先跑通产品逻辑，价格实时化是第二阶段
+基准归一化	log-scale 相对参考点，Intel i5-1235U = 5.0/10	避免跑分数值域差异，每翻倍 +1 分，可解释性强
+权重矩阵	静态矩阵 7 用途 × 8 信号，手工填写	初期可控，积累用户反馈后可机器学习替代
+Milestone 顺序	M0 手动验证前置于 M2 爬虫自动化	手动验证是最便宜的返工机会，不做这步爬虫跑出来的数据质量无保证
+M3+M4 并行	接口定义后同时开发评分引擎和意图解析	两者无数据依赖，串行开发浪费时间
+Fallback	信号不足时降级到规格估算，UI 明确标注	MVP 初期数据稀疏是常态，必须预先定义降级规则
+
+
+Folio.  ·  Phase 10 执行计划  ·  2026-03-19
