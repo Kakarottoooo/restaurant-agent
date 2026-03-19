@@ -59,5 +59,12 @@ Without the key, hotel queries return empty results gracefully.
 3. Provision Vercel Postgres (or Neon) and add `POSTGRES_URL`
 4. Run SQL in `lib/schema.sql` to create tables
 
+## Multi-airport city handling (added this iteration)
+- `MULTI_AIRPORT_CITIES` map + `resolveMultiAirport()` exported from `lib/tools.ts`
+- Covers: NYC (JFK/LGA/EWR), Washington DC (DCA/IAD/BWI), Chicago (ORD/MDW), Miami (MIA/FLL), SF Bay Area (SFO/OAK/SJC), Dallas (DFW/DAL), Houston (IAH/HOU)
+- `runFlightPipeline` now does parallel searches when departure/arrival is a multi-airport city
+- Returns best 3 from primary airport + cheapest from alternates (if cheaper), satisfying PLAN.md spec
+- FlightCard already shows IATA badge so users can see which airport each flight departs from
+
 ## Remaining work
 All PLAN.md phases (1–8) complete. Future backlog: Itinerary Builder, community reviews.

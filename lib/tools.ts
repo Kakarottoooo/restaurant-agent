@@ -443,6 +443,29 @@ function getAirportCoords(iata: string): { lat: number; lng: number } | undefine
   return AIRPORT_COORDS[iata.toUpperCase()];
 }
 
+// Multi-airport city mapping: city name (lowercase) → primary IATA + all IATA codes
+export const MULTI_AIRPORT_CITIES: Record<string, { primary: string; all: string[] }> = {
+  "new york":       { primary: "JFK", all: ["JFK", "LGA", "EWR"] },
+  "new york city":  { primary: "JFK", all: ["JFK", "LGA", "EWR"] },
+  "nyc":            { primary: "JFK", all: ["JFK", "LGA", "EWR"] },
+  "washington":     { primary: "DCA", all: ["DCA", "IAD", "BWI"] },
+  "washington dc":  { primary: "DCA", all: ["DCA", "IAD", "BWI"] },
+  "washington d.c.":{ primary: "DCA", all: ["DCA", "IAD", "BWI"] },
+  "chicago":        { primary: "ORD", all: ["ORD", "MDW"] },
+  "los angeles":    { primary: "LAX", all: ["LAX"] },
+  "miami":          { primary: "MIA", all: ["MIA", "FLL"] },
+  "san francisco":  { primary: "SFO", all: ["SFO", "OAK", "SJC"] },
+  "bay area":       { primary: "SFO", all: ["SFO", "OAK", "SJC"] },
+  "dallas":         { primary: "DFW", all: ["DFW", "DAL"] },
+  "houston":        { primary: "IAH", all: ["IAH", "HOU"] },
+};
+
+/** Returns the multi-airport entry if the city input matches a known multi-airport city, else null. */
+export function resolveMultiAirport(cityInput: string): { primary: string; all: string[] } | null {
+  const lower = cityInput.toLowerCase().trim();
+  return MULTI_AIRPORT_CITIES[lower] ?? null;
+}
+
 export async function searchFlights(params: {
   departure_city: string;
   arrival_city: string;
