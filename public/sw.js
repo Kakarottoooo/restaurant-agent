@@ -1,4 +1,4 @@
-const CACHE_NAME = "folio-2ef4U7hCRZSrmaNSj0z5x";
+const CACHE_NAME = "folio-A4XrUqgwBbPcLskrdIIr3";
 const STATIC_ASSETS = ["/", "/manifest.json"];
 
 self.addEventListener("install", (event) => {
