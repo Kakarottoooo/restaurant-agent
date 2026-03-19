@@ -803,16 +803,25 @@ async function runFlightPipeline(
   const wantedNonstop = intent.prefer_direct === true || intent.max_stops === 0;
   const no_direct_available = wantedNonstop && flights.every((f) => f.stops > 0);
 
-  const cards: FlightRecommendationCard[] = flights.map((flight, i) => {
-    const group: FlightRecommendationCard["group"] =
-      flight.stops === 0 ? "direct" : flight.stops === 1 ? "one_stop" : "two_stop";
+  // Identify cheapest flight (only when not filtering by stop preference)
+  const isFiltered = wantedNonstop || intent.max_stops === 1;
+  const cheapestId = !isFiltered && flights.length > 0
+    ? flights.filter(f => f.price > 0).sort((a, b) => a.price - b.price)[0]?.id
+    : null;
 
-    const why =
-      flight.stops === 0
-        ? `Nonstop flight — fastest option at ${flight.duration}`
-        : flight.stops === 1
-        ? `1 stop via ${flight.layover_city ?? "connecting city"} (${flight.layover_duration ?? ""} layover)`
-        : `${flight.stops} stops — most affordable option`;
+  const cards: FlightRecommendationCard[] = flights.map((flight, i) => {
+    const isCheapest = !isFiltered && flight.id === cheapestId;
+    const group: FlightRecommendationCard["group"] = isCheapest
+      ? "cheapest"
+      : flight.stops === 0 ? "direct" : flight.stops === 1 ? "one_stop" : "two_stop";
+
+    const why = isCheapest
+      ? `Lowest price found — $${flight.price}${flight.stops > 0 ? ` with ${flight.stops} stop${flight.stops > 1 ? "s" : ""}` : ", nonstop"}`
+      : flight.stops === 0
+      ? `Nonstop flight — fastest option at ${flight.duration}`
+      : flight.stops === 1
+      ? `1 stop via ${flight.layover_city ?? "connecting city"} (${flight.layover_duration ?? ""} layover)`
+      : `${flight.stops} stops — most affordable option`;
 
     return {
       flight,

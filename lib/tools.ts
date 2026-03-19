@@ -742,14 +742,17 @@ export async function searchFlights(params: {
     if (params.max_stops === 1) {
       return [...direct, ...oneStop].slice(0, maxResults);
     }
-    // Default: 4 direct + 3 one-stop + 1 two-stop (fill gaps if fewer available)
-    const wantDirect  = 4;
-    const wantOneStop = 3;
-    const wantTwoPlus = 1;
-    const pickedDirect  = direct.slice(0, wantDirect);
-    const pickedOne     = oneStop.slice(0, wantOneStop);
-    const pickedTwo     = twoPlus.slice(0, wantTwoPlus);
-    return [...pickedDirect, ...pickedOne, ...pickedTwo].slice(0, maxResults);
+    // Default: 4 direct + 3 one-stop + 1 two-stop + 1 cheapest overall
+    const pickedDirect = direct.slice(0, 4);
+    const pickedOne    = oneStop.slice(0, 3);
+    const pickedTwo    = twoPlus.slice(0, 1);
+    const picked = [...pickedDirect, ...pickedOne, ...pickedTwo];
+    const pickedIds = new Set(picked.map(f => f.id));
+    const cheapest = parsed
+      .filter(f => !pickedIds.has(f.id) && f.price > 0)
+      .sort((a, b) => a.price - b.price)[0];
+    if (cheapest) picked.push(cheapest);
+    return picked.slice(0, maxResults);
   } catch (err) {
     console.warn("searchFlights error:", err);
     return [];

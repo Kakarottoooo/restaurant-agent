@@ -258,7 +258,7 @@ export interface Flight {
 export interface FlightRecommendationCard {
   flight: Flight;
   rank: number;
-  group: "direct" | "one_stop" | "two_stop";
+  group: "direct" | "one_stop" | "two_stop" | "cheapest";
   why_recommended: string;
 }
 

@@ -329,7 +329,10 @@ export default function MapView({
           {flightCards.map((card, i) => {
             const isSelected = i === selectedFlightIndex;
             const { flight: f } = card;
-            const stopLabel = f.stops === 0 ? "Nonstop" : f.stops === 1 ? `1 stop${f.layover_city ? ` · ${f.layover_city}` : ""}` : `${f.stops} stops`;
+            const isCheapest = card.group === "cheapest";
+            const stopLabel = isCheapest
+              ? `Best Price · ${f.stops === 0 ? "Nonstop" : f.stops === 1 ? `1 stop${f.layover_city ? ` · ${f.layover_city}` : ""}` : `${f.stops} stops`}`
+              : f.stops === 0 ? "Nonstop" : f.stops === 1 ? `1 stop${f.layover_city ? ` · ${f.layover_city}` : ""}` : `${f.stops} stops`;
             return (
               <button
                 key={f.id}

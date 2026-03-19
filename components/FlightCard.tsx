@@ -30,12 +30,14 @@ const GROUP_LABEL: Record<FlightRecommendationCard["group"], string> = {
   direct: "Nonstop",
   one_stop: "1 Stop",
   two_stop: "2 Stops",
+  cheapest: "Best Price",
 };
 
 const GROUP_COLOR: Record<FlightRecommendationCard["group"], string> = {
   direct: "#2D6A4F",   // green
   one_stop: "#8B5E14", // amber
   two_stop: "#7B3F00", // brown
+  cheapest: "#1a5fa8", // blue
 };
 
 export default function FlightCard({ card, index }: FlightCardProps) {
