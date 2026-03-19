@@ -672,6 +672,27 @@ export async function searchFlights(params: {
       const depCoords = getAirportCoords(depAirport);
       const arrCoords = getAirportCoords(arrAirport);
 
+      // Build per-leg detail for multi-segment map rendering
+      const legs: import("./types").FlightLeg[] = flights.map((leg, i) => {
+        const fromId = String((leg.departure_airport as Record<string, unknown>)?.id ?? "");
+        const toId = String((leg.arrival_airport as Record<string, unknown>)?.id ?? "");
+        const fromCoords = getAirportCoords(fromId);
+        const toCoords = getAirportCoords(toId);
+        const layoverAfter = layovers?.[i];
+        const layoverMin = layoverAfter ? Number((layoverAfter as Record<string, unknown>).duration ?? 0) : 0;
+        return {
+          from_airport: fromId,
+          to_airport: toId,
+          departure_time: String((leg.departure_airport as Record<string, unknown>)?.time ?? ""),
+          arrival_time: String((leg.arrival_airport as Record<string, unknown>)?.time ?? ""),
+          from_lat: fromCoords?.lat,
+          from_lng: fromCoords?.lng,
+          to_lat: toCoords?.lat,
+          to_lng: toCoords?.lng,
+          layover_duration: layoverMin > 0 ? `${Math.floor(layoverMin / 60)}h ${layoverMin % 60}m` : undefined,
+        };
+      });
+
       return {
         id: `flight-${idx}`,
         airline,
@@ -690,6 +711,7 @@ export async function searchFlights(params: {
         price,
         booking_link: bookingLink,
         is_round_trip: params.is_round_trip,
+        legs,
         departure_lat: depCoords?.lat,
         departure_lng: depCoords?.lng,
         arrival_lat: arrCoords?.lat,

@@ -115,35 +115,76 @@ export default function MapView({
   const flightCardRefs = useRef<(HTMLButtonElement | null)[]>([]);
 
   if (isFlightMode && flightCards) {
-    const firstFlight = flightCards[selectedFlightIndex]?.flight ?? flightCards[0].flight;
-    const hasCoords =
-      firstFlight.departure_lat != null &&
-      firstFlight.departure_lng != null &&
-      firstFlight.arrival_lat != null &&
-      firstFlight.arrival_lng != null;
+    const selectedCard = flightCards[selectedFlightIndex] ?? flightCards[0];
+    const flight = selectedCard.flight;
 
-    // Compute arc for selected flight
-    const arcPoints = hasCoords
-      ? greatCircleArc(
-          firstFlight.departure_lat!,
-          firstFlight.departure_lng!,
-          firstFlight.arrival_lat!,
-          firstFlight.arrival_lng!
-        )
-      : [];
+    // Use per-leg data if available, otherwise fall back to single arc
+    const legs = flight.legs && flight.legs.length > 0 ? flight.legs : null;
 
+    // Build arc segments: one per leg
+    type ArcSegment = { points: [number, number][]; fromId: string; toId: string; depTime: string; arrTime: string; layover?: string };
+    const arcSegments: ArcSegment[] = [];
+
+    if (legs) {
+      for (const leg of legs) {
+        if (leg.from_lat != null && leg.from_lng != null && leg.to_lat != null && leg.to_lng != null) {
+          arcSegments.push({
+            points: greatCircleArc(leg.from_lat, leg.from_lng, leg.to_lat, leg.to_lng),
+            fromId: leg.from_airport,
+            toId: leg.to_airport,
+            depTime: leg.departure_time,
+            arrTime: leg.arrival_time,
+            layover: leg.layover_duration,
+          });
+        }
+      }
+    } else if (
+      flight.departure_lat != null && flight.departure_lng != null &&
+      flight.arrival_lat != null && flight.arrival_lng != null
+    ) {
+      arcSegments.push({
+        points: greatCircleArc(flight.departure_lat, flight.departure_lng, flight.arrival_lat, flight.arrival_lng),
+        fromId: flight.departure_airport,
+        toId: flight.arrival_airport,
+        depTime: flight.departure_time,
+        arrTime: flight.arrival_time,
+      });
+    }
+
+    const hasCoords = arcSegments.length > 0;
+
+    // Collect all unique airport markers
+    type AirportMarker = { id: string; lat: number; lng: number; time: string; isOrigin: boolean; isDest: boolean; layover?: string };
+    const markerMap = new Map<string, AirportMarker>();
+    arcSegments.forEach((seg, i) => {
+      const fromLeg = legs ? legs[i] : null;
+      const toLeg = legs ? legs[i] : null;
+      const fromLat = fromLeg ? fromLeg.from_lat : flight.departure_lat;
+      const fromLng = fromLeg ? fromLeg.from_lng : flight.departure_lng;
+      const toLat = toLeg ? toLeg.to_lat : flight.arrival_lat;
+      const toLng = toLeg ? toLeg.to_lng : flight.arrival_lng;
+      if (fromLat != null && fromLng != null) {
+        const existing = markerMap.get(seg.fromId);
+        markerMap.set(seg.fromId, { id: seg.fromId, lat: fromLat, lng: fromLng, time: seg.depTime, isOrigin: i === 0, isDest: false, layover: existing?.layover });
+      }
+      if (toLat != null && toLng != null) {
+        const isLast = i === arcSegments.length - 1;
+        markerMap.set(seg.toId, { id: seg.toId, lat: toLat, lng: toLng, time: seg.arrTime, isOrigin: false, isDest: isLast, layover: isLast ? undefined : seg.layover });
+      }
+    });
+    const markers = Array.from(markerMap.values());
+
+    // Map center: midpoint of all marker coords
     const mapCenter: [number, number] = hasCoords
-      ? [
-          (firstFlight.departure_lat! + firstFlight.arrival_lat!) / 2,
-          (firstFlight.departure_lng! + firstFlight.arrival_lng!) / 2,
-        ]
-      : [39.5, -98.35]; // continental US center
+      ? [markers.reduce((s, m) => s + m.lat, 0) / markers.length, markers.reduce((s, m) => s + m.lng, 0) / markers.length]
+      : [39.5, -98.35];
 
     return (
       <div style={{ position: "relative", width: "100%", height: "100%", display: "flex", flexDirection: "column" }}>
         <div style={{ flex: 1, minHeight: 0 }}>
           {L && hasCoords ? (
             <MapContainer
+              key={`flight-map-${selectedFlightIndex}`}
               center={mapCenter}
               zoom={4}
               style={{ height: "100%", width: "100%" }}
@@ -154,33 +195,43 @@ export default function MapView({
                 attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                 url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
               />
-              {/* Arc line */}
-              {arcPoints.length > 0 && (
+              {/* Draw one arc per leg */}
+              {arcSegments.map((seg, i) => (
                 <Polyline
-                  positions={arcPoints}
+                  key={i}
+                  positions={seg.points}
                   pathOptions={{ color: "#C9A84C", weight: 2, dashArray: "6 4", opacity: 0.9 }}
                 />
-              )}
-              {/* Departure marker */}
-              <Marker
-                position={[firstFlight.departure_lat!, firstFlight.departure_lng!]}
-                icon={L.divIcon({
-                  html: `<div style="background:#2C2416;color:#F0EAD6;border-radius:50%;width:32px;height:32px;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;font-family:DM Sans,sans-serif;border:2px solid #C9A84C;box-shadow:0 2px 8px rgba(0,0,0,0.4);text-align:center;line-height:1.1;">${firstFlight.departure_airport}</div>`,
-                  className: "",
-                  iconSize: [32, 32],
-                  iconAnchor: [16, 16],
-                })}
-              />
-              {/* Arrival marker */}
-              <Marker
-                position={[firstFlight.arrival_lat!, firstFlight.arrival_lng!]}
-                icon={L.divIcon({
-                  html: `<div style="background:#C9A84C;color:#fff;border-radius:50%;width:32px;height:32px;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;font-family:DM Sans,sans-serif;border:2px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,0.4);text-align:center;line-height:1.1;">${firstFlight.arrival_airport}</div>`,
-                  className: "",
-                  iconSize: [32, 32],
-                  iconAnchor: [16, 16],
-                })}
-              />
+              ))}
+              {/* Airport markers */}
+              {markers.map((m) => {
+                const isStop = !m.isOrigin && !m.isDest;
+                const bg = m.isOrigin ? "#2C2416" : m.isDest ? "#C9A84C" : "#888";
+                const fg = m.isOrigin ? "#F0EAD6" : "#fff";
+                const label = isStop && m.layover
+                  ? `<div style="font-size:8px;opacity:0.85;margin-top:1px">${m.layover}</div>`
+                  : "";
+                const timeLabel = m.time
+                  ? `<div style="position:absolute;top:-18px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.65);color:#fff;border-radius:4px;padding:1px 5px;font-size:9px;white-space:nowrap;font-family:'DM Sans',sans-serif;">${m.time}</div>`
+                  : "";
+                return (
+                  <Marker
+                    key={m.id}
+                    position={[m.lat, m.lng]}
+                    icon={L.divIcon({
+                      html: `<div style="position:relative;">
+                        ${timeLabel}
+                        <div style="background:${bg};color:${fg};border-radius:${isStop ? "6px" : "50%"};width:32px;height:${isStop ? "auto" : "32px"};min-height:32px;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:9px;font-weight:700;font-family:'DM Sans',sans-serif;border:2px solid #C9A84C;box-shadow:0 2px 8px rgba(0,0,0,0.4);padding:2px 4px;text-align:center;line-height:1.2;">
+                          ${m.id}${label}
+                        </div>
+                      </div>`,
+                      className: "",
+                      iconSize: [32, isStop ? 44 : 32],
+                      iconAnchor: [16, isStop ? 22 : 16],
+                    })}
+                  />
+                );
+              })}
             </MapContainer>
           ) : (
             <div style={{ height: "100%", backgroundColor: "var(--card-2)", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -209,10 +260,11 @@ export default function MapView({
         >
           {flightCards.map((card, i) => {
             const isSelected = i === selectedFlightIndex;
-            const { flight } = card;
+            const { flight: f } = card;
+            const stopLabel = f.stops === 0 ? "Nonstop" : f.stops === 1 ? `1 stop${f.layover_city ? ` · ${f.layover_city}` : ""}` : `${f.stops} stops`;
             return (
               <button
-                key={flight.id}
+                key={f.id}
                 ref={(el) => { flightCardRefs.current[i] = el; }}
                 role="option"
                 aria-selected={isSelected}
@@ -230,14 +282,17 @@ export default function MapView({
                   textAlign: "left",
                 }}
               >
-                <div style={{ fontFamily: "var(--font-playfair)", fontSize: "13px", fontWeight: 600, color: "var(--text-primary)", marginBottom: 4 }}>
-                  {flight.departure_airport} → {flight.arrival_airport}
+                <div style={{ fontFamily: "var(--font-playfair)", fontSize: "13px", fontWeight: 600, color: "var(--text-primary)", marginBottom: 2 }}>
+                  {f.departure_airport} → {f.arrival_airport}
                 </div>
-                <div style={{ fontFamily: "var(--font-dm-sans)", fontSize: "11px", color: "var(--text-secondary)" }}>
-                  {flight.airline} · {flight.duration}
+                <div style={{ fontFamily: "var(--font-dm-sans)", fontSize: "11px", color: "var(--text-secondary)", marginBottom: 2 }}>
+                  {f.departure_time} → {f.arrival_time} · {f.duration}
                 </div>
-                <div style={{ fontFamily: "var(--font-dm-sans)", fontSize: "13px", fontWeight: 700, color: "#C9A84C", marginTop: 4 }}>
-                  {flight.price > 0 ? `$${flight.price}` : "—"}
+                <div style={{ fontFamily: "var(--font-dm-sans)", fontSize: "10px", color: "var(--text-muted)", marginBottom: 4 }}>
+                  {f.airline} · {stopLabel}
+                </div>
+                <div style={{ fontFamily: "var(--font-dm-sans)", fontSize: "13px", fontWeight: 700, color: "#C9A84C" }}>
+                  {f.price > 0 ? `$${f.price}` : "—"}
                 </div>
               </button>
             );

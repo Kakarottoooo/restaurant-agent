@@ -211,6 +211,18 @@ export interface Hotel {
   lng?: number;
 }
 
+export interface FlightLeg {
+  from_airport: string;   // IATA
+  to_airport: string;     // IATA
+  departure_time: string; // e.g. "08:30"
+  arrival_time: string;   // e.g. "11:45"
+  from_lat?: number;
+  from_lng?: number;
+  to_lat?: number;
+  to_lng?: number;
+  layover_duration?: string; // wait at to_airport before next leg
+}
+
 export interface Flight {
   id: string;
   airline: string;
@@ -232,7 +244,9 @@ export interface Flight {
   return_departure_time?: string;
   return_arrival_time?: string;
   return_duration?: string;
-  // For map arc
+  // Per-leg detail for map rendering
+  legs?: FlightLeg[];
+  // For map arc (overall)
   departure_lat?: number;
   departure_lng?: number;
   arrival_lat?: number;
