@@ -660,7 +660,7 @@ export async function searchFlights(params: {
         ? Number((layovers[0] as Record<string, unknown>).duration ?? 0)
         : 0;
       const layoverDuration = layoverDurationMin > 0
-        ? `${Math.floor(layoverDurationMin / 60)}h ${layoverDurationMin % 60}m`
+        ? `${Math.floor(layoverDurationMin / 60)}h${layoverDurationMin % 60 > 0 ? ` ${layoverDurationMin % 60}m` : ""}`
         : undefined;
 
       const price = Number(entry.price ?? 0);
@@ -691,7 +691,7 @@ export async function searchFlights(params: {
           from_lng: fromCoords?.lng,
           to_lat: toCoords?.lat,
           to_lng: toCoords?.lng,
-          layover_duration: layoverMin > 0 ? `${Math.floor(layoverMin / 60)}h ${layoverMin % 60}m` : undefined,
+          layover_duration: layoverMin > 0 ? `${Math.floor(layoverMin / 60)}h${layoverMin % 60 > 0 ? ` ${layoverMin % 60}m` : ""}` : undefined,
         };
       });
 
