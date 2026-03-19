@@ -188,6 +188,7 @@ export interface FlightIntent extends BaseIntent {
   passengers?: number;
   cabin_class?: "economy" | "business" | "first";
   prefer_direct?: boolean;
+  max_stops?: number | null; // null = no preference, 0 = nonstop only, 1 = max 1 stop
 }
 
 export type ParsedIntent = RestaurantIntent | HotelIntent | FlightIntent;

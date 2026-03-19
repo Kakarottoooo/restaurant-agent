@@ -574,6 +574,7 @@ export async function searchFlights(params: {
   cabin_class?: "economy" | "business" | "first";
   is_round_trip?: boolean;
   prefer_direct?: boolean;
+  max_stops?: number | null;
   maxResults?: number;
 }): Promise<Flight[]> {
   const apiKey = process.env.SERPAPI_KEY;
@@ -725,15 +726,30 @@ export async function searchFlights(params: {
       .map((entry, idx) => parseFlightEntry(entry, idx))
       .filter((f): f is Flight => f !== null);
 
-    // Group: direct x3, 1-stop x1, 2-stop x1 (or direct x5 if prefer_direct)
-    const direct = parsed.filter((f) => f.stops === 0);
-    if (params.prefer_direct && direct.length > 0) {
-      return direct.slice(0, params.maxResults ?? 5);
+    const maxResults = params.maxResults ?? 8;
+    const direct  = parsed.filter((f) => f.stops === 0);
+    const oneStop = parsed.filter((f) => f.stops === 1);
+    const twoPlus = parsed.filter((f) => f.stops >= 2);
+
+    // User explicitly requested nonstop / max_stops=0
+    if (params.prefer_direct || params.max_stops === 0) {
+      // Return all nonstop, fall back to 1-stop if none available
+      return direct.length > 0
+        ? direct.slice(0, maxResults)
+        : oneStop.slice(0, maxResults);
     }
-    // No direct flights available (or prefer_direct not set): return mixed results
-    const oneStop = parsed.filter((f) => f.stops === 1).slice(0, params.prefer_direct ? 3 : 1);
-    const twoStop = params.prefer_direct ? [] : parsed.filter((f) => f.stops >= 2).slice(0, 1);
-    return [...direct.slice(0, 3), ...oneStop, ...twoStop].slice(0, params.maxResults ?? 5);
+    // User explicitly requested max 1 stop
+    if (params.max_stops === 1) {
+      return [...direct, ...oneStop].slice(0, maxResults);
+    }
+    // Default: 4 direct + 3 one-stop + 1 two-stop (fill gaps if fewer available)
+    const wantDirect  = 4;
+    const wantOneStop = 3;
+    const wantTwoPlus = 1;
+    const pickedDirect  = direct.slice(0, wantDirect);
+    const pickedOne     = oneStop.slice(0, wantOneStop);
+    const pickedTwo     = twoPlus.slice(0, wantTwoPlus);
+    return [...pickedDirect, ...pickedOne, ...pickedTwo].slice(0, maxResults);
   } catch (err) {
     console.warn("searchFlights error:", err);
     return [];

@@ -286,6 +286,7 @@ Return JSON with these fields (omit fields not mentioned):
   "passengers": number or null,
   "cabin_class": "economy|business|first or null",
   "prefer_direct": true or false (true if user says 'nonstop', 'direct', '直飞'),
+  "max_stops": null or 0 (nonstop only) or 1 (at most 1 stop) — set when user explicitly limits stops, otherwise null,
   "budget_total": number or null
 }
 
@@ -736,6 +737,7 @@ async function runFlightPipeline(
     passengers: intent.passengers,
     cabin_class: intent.cabin_class,
     prefer_direct: intent.prefer_direct,
+    max_stops: intent.max_stops,
   };
 
   // Multi-airport city handling: search primary airport + cheapest from alternates
@@ -748,9 +750,9 @@ async function runFlightPipeline(
     // Parallel search: primary airport + each alternate airport
     const alternates = depMulti.all.filter((code) => code !== depMulti.primary);
     const [primaryFlights, ...altFlightGroups] = await Promise.all([
-      searchFlights({ ...searchParams, departure_city: depMulti.primary, maxResults: 5 }),
+      searchFlights({ ...searchParams, departure_city: depMulti.primary, maxResults: 8 }),
       ...alternates.map((alt) =>
-        searchFlights({ ...searchParams, departure_city: alt, maxResults: 3 })
+        searchFlights({ ...searchParams, departure_city: alt, maxResults: 4 })
       ),
     ]);
 
@@ -772,11 +774,11 @@ async function runFlightPipeline(
   } else if (arrMulti && arrMulti.all.length > 1) {
     // Multi-airport arrival (less common but handled symmetrically)
     const [primaryFlights, ...altFlightGroups] = await Promise.all([
-      searchFlights({ ...searchParams, departure_city: intent.departure_city!, arrival_city: arrMulti.primary, maxResults: 5 }),
+      searchFlights({ ...searchParams, departure_city: intent.departure_city!, arrival_city: arrMulti.primary, maxResults: 8 }),
       ...arrMulti.all
         .filter((c) => c !== arrMulti.primary)
         .map((alt) =>
-          searchFlights({ ...searchParams, departure_city: intent.departure_city!, arrival_city: alt, maxResults: 3 })
+          searchFlights({ ...searchParams, departure_city: intent.departure_city!, arrival_city: alt, maxResults: 4 })
         ),
     ]);
     const primaryBest = primaryFlights.slice(0, 3);
@@ -790,7 +792,7 @@ async function runFlightPipeline(
     flights = await searchFlights({
       ...searchParams,
       departure_city: intent.departure_city!,
-      maxResults: 5,
+      maxResults: 8,
     });
   }
 
@@ -798,7 +800,8 @@ async function runFlightPipeline(
     return { flightRecommendations: [], missing_fields: [], no_direct_available: false };
   }
 
-  const no_direct_available = intent.prefer_direct === true && flights.every((f) => f.stops > 0);
+  const wantedNonstop = intent.prefer_direct === true || intent.max_stops === 0;
+  const no_direct_available = wantedNonstop && flights.every((f) => f.stops > 0);
 
   const cards: FlightRecommendationCard[] = flights.map((flight, i) => {
     const group: FlightRecommendationCard["group"] =
