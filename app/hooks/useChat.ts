@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
-import { RecommendationCard as CardType, Message, SessionPreferences, HotelRecommendationCard, FlightRecommendationCard, CreditCardRecommendationCard, CategoryType } from "@/lib/types";
+import { RecommendationCard as CardType, Message, SessionPreferences, HotelRecommendationCard, FlightRecommendationCard, CreditCardRecommendationCard, LaptopRecommendationCard, CategoryType } from "@/lib/types";
 import { LearnedWeights } from "@/lib/types";
 
 export const LOADING_STEPS = [
@@ -51,6 +51,7 @@ export function useChat({
   const [allHotelCards, setAllHotelCards] = useState<HotelRecommendationCard[]>([]);
   const [allFlightCards, setAllFlightCards] = useState<FlightRecommendationCard[]>([]);
   const [allCreditCardCards, setAllCreditCardCards] = useState<CreditCardRecommendationCard[]>([]);
+  const [allLaptopCards, setAllLaptopCards] = useState<LaptopRecommendationCard[]>([]);
   const [resultCategory, setResultCategory] = useState<CategoryType>("restaurant");
 
   // Stable ref to always-current messages (avoids stale closure in sendMessage)
@@ -123,6 +124,8 @@ export function useChat({
       setSuggestedRefinements([]);
       setAllHotelCards([]);
       setAllFlightCards([]);
+      setAllCreditCardCards([]);
+      setAllLaptopCards([]);
       setResultCategory("restaurant");
 
       const url = new URL(window.location.href);
@@ -221,7 +224,18 @@ export function useChat({
 
                 if (category === "credit_card") {
                   const ccRecs: CreditCardRecommendationCard[] = event.creditCardRecommendations ?? [];
-                  if (ccRecs.length === 0) {
+                  const missingCCFields: string[] = event.missing_credit_card_fields ?? [];
+
+                  if (missingCCFields.length > 0) {
+                    setMessages((prev) => [
+                      ...prev,
+                      {
+                        role: "assistant",
+                        content: `To find the best card for you, I need a few details:\n\n1. **Monthly spending** — roughly how much do you spend on dining, groceries, travel, gas, and other categories each month?\n2. **Reward preference** — do you prefer cash back or travel points/miles?\n3. **Existing cards** — any cards you already hold? (I'll calculate the marginal value of adding a new one.)\n\nEven rough estimates work great!`,
+                        category: "credit_card" as const,
+                      },
+                    ]);
+                  } else if (ccRecs.length === 0) {
                     setMessages((prev) => [
                       ...prev,
                       {
@@ -231,9 +245,33 @@ export function useChat({
                       },
                     ]);
                   } else {
+                    const topMarginal = ccRecs[0]?.marginal_value ?? 0;
+                    const portfolioOptimized = topMarginal <= 0;
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    const ccIntent = event.requirements as any;
+                    const creditScore: number | null = ccIntent?.credit_score ?? null;
+                    const noHistory = creditScore === 0;
+                    const lowCredit = creditScore !== null && creditScore > 0 && creditScore < 650;
+                    // Unnamed existing cards: user mentioned having cards but didn't name them
+                    const hasUnnamedCards =
+                      ccIntent?.has_existing_cards === true &&
+                      (ccIntent?.existing_cards ?? []).length === 0;
+                    let content: string;
+                    if (noHistory) {
+                      content = `⚠ Since you have no credit history, most standard cards may be difficult to get approved for. Consider starting with a **secured card** or a **student card** (e.g. Discover it Student, Capital One Platinum Secured) to build your score first. That said, here are the best options from our database that have the lowest approval requirements:`;
+                    } else if (lowCredit) {
+                      content = `With a credit score of ${creditScore}, most standard rewards cards will be difficult to get approved for. Here are the cards most likely to approve you at your current score — all are designed for fair-credit applicants:`;
+                    } else if (portfolioOptimized) {
+                      content = `Your current card portfolio already covers your spending well — any new card would add little or no incremental value. Here are the closest options anyway, but adding them may not be worth the complexity.`;
+                    } else {
+                      content = `Here are the top ${ccRecs.length} credit cards ranked by annual net gain for your spending profile.`;
+                    }
+                    if (hasUnnamedCards) {
+                      content += `\n\n*You mentioned having existing cards but didn't name them. Results use a 1× baseline — if your current cards already earn bonus rates, the actual incremental gain from adding a new card may be lower.*`;
+                    }
                     const assistantMessage: Message = {
                       role: "assistant",
-                      content: `Here are the top ${ccRecs.length} credit cards ranked by annual net gain for your spending profile.`,
+                      content,
                       creditCardCards: ccRecs,
                       category: "credit_card" as const,
                     };
@@ -297,6 +335,29 @@ export function useChat({
                     };
                     setMessages((prev) => [...prev, assistantMessage]);
                     setAllHotelCards(hotelRecs);
+                  }
+                } else if (category === "laptop") {
+                  const laptopRecs: LaptopRecommendationCard[] = event.laptopRecommendations ?? [];
+                  const missingUseCase: boolean = event.missing_laptop_use_case ?? false;
+
+                  if (missingUseCase || laptopRecs.length === 0) {
+                    setMessages((prev) => [
+                      ...prev,
+                      {
+                        role: "assistant",
+                        content: `To find the best laptop for you, I need to know **how you'll use it**. Please tell me:\n\n1. **Primary use case** — e.g. coding, video editing, gaming, business travel, general productivity, data science\n2. **Budget** — rough price range in USD (optional)\n3. **OS preference** — Mac, Windows, Linux, or no preference\n4. **Portability** — how important is weight / battery life?`,
+                        category: "laptop" as const,
+                      },
+                    ]);
+                  } else {
+                    const assistantMessage: Message = {
+                      role: "assistant",
+                      content: `Here are the top ${laptopRecs.length} laptop${laptopRecs.length > 1 ? "s" : ""} ranked for your use case.`,
+                      laptopCards: laptopRecs,
+                      category: "laptop" as const,
+                    };
+                    setMessages((prev) => [...prev, assistantMessage]);
+                    setAllLaptopCards(laptopRecs);
                   }
                 } else {
                   const recommendations: CardType[] = event.recommendations ?? [];
@@ -413,6 +474,7 @@ export function useChat({
     allHotelCards,
     allFlightCards,
     allCreditCardCards,
+    allLaptopCards,
     resultCategory,
     activePrice,
     setActivePrice,

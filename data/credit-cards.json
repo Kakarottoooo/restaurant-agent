@@ -1,108 +1,238 @@
 {
+  "meta": {
+    "last_updated": "2026-03-19",
+    "note": "Signup bonus amounts fluctuate frequently. Always verify current offers on issuer's official website before presenting to users. Fields marked with 'high_volatility: true' change most often."
+  },
+  "point_currencies": {
+    "chase_ur": {
+      "name": "Chase Ultimate Rewards",
+      "cpp_cash": 0.01,
+      "cpp_travel_portal": 0.015,
+      "note": "Points Boost offers on Chase Travel can reach 1.75cpp for select premium cabin bookings. Transfer to airline/hotel partners 1:1."
+    },
+    "amex_mr": {
+      "name": "Amex Membership Rewards",
+      "cpp_cash": 0.01,
+      "cpp_travel": 0.015,
+      "note": "Transfer to 20+ airline and hotel partners at 1:1 (Hilton is 1:2). Best value via transfer partners."
+    },
+    "citi_ty": {
+      "name": "Citi ThankYou Points",
+      "cpp_cash": 0.01,
+      "cpp_travel": 0.014,
+      "note": "Transfer to airline partners. Best value via transfer partners."
+    },
+    "capital_one_miles": {
+      "name": "Capital One Miles",
+      "cpp_cash": 0.01,
+      "cpp_travel": 0.013,
+      "note": "Transfer to 15+ airline and hotel partners. Can also redeem as travel statement credits at 1cpp."
+    },
+    "bilt_points": {
+      "name": "Bilt Points",
+      "cpp_cash": 0.0125,
+      "cpp_travel": 0.015,
+      "note": "Transfer to airlines (United, AA, Air Canada) and hotels (Hyatt). One of the highest-value transferable currencies."
+    },
+    "marriott_bonvoy": {
+      "name": "Marriott Bonvoy Points",
+      "cpp_cash": 0.006,
+      "cpp_travel": 0.008,
+      "note": "Best value redeeming for Marriott hotel stays. Transfer to airlines at 3:1 with 5k bonus per 60k transferred."
+    },
+    "delta_skymiles": {
+      "name": "Delta SkyMiles",
+      "cpp_cash": 0.01,
+      "cpp_travel": 0.012,
+      "note": "No-expiry miles. Variable redemption value; best on international business class."
+    },
+    "hilton_honors": {
+      "name": "Hilton Honors Points",
+      "cpp_cash": 0.005,
+      "cpp_travel": 0.006,
+      "note": "Low cpp but high earn rates. Best value at premium Hilton properties."
+    },
+    "cash": {
+      "name": "Cash Back",
+      "cpp_cash": 0.01,
+      "cpp_travel": 0.01,
+      "note": "Straightforward cash back. No transfer partners."
+    }
+  },
   "cards": [
     {
       "id": "chase-sapphire-preferred",
       "name": "Chase Sapphire Preferred",
       "issuer": "Chase",
       "annual_fee": 95,
-      "rewards_currency": "Chase UR",
+      "rewards_currency": "chase_ur",
       "category_rates": {
         "dining": 3,
-        "groceries": 1,
-        "travel": 2,
+        "groceries_online": 3,
+        "groceries_instore": 1,
+        "travel_chase_portal": 5,
+        "travel_other": 2,
         "gas": 1,
-        "online_shopping": 1,
-        "streaming": 1,
+        "streaming": 3,
         "pharmacy": 1,
         "other": 1
       },
-      "point_value_cash": 0.01,
-      "point_value_travel": 0.0125,
-      "signup_bonus_points": 60000,
-      "signup_bonus_spend_requirement": 4000,
-      "signup_bonus_timeframe_months": 3,
+      "signup_bonus": {
+        "points": 75000,
+        "spend_requirement": 5000,
+        "timeframe_months": 3,
+        "estimated_value_cash": 750,
+        "estimated_value_travel": 1125,
+        "high_volatility": true,
+        "note": "Was 60k/$4k as recently as early 2026. Check issuer site for current offer."
+      },
+      "credits": {
+        "annual_hotel_credit": 50,
+        "anniversary_points_bonus_pct": 10,
+        "dashpass": "complimentary 1yr"
+      },
       "foreign_transaction_fee": false,
       "min_credit_score": 700,
-      "notes": ["5x on travel booked via Chase Travel portal", "3x on select streaming services"],
-      "last_verified": "2026-02-01"
+      "mutually_exclusive_with": ["chase-sapphire-reserve"],
+      "eligibility_notes": [
+        "Subject to Chase 5/24 rule",
+        "Cannot hold both Preferred and Reserve simultaneously (historically), though rules changed Jan 2026 — verify current policy",
+        "48-month waiting period between Sapphire family bonuses"
+      ],
+      "notes": [
+        "5x on travel booked via Chase Travel portal (excluding $50 hotel credit)",
+        "3x on dining, select streaming, and online groceries (excl. Target, Walmart, wholesale clubs)",
+        "10% anniversary points boost on all purchases made previous year",
+        "Strong travel protections: trip cancellation, primary rental car insurance, baggage delay"
+      ],
+      "last_verified": "2026-03-19"
     },
     {
       "id": "chase-sapphire-reserve",
       "name": "Chase Sapphire Reserve",
       "issuer": "Chase",
-      "annual_fee": 550,
-      "rewards_currency": "Chase UR",
+      "annual_fee": 795,
+      "rewards_currency": "chase_ur",
       "category_rates": {
         "dining": 3,
-        "groceries": 1,
-        "travel": 3,
+        "groceries_online": 1,
+        "groceries_instore": 1,
+        "travel_chase_portal": 8,
+        "travel_direct_flights_hotels": 4,
+        "travel_other": 3,
         "gas": 1,
-        "online_shopping": 1,
         "streaming": 1,
         "pharmacy": 1,
         "other": 1
       },
-      "point_value_cash": 0.015,
-      "point_value_travel": 0.015,
-      "signup_bonus_points": 60000,
-      "signup_bonus_spend_requirement": 4000,
-      "signup_bonus_timeframe_months": 3,
+      "signup_bonus": {
+        "points": 125000,
+        "spend_requirement": 6000,
+        "timeframe_months": 3,
+        "estimated_value_cash": 1250,
+        "estimated_value_travel": 1875,
+        "high_volatility": true,
+        "note": "Fee and bonus restructured mid-2025. Verify current offer on Chase site."
+      },
+      "credits": {
+        "annual_travel_credit": 300,
+        "the_edit_hotel_credit": 500,
+        "dining_exclusive_tables_credit": 300,
+        "global_entry_tsp_precheck_credit": 120,
+        "global_entry_tsp_frequency_years": 4,
+        "apple_tv_apple_music": "complimentary through 2027-06"
+      },
+      "effective_annual_fee_after_travel_credit": 495,
       "foreign_transaction_fee": false,
-      "min_credit_score": 720,
-      "notes": ["$300 annual travel credit offsets fee", "10x hotels+car rentals via Chase portal", "Priority Pass lounge access"],
-      "last_verified": "2026-02-01"
+      "min_credit_score": 750,
+      "mutually_exclusive_with": ["chase-sapphire-preferred"],
+      "eligibility_notes": [
+        "Subject to Chase 5/24 rule",
+        "Annual fee increased from $550 to $795 in mid-2025 — significantly higher than data may suggest",
+        "48-month waiting period between Sapphire family bonuses"
+      ],
+      "notes": [
+        "8x on all Chase Travel portal purchases (incl. The Edit)",
+        "4x on flights and hotels booked direct with airlines/hotels",
+        "3x on dining worldwide and all other travel",
+        "$300 travel credit auto-applies to any travel purchase — very flexible",
+        "$500 The Edit credit ($250 semi-annually) for hand-picked hotel collection, 2-night minimum",
+        "Priority Pass + Chase Sapphire Lounge access (with 2 guests)",
+        "Best paired with Freedom Flex or Freedom Unlimited to maximize UR ecosystem"
+      ],
+      "last_verified": "2026-03-19"
     },
     {
       "id": "chase-freedom-unlimited",
       "name": "Chase Freedom Unlimited",
       "issuer": "Chase",
       "annual_fee": 0,
-      "rewards_currency": "Chase UR",
+      "rewards_currency": "chase_ur",
       "category_rates": {
         "dining": 3,
-        "groceries": 1,
-        "travel": 1,
+        "groceries_instore": 1,
+        "travel_chase_portal": 5,
+        "travel_other": 1,
         "gas": 1,
-        "online_shopping": 1,
         "streaming": 1,
         "pharmacy": 3,
         "other": 1.5
       },
-      "point_value_cash": 0.01,
-      "point_value_travel": 0.0125,
-      "signup_bonus_points": 20000,
-      "signup_bonus_spend_requirement": 500,
-      "signup_bonus_timeframe_months": 3,
+      "signup_bonus": {
+        "points": 20000,
+        "spend_requirement": 500,
+        "timeframe_months": 3,
+        "estimated_value_cash": 200,
+        "estimated_value_travel": 250,
+        "high_volatility": true
+      },
+      "credits": {},
       "foreign_transaction_fee": true,
       "min_credit_score": 670,
-      "notes": ["5x on travel via Chase portal", "Best as companion to Sapphire for UR transfer"],
-      "last_verified": "2026-02-01"
+      "notes": [
+        "1.5x on all other purchases makes it the best catch-all Chase card",
+        "3x on dining and pharmacy; 5x via Chase Travel portal",
+        "Best used as companion to Sapphire Preferred/Reserve — transfers UR points to travel partners",
+        "Has foreign transaction fee — do not use abroad"
+      ],
+      "last_verified": "2026-03-19"
     },
     {
       "id": "chase-freedom-flex",
       "name": "Chase Freedom Flex",
       "issuer": "Chase",
       "annual_fee": 0,
-      "rewards_currency": "Chase UR",
+      "rewards_currency": "chase_ur",
       "category_rates": {
         "dining": 3,
-        "groceries": 1,
-        "travel": 1,
+        "groceries_instore": 1,
+        "travel_chase_portal": 5,
+        "travel_other": 1,
         "gas": 1,
-        "online_shopping": 1,
         "streaming": 1,
         "pharmacy": 3,
+        "rotating_quarterly": 5,
         "other": 1
       },
-      "point_value_cash": 0.01,
-      "point_value_travel": 0.0125,
-      "signup_bonus_points": 20000,
-      "signup_bonus_spend_requirement": 500,
-      "signup_bonus_timeframe_months": 3,
+      "signup_bonus": {
+        "points": 20000,
+        "spend_requirement": 500,
+        "timeframe_months": 3,
+        "estimated_value_cash": 200,
+        "estimated_value_travel": 250,
+        "high_volatility": true
+      },
+      "credits": {},
       "foreign_transaction_fee": true,
       "min_credit_score": 670,
-      "notes": ["5x rotating quarterly categories (up to $1,500/quarter) — gas, groceries, Amazon, PayPal and more", "Best paired with Sapphire Reserve/Preferred"],
-      "last_verified": "2026-02-01"
+      "notes": [
+        "5% on rotating quarterly categories up to $1,500/quarter after activation (gas, groceries, Amazon, PayPal, etc.)",
+        "3x on dining and pharmacy year-round",
+        "Requires tracking and activating quarterly categories — not set-and-forget",
+        "Best paired with Sapphire Preferred/Reserve to unlock partner transfers",
+        "Has foreign transaction fee — do not use abroad"
+      ],
+      "last_verified": "2026-03-19"
     },
     {
       "id": "chase-amazon-prime",
@@ -112,137 +242,223 @@
       "rewards_currency": "cash",
       "category_rates": {
         "dining": 2,
-        "groceries": 5,
-        "travel": 2,
+        "groceries_whole_foods": 5,
+        "groceries_instore": 1,
+        "travel_other": 2,
         "gas": 2,
-        "online_shopping": 5,
+        "online_shopping_amazon": 5,
+        "online_shopping_other": 1,
         "streaming": 1,
         "pharmacy": 1,
         "other": 1
       },
-      "point_value_cash": 0.01,
-      "point_value_travel": 0.01,
-      "signup_bonus_points": 10000,
-      "signup_bonus_spend_requirement": 0,
-      "signup_bonus_timeframe_months": 0,
+      "signup_bonus": {
+        "points": 10000,
+        "spend_requirement": 0,
+        "timeframe_months": 0,
+        "estimated_value_cash": 100,
+        "high_volatility": false,
+        "note": "Instant $100 gift card upon approval, no spend requirement"
+      },
+      "credits": {},
       "foreign_transaction_fee": false,
       "min_credit_score": 670,
-      "notes": ["Requires active Amazon Prime membership", "5% at Whole Foods Market", "2% at restaurants, gas stations, and transit"],
-      "last_verified": "2026-02-01"
+      "eligibility_notes": [
+        "Requires active Amazon Prime membership ($139/year)"
+      ],
+      "notes": [
+        "5% at Amazon.com and Whole Foods Market",
+        "2% at restaurants, gas stations, and transit",
+        "Best card for heavy Amazon/Whole Foods shoppers",
+        "Cash back deposited directly to Amazon account or as statement credit"
+      ],
+      "last_verified": "2026-03-19"
     },
     {
       "id": "chase-ink-business-preferred",
       "name": "Chase Ink Business Preferred",
       "issuer": "Chase",
       "annual_fee": 95,
-      "rewards_currency": "Chase UR",
+      "rewards_currency": "chase_ur",
       "category_rates": {
         "dining": 3,
-        "groceries": 1,
-        "travel": 3,
-        "gas": 1,
+        "travel_other": 3,
+        "online_advertising": 3,
+        "shipping": 3,
         "online_shopping": 3,
+        "gas": 1,
         "streaming": 1,
         "pharmacy": 1,
         "other": 1
       },
-      "point_value_cash": 0.01,
-      "point_value_travel": 0.0125,
-      "signup_bonus_points": 100000,
-      "signup_bonus_spend_requirement": 8000,
-      "signup_bonus_timeframe_months": 3,
+      "signup_bonus": {
+        "points": 100000,
+        "spend_requirement": 8000,
+        "timeframe_months": 3,
+        "estimated_value_cash": 1000,
+        "estimated_value_travel": 1500,
+        "high_volatility": true
+      },
+      "credits": {},
       "foreign_transaction_fee": false,
       "min_credit_score": 700,
-      "notes": ["Business card — requires business income", "3x on shipping, advertising (up to $150k/year combined)"],
-      "last_verified": "2026-02-01"
+      "eligibility_notes": [
+        "Business card — requires business income (freelance, side income qualifies)",
+        "Subject to Chase 5/24 rule"
+      ],
+      "notes": [
+        "3x on travel, shipping, online advertising, and internet/cable/phone (up to $150k/year combined)",
+        "SaaS software (Figma, AWS, Adobe CC) may only earn 3x if classified under 'internet/cable/phone services' — verify that your vendors' merchant codes trigger the bonus before relying on this rate",
+        "One of the best business card signup bonuses available",
+        "Points transfer to same Chase travel partners as Sapphire cards"
+      ],
+      "last_verified": "2026-03-19"
     },
     {
       "id": "chase-marriott-bonvoy-boundless",
       "name": "Chase Marriott Bonvoy Boundless",
       "issuer": "Chase",
       "annual_fee": 95,
-      "rewards_currency": "Marriott Bonvoy",
+      "rewards_currency": "marriott_bonvoy",
       "category_rates": {
+        "marriott_hotels": 6,
+        "groceries_instore": 3,
         "dining": 2,
-        "groceries": 3,
-        "travel": 2,
+        "travel_other": 2,
         "gas": 2,
         "online_shopping": 2,
         "streaming": 2,
         "pharmacy": 2,
         "other": 2
       },
-      "point_value_cash": 0.006,
-      "point_value_travel": 0.008,
-      "signup_bonus_points": 100000,
-      "signup_bonus_spend_requirement": 3000,
-      "signup_bonus_timeframe_months": 3,
+      "signup_bonus": {
+        "points": 100000,
+        "spend_requirement": 3000,
+        "timeframe_months": 3,
+        "estimated_value_cash": 600,
+        "estimated_value_travel": 800,
+        "high_volatility": true
+      },
+      "credits": {
+        "free_night_annual": "up to 35,000 Bonvoy points",
+        "elite_night_credits": 15
+      },
       "foreign_transaction_fee": false,
       "min_credit_score": 700,
-      "notes": ["6x at Marriott properties", "One free night award annually (up to 35,000 points)", "15 Elite Night Credits per year"],
-      "last_verified": "2026-02-01"
+      "notes": [
+        "6x at Marriott properties",
+        "3x on first $6k/year in grocery purchases",
+        "One free night award annually (up to 35k points) — can offset annual fee alone",
+        "15 Elite Night Credits per year toward Marriott status",
+        "Best card if you regularly stay at Marriott properties"
+      ],
+      "last_verified": "2026-03-19"
     },
     {
       "id": "amex-platinum",
       "name": "Amex Platinum",
       "issuer": "American Express",
-      "annual_fee": 695,
-      "rewards_currency": "Amex MR",
+      "annual_fee": 895,
+      "rewards_currency": "amex_mr",
       "category_rates": {
         "dining": 1,
-        "groceries": 1,
-        "travel": 5,
+        "groceries_instore": 1,
+        "travel_flights_direct_or_amex": 5,
+        "travel_hotels_amex_portal": 5,
+        "travel_other": 1,
         "gas": 1,
-        "online_shopping": 1,
         "streaming": 1,
         "pharmacy": 1,
         "other": 1
       },
-      "point_value_cash": 0.01,
-      "point_value_travel": 0.015,
-      "signup_bonus_points": 80000,
-      "signup_bonus_spend_requirement": 8000,
-      "signup_bonus_timeframe_months": 6,
+      "signup_bonus": {
+        "points": 175000,
+        "spend_requirement": 12000,
+        "timeframe_months": 6,
+        "estimated_value_cash": 1750,
+        "estimated_value_travel": 2625,
+        "high_volatility": true,
+        "note": "Offer is 'as high as 175k' — actual offer varies per applicant. Annual fee increased from $695 to $895 in late 2025."
+      },
+      "credits": {
+        "hotel_fhr_thc_credit": 600,
+        "uber_cash": 200,
+        "uber_one_credit": 120,
+        "digital_entertainment_credit": 300,
+        "equinox_credit": 300,
+        "saks_credit": 100,
+        "walmart_plus_credit": 155,
+        "clear_plus_credit": 209,
+        "airline_fee_credit": 200,
+        "lululemon_credit": 300
+      },
+      "effective_annual_fee_note": "Headline fee $895, but $600+ in travel credits plus lifestyle credits make effective fee much lower for heavy users",
       "foreign_transaction_fee": false,
       "min_credit_score": 720,
-      "notes": [
-        "5x on flights booked directly with airlines or via Amex Travel",
-        "5x on prepaid hotels via Amex Travel",
-        "Up to $200 airline fee credit, $200 hotel credit, $240 digital entertainment credit, $155 Walmart+ credit",
-        "Centurion Lounge access + Priority Pass",
-        "Best for heavy travelers who maximize credits"
+      "eligibility_notes": [
+        "Once-per-lifetime bonus rule — if you've had Amex Platinum before, likely ineligible for welcome bonus",
+        "Amex uses soft pull to show offer before hard inquiry — check offer before committing"
       ],
-      "last_verified": "2026-02-01"
+      "notes": [
+        "5x on flights booked directly with airlines or via Amex Travel (up to $500k/year)",
+        "5x on prepaid hotels via Amex Travel",
+        "Access to 1,550+ lounges: Centurion Lounges, Priority Pass, Delta Sky Club (10 visits/year when flying Delta), Plaza Premium",
+        "Marriott and Hilton Gold status complimentary",
+        "Annual fee increased significantly in 2025 — only worth it if you maximize multiple credits",
+        "Best for frequent travelers who will actually use the Equinox, lululemon, digital entertainment, and hotel credits"
+      ],
+      "last_verified": "2026-03-19"
     },
     {
       "id": "amex-gold",
       "name": "Amex Gold",
       "issuer": "American Express",
-      "annual_fee": 250,
-      "rewards_currency": "Amex MR",
+      "annual_fee": 325,
+      "rewards_currency": "amex_mr",
       "category_rates": {
         "dining": 4,
-        "groceries": 4,
-        "travel": 3,
+        "groceries_us_supermarkets": 4,
+        "groceries_other": 1,
+        "travel_flights_direct_or_amex": 3,
+        "travel_other": 1,
         "gas": 1,
-        "online_shopping": 1,
         "streaming": 1,
         "pharmacy": 1,
         "other": 1
       },
-      "point_value_cash": 0.01,
-      "point_value_travel": 0.015,
-      "signup_bonus_points": 60000,
-      "signup_bonus_spend_requirement": 6000,
-      "signup_bonus_timeframe_months": 6,
+      "signup_bonus": {
+        "points": 100000,
+        "spend_requirement": 6000,
+        "timeframe_months": 6,
+        "estimated_value_cash": 1000,
+        "estimated_value_travel": 1500,
+        "high_volatility": true,
+        "note": "Annual fee increased from $250 to $325 in 2024. Verify current offer."
+      },
+      "credits": {
+        "dining_credit_monthly": 10,
+        "dining_credit_annual": 120,
+        "resy_credit_annual": 100,
+        "uber_cash_annual": 120,
+        "dining_credit_note": "$10/month at Grubhub, Cheesecake Factory, Goldbelly, Wine.com, Five Guys. Enrollment required.",
+        "uber_cash_note": "$10/month Uber Cash (rides and Eats in US). Must add Amex Gold to Uber app."
+      },
+      "effective_annual_fee_after_credits": 105,
       "foreign_transaction_fee": false,
       "min_credit_score": 700,
-      "notes": [
-        "4x at restaurants worldwide and US supermarkets (up to $25,000/year on groceries)",
-        "3x on flights booked directly with airlines",
-        "Up to $120 dining credit ($10/month) and $120 Uber Cash annually"
+      "eligibility_notes": [
+        "Amex once-per-lifetime bonus rule applies",
+        "4x groceries capped at $25,000/year at US supermarkets"
       ],
-      "last_verified": "2026-02-01"
+      "notes": [
+        "4x at restaurants worldwide (no cap)",
+        "4x at US supermarkets up to $25k/year, then 1x",
+        "3x on flights booked directly with airlines or via Amex Travel",
+        "$120 dining credit + $120 Uber Cash effectively bring annual fee to ~$85 for users who maximize credits",
+        "Best dining + grocery card for MR point earners",
+        "Annual fee raised from $250 to $325 in 2024 — factor this into calculation"
+      ],
+      "last_verified": "2026-03-19"
     },
     {
       "id": "amex-blue-cash-preferred",
@@ -252,28 +468,36 @@
       "rewards_currency": "cash",
       "category_rates": {
         "dining": 1,
-        "groceries": 6,
-        "travel": 1,
-        "gas": 3,
-        "online_shopping": 1,
-        "streaming": 6,
+        "groceries_us_supermarkets": 6,
+        "groceries_other": 1,
+        "travel_other": 1,
+        "gas_us_stations": 3,
+        "streaming_us": 6,
+        "transit": 3,
         "pharmacy": 1,
         "other": 1
       },
-      "point_value_cash": 0.01,
-      "point_value_travel": 0.01,
-      "signup_bonus_points": 25000,
-      "signup_bonus_spend_requirement": 3000,
-      "signup_bonus_timeframe_months": 6,
+      "signup_bonus": {
+        "points": 25000,
+        "spend_requirement": 3000,
+        "timeframe_months": 6,
+        "estimated_value_cash": 250,
+        "high_volatility": false
+      },
+      "credits": {},
       "foreign_transaction_fee": false,
       "min_credit_score": 670,
+      "eligibility_notes": [
+        "6% grocery rate capped at $6,000/year at US supermarkets, then 1%"
+      ],
       "notes": [
-        "6% at US supermarkets (up to $6,000/year), then 1%",
+        "6% at US supermarkets up to $6k/year — best grocery cash-back rate available",
         "6% on select US streaming subscriptions",
         "3% at US gas stations and transit",
-        "Best grocery card if you spend $350+/month at supermarkets"
+        "Best if you spend $350+/month at supermarkets — breaks even vs. Blue Cash Everyday at that level",
+        "Does not earn transferable points — pure cash back"
       ],
-      "last_verified": "2026-02-01"
+      "last_verified": "2026-03-19"
     },
     {
       "id": "amex-blue-cash-everyday",
@@ -283,214 +507,290 @@
       "rewards_currency": "cash",
       "category_rates": {
         "dining": 1,
-        "groceries": 3,
-        "travel": 1,
-        "gas": 3,
-        "online_shopping": 3,
+        "groceries_us_supermarkets": 3,
+        "groceries_other": 1,
+        "travel_other": 1,
+        "gas_us_stations": 3,
+        "online_shopping_us": 3,
         "streaming": 1,
         "pharmacy": 1,
         "other": 1
       },
-      "point_value_cash": 0.01,
-      "point_value_travel": 0.01,
-      "signup_bonus_points": 20000,
-      "signup_bonus_spend_requirement": 2000,
-      "signup_bonus_timeframe_months": 6,
+      "signup_bonus": {
+        "points": 20000,
+        "spend_requirement": 2000,
+        "timeframe_months": 6,
+        "estimated_value_cash": 200,
+        "high_volatility": false
+      },
+      "credits": {},
       "foreign_transaction_fee": false,
       "min_credit_score": 670,
-      "notes": [
-        "3% at US supermarkets (up to $6,000/year), then 1%",
-        "3% at US gas stations (up to $6,000/year), then 1%",
-        "3% on US online retail purchases (up to $6,000/year)"
+      "eligibility_notes": [
+        "3% grocery and gas each capped at $6,000/year, then 1%",
+        "3% online retail capped at $6,000/year"
       ],
-      "last_verified": "2026-02-01"
+      "notes": [
+        "No annual fee version of Blue Cash Preferred",
+        "3% at US supermarkets, gas stations, and online retail (each capped at $6k/year)",
+        "Best for moderate grocery spenders who don't want to pay annual fee"
+      ],
+      "last_verified": "2026-03-19"
     },
     {
       "id": "amex-green",
       "name": "Amex Green",
       "issuer": "American Express",
       "annual_fee": 150,
-      "rewards_currency": "Amex MR",
+      "rewards_currency": "amex_mr",
       "category_rates": {
         "dining": 3,
-        "groceries": 1,
-        "travel": 3,
+        "groceries_instore": 1,
+        "travel_all": 3,
         "gas": 1,
-        "online_shopping": 1,
         "streaming": 1,
         "pharmacy": 1,
         "other": 1
       },
-      "point_value_cash": 0.01,
-      "point_value_travel": 0.015,
-      "signup_bonus_points": 40000,
-      "signup_bonus_spend_requirement": 3000,
-      "signup_bonus_timeframe_months": 6,
+      "signup_bonus": {
+        "points": 40000,
+        "spend_requirement": 3000,
+        "timeframe_months": 6,
+        "estimated_value_cash": 400,
+        "estimated_value_travel": 600,
+        "high_volatility": true
+      },
+      "credits": {
+        "clear_plus_credit": 189,
+        "lounge_buddy_credit": 100
+      },
+      "effective_annual_fee_after_credits": 0,
       "foreign_transaction_fee": false,
       "min_credit_score": 680,
-      "notes": ["3x on travel and dining worldwide", "Up to $189 CLEAR Plus credit, up to $100 LoungeBuddy credit"],
-      "last_verified": "2026-02-01"
+      "notes": [
+        "3x on travel and transit worldwide (broader travel definition than many cards)",
+        "3x on dining worldwide",
+        "Effective fee near $0 if you use CLEAR+ credit — but verify CLEAR+ is useful to you first",
+        "Good entry point into Amex MR ecosystem without high annual fee"
+      ],
+      "last_verified": "2026-03-19"
     },
     {
       "id": "amex-delta-gold",
       "name": "Amex Delta SkyMiles Gold",
       "issuer": "American Express",
       "annual_fee": 150,
-      "rewards_currency": "Delta SkyMiles",
+      "rewards_currency": "delta_skymiles",
       "category_rates": {
         "dining": 2,
-        "groceries": 2,
-        "travel": 2,
+        "groceries_us_supermarkets": 2,
+        "travel_delta": 2,
+        "travel_other": 1,
         "gas": 1,
-        "online_shopping": 1,
         "streaming": 1,
         "pharmacy": 1,
         "other": 1
       },
-      "point_value_cash": 0.01,
-      "point_value_travel": 0.012,
-      "signup_bonus_points": 80000,
-      "signup_bonus_spend_requirement": 3000,
-      "signup_bonus_timeframe_months": 6,
+      "signup_bonus": {
+        "points": 80000,
+        "spend_requirement": 3000,
+        "timeframe_months": 6,
+        "estimated_value_cash": 800,
+        "estimated_value_travel": 960,
+        "high_volatility": true,
+        "note": "Annual fee waived first year."
+      },
+      "credits": {
+        "annual_companion_certificate": "domestic economy (taxes/fees apply)",
+        "first_checked_bag_free": true
+      },
       "foreign_transaction_fee": false,
       "min_credit_score": 680,
       "notes": [
-        "2x at restaurants, supermarkets, and on Delta flights",
-        "Annual companion certificate for domestic economy",
-        "Free first checked bag on Delta flights",
-        "Annual fee waived first year"
+        "2x on Delta flights, restaurants, and US supermarkets",
+        "Annual companion certificate for domestic economy — high value if used",
+        "First checked bag free for you and up to 8 companions on Delta flights",
+        "Annual fee waived first year",
+        "Best if you frequently fly Delta and check bags"
       ],
-      "last_verified": "2026-02-01"
+      "last_verified": "2026-03-19"
     },
     {
       "id": "amex-hilton-honors",
       "name": "Amex Hilton Honors",
       "issuer": "American Express",
       "annual_fee": 0,
-      "rewards_currency": "Hilton Honors",
+      "rewards_currency": "hilton_honors",
       "category_rates": {
-        "dining": 5,
-        "groceries": 5,
-        "travel": 3,
-        "gas": 5,
+        "hilton_hotels": 7,
+        "dining_us_restaurants": 5,
+        "groceries_us_supermarkets": 5,
+        "gas_us_stations": 5,
+        "travel_other": 3,
         "online_shopping": 3,
         "streaming": 3,
         "pharmacy": 3,
         "other": 3
       },
-      "point_value_cash": 0.005,
-      "point_value_travel": 0.006,
-      "signup_bonus_points": 80000,
-      "signup_bonus_spend_requirement": 2000,
-      "signup_bonus_timeframe_months": 3,
+      "signup_bonus": {
+        "points": 80000,
+        "spend_requirement": 2000,
+        "timeframe_months": 3,
+        "estimated_value_cash": 400,
+        "estimated_value_travel": 480,
+        "high_volatility": true
+      },
+      "credits": {},
       "foreign_transaction_fee": false,
       "min_credit_score": 670,
-      "notes": ["7x at Hilton hotels", "5x at US restaurants, supermarkets, and gas stations", "Hilton Honors Silver status"],
-      "last_verified": "2026-02-01"
+      "notes": [
+        "7x at Hilton hotels, 5x at US restaurants, supermarkets, gas stations",
+        "3x on all other eligible purchases",
+        "Hilton Honors Silver status complimentary",
+        "High earn rates but low cpp on Hilton points — net value is modest",
+        "Best no-annual-fee card if you stay at Hilton properties occasionally"
+      ],
+      "last_verified": "2026-03-19"
     },
     {
       "id": "amex-hilton-honors-surpass",
       "name": "Amex Hilton Honors Surpass",
       "issuer": "American Express",
       "annual_fee": 150,
-      "rewards_currency": "Hilton Honors",
+      "rewards_currency": "hilton_honors",
       "category_rates": {
-        "dining": 6,
-        "groceries": 6,
-        "travel": 3,
-        "gas": 6,
+        "hilton_hotels": 12,
+        "dining_us_restaurants": 6,
+        "groceries_us_supermarkets": 6,
+        "gas_us_stations": 6,
+        "travel_other": 3,
         "online_shopping": 3,
         "streaming": 3,
         "pharmacy": 3,
         "other": 3
       },
-      "point_value_cash": 0.005,
-      "point_value_travel": 0.006,
-      "signup_bonus_points": 130000,
-      "signup_bonus_spend_requirement": 3000,
-      "signup_bonus_timeframe_months": 6,
+      "signup_bonus": {
+        "points": 130000,
+        "spend_requirement": 3000,
+        "timeframe_months": 6,
+        "estimated_value_cash": 650,
+        "estimated_value_travel": 780,
+        "high_volatility": true
+      },
+      "credits": {
+        "priority_pass_visits_free_annual": 10
+      },
       "foreign_transaction_fee": false,
       "min_credit_score": 680,
-      "notes": ["12x at Hilton hotels", "6x at US restaurants, supermarkets, and gas stations", "Hilton Honors Gold status + Priority Pass (10 free visits/year)"],
-      "last_verified": "2026-02-01"
+      "notes": [
+        "12x at Hilton hotels, 6x at US restaurants, supermarkets, gas",
+        "Hilton Honors Gold status — includes 80% bonus points and complimentary breakfast at some properties",
+        "10 free Priority Pass lounge visits per year",
+        "Best Hilton card for frequent Hilton stayers"
+      ],
+      "last_verified": "2026-03-19"
     },
     {
       "id": "citi-strata-premier",
       "name": "Citi Strata Premier",
       "issuer": "Citi",
       "annual_fee": 95,
-      "rewards_currency": "Citi TY",
+      "rewards_currency": "citi_ty",
       "category_rates": {
         "dining": 3,
-        "groceries": 3,
-        "travel": 3,
+        "groceries_instore": 3,
+        "travel_hotels": 3,
+        "travel_air": 3,
         "gas": 3,
         "online_shopping": 1,
         "streaming": 1,
         "pharmacy": 1,
         "other": 1
       },
-      "point_value_cash": 0.01,
-      "point_value_travel": 0.014,
-      "signup_bonus_points": 75000,
-      "signup_bonus_spend_requirement": 4000,
-      "signup_bonus_timeframe_months": 3,
+      "signup_bonus": {
+        "points": 75000,
+        "spend_requirement": 4000,
+        "timeframe_months": 3,
+        "estimated_value_cash": 750,
+        "estimated_value_travel": 1050,
+        "high_volatility": true
+      },
+      "credits": {
+        "annual_hotel_credit": 100,
+        "hotel_credit_note": "$100 off single hotel stay of $500+ booked via thankyou.com once per year"
+      },
       "foreign_transaction_fee": false,
       "min_credit_score": 700,
-      "notes": ["3x on restaurants, groceries, gas, hotels, and air travel", "Great all-around ThankYou Points earner"],
-      "last_verified": "2026-02-01"
+      "notes": [
+        "3x on dining, groceries, gas, hotels, and air travel — broadest 3x categories of any $95 card",
+        "Best all-around ThankYou Points earner for everyday spend",
+        "Pairs well with Citi Double Cash or Custom Cash to maximize TY ecosystem"
+      ],
+      "last_verified": "2026-03-19"
     },
     {
       "id": "citi-double-cash",
       "name": "Citi Double Cash",
       "issuer": "Citi",
       "annual_fee": 0,
-      "rewards_currency": "Citi TY",
+      "rewards_currency": "citi_ty",
       "category_rates": {
         "dining": 2,
-        "groceries": 2,
-        "travel": 2,
+        "groceries_instore": 2,
+        "travel_other": 2,
         "gas": 2,
         "online_shopping": 2,
         "streaming": 2,
         "pharmacy": 2,
         "other": 2
       },
-      "point_value_cash": 0.01,
-      "point_value_travel": 0.014,
-      "signup_bonus_points": 0,
-      "signup_bonus_spend_requirement": 0,
-      "signup_bonus_timeframe_months": 0,
+      "signup_bonus": {
+        "points": 0,
+        "spend_requirement": 0,
+        "timeframe_months": 0,
+        "estimated_value_cash": 0,
+        "high_volatility": false,
+        "note": "No welcome bonus — card value is in flat-rate ongoing earn"
+      },
+      "credits": {},
       "foreign_transaction_fee": true,
       "min_credit_score": 670,
-      "notes": ["2% cash back everywhere: 1% when you buy + 1% when you pay", "Simple, no-fuss flat-rate card"],
-      "last_verified": "2026-02-01"
+      "notes": [
+        "2% flat cash back everywhere: 1% when you buy + 1% when you pay",
+        "Best simple flat-rate no-annual-fee card",
+        "Earns ThankYou Points when paired with Strata Premier — unlocks transfer partners",
+        "Has foreign transaction fee — do not use abroad"
+      ],
+      "last_verified": "2026-03-19"
     },
     {
       "id": "citi-custom-cash",
       "name": "Citi Custom Cash",
       "issuer": "Citi",
       "annual_fee": 0,
-      "rewards_currency": "Citi TY",
+      "rewards_currency": "citi_ty",
       "category_rates": {
-        "dining": 2,
-        "groceries": 2,
-        "travel": 2,
-        "gas": 2,
-        "online_shopping": 2,
-        "streaming": 2,
-        "pharmacy": 2,
-        "other": 1
+        "top_category_auto_5pct": 5,
+        "top_category_cap_monthly": 500,
+        "all_other": 1
       },
-      "point_value_cash": 0.01,
-      "point_value_travel": 0.014,
-      "signup_bonus_points": 20000,
-      "signup_bonus_spend_requirement": 1500,
-      "signup_bonus_timeframe_months": 6,
+      "signup_bonus": {
+        "points": 20000,
+        "spend_requirement": 1500,
+        "timeframe_months": 6,
+        "estimated_value_cash": 200,
+        "high_volatility": false
+      },
+      "credits": {},
       "foreign_transaction_fee": true,
       "min_credit_score": 670,
-      "notes": ["Automatically earns 5% in your highest-spend category each billing cycle (up to $500)", "Great no-annual-fee card for one focused category"],
-      "last_verified": "2026-02-01"
+      "notes": [
+        "Automatically earns 5% in your highest-spend category each billing cycle (up to $500/month in that category)",
+        "Eligible 5% categories: restaurants, gas, groceries, select travel, transit, streaming, drugstores, home improvement, fitness clubs",
+        "Great no-annual-fee companion card to maximize one focused category",
+        "Has foreign transaction fee — do not use abroad"
+      ],
+      "last_verified": "2026-03-19"
     },
     {
       "id": "citi-costco-anywhere",
@@ -499,81 +799,121 @@
       "annual_fee": 0,
       "rewards_currency": "cash",
       "category_rates": {
+        "gas_anywhere": 4,
         "dining": 3,
-        "groceries": 2,
-        "travel": 3,
-        "gas": 4,
+        "travel_eligible": 3,
+        "groceries_costco": 2,
         "online_shopping": 1,
         "streaming": 1,
         "pharmacy": 1,
         "other": 1
       },
-      "point_value_cash": 0.01,
-      "point_value_travel": 0.01,
-      "signup_bonus_points": 0,
-      "signup_bonus_spend_requirement": 0,
-      "signup_bonus_timeframe_months": 0,
+      "signup_bonus": {
+        "points": 0,
+        "spend_requirement": 0,
+        "timeframe_months": 0,
+        "estimated_value_cash": 0,
+        "high_volatility": false,
+        "note": "No welcome bonus"
+      },
+      "credits": {},
       "foreign_transaction_fee": false,
       "min_credit_score": 700,
-      "notes": ["Requires active Costco membership", "4% on eligible gas (up to $7,000/year)", "3% at restaurants and eligible travel", "2% at Costco"],
-      "last_verified": "2026-02-01"
+      "eligibility_notes": [
+        "Requires active Costco membership"
+      ],
+      "notes": [
+        "4% on eligible gas worldwide up to $7,000/year, then 1% — best gas rate with no annual fee",
+        "3% at restaurants and eligible travel",
+        "2% at Costco (warehouse + costco.com)",
+        "Rewards paid out annually as Costco shop credit in February"
+      ],
+      "last_verified": "2026-03-19"
     },
     {
       "id": "capital-one-venture-x",
       "name": "Capital One Venture X",
       "issuer": "Capital One",
       "annual_fee": 395,
-      "rewards_currency": "Capital One Miles",
+      "rewards_currency": "capital_one_miles",
       "category_rates": {
         "dining": 2,
-        "groceries": 2,
-        "travel": 5,
+        "groceries_instore": 2,
+        "travel_c1_portal_hotels_cars": 10,
+        "travel_c1_portal_flights": 5,
+        "travel_other": 2,
         "gas": 2,
         "online_shopping": 2,
         "streaming": 2,
         "pharmacy": 2,
         "other": 2
       },
-      "point_value_cash": 0.01,
-      "point_value_travel": 0.013,
-      "signup_bonus_points": 75000,
-      "signup_bonus_spend_requirement": 4000,
-      "signup_bonus_timeframe_months": 3,
+      "signup_bonus": {
+        "points": 75000,
+        "spend_requirement": 4000,
+        "timeframe_months": 3,
+        "estimated_value_cash": 750,
+        "estimated_value_travel": 975,
+        "high_volatility": true
+      },
+      "credits": {
+        "annual_travel_credit_c1_portal": 300,
+        "anniversary_bonus_miles": 10000,
+        "anniversary_bonus_value": 100,
+        "global_entry_tsp_precheck_credit": 120,
+        "global_entry_tsp_frequency_years": 4
+      },
+      "effective_annual_fee_after_credits": 95,
       "foreign_transaction_fee": false,
       "min_credit_score": 720,
       "notes": [
-        "$300 Capital One travel credit annually",
-        "10,000 bonus miles on cardmember anniversary ($100 value)",
-        "10x on hotels+rental cars, 5x on flights via Capital One Travel",
-        "Priority Pass + Capital One Lounge access"
+        "$300 Capital One Travel credit effectively brings annual fee to $95",
+        "10,000 anniversary bonus miles ($100 value) — card essentially pays for itself year over year",
+        "The 10x (hotels/cars) and 5x (flights) rates only apply when booking through Capital One Travel portal — direct airline or hotel bookings earn only 2x",
+        "2x on all other purchases — strong everyday earn rate",
+        "Priority Pass + Capital One Lounge access",
+        "Best premium travel card value at effective $95/year after credits"
       ],
-      "last_verified": "2026-02-01"
+      "last_verified": "2026-03-19"
     },
     {
       "id": "capital-one-venture",
       "name": "Capital One Venture",
       "issuer": "Capital One",
       "annual_fee": 95,
-      "rewards_currency": "Capital One Miles",
+      "rewards_currency": "capital_one_miles",
       "category_rates": {
         "dining": 2,
-        "groceries": 2,
-        "travel": 5,
+        "groceries_instore": 2,
+        "travel_c1_portal_hotels_cars": 5,
+        "travel_other": 2,
         "gas": 2,
         "online_shopping": 2,
         "streaming": 2,
         "pharmacy": 2,
         "other": 2
       },
-      "point_value_cash": 0.01,
-      "point_value_travel": 0.013,
-      "signup_bonus_points": 75000,
-      "signup_bonus_spend_requirement": 4000,
-      "signup_bonus_timeframe_months": 3,
+      "signup_bonus": {
+        "points": 75000,
+        "spend_requirement": 4000,
+        "timeframe_months": 3,
+        "estimated_value_cash": 750,
+        "estimated_value_travel": 975,
+        "high_volatility": true
+      },
+      "credits": {
+        "global_entry_tsp_precheck_credit": 120,
+        "global_entry_tsp_frequency_years": 4
+      },
       "foreign_transaction_fee": false,
       "min_credit_score": 700,
-      "notes": ["2x on all purchases", "5x on hotels and rental cars via Capital One Travel", "Global Entry/TSA PreCheck credit ($120)"],
-      "last_verified": "2026-02-01"
+      "notes": [
+        "2x miles on all purchases — simple and consistent",
+        "5x on hotels and rental cars via Capital One Travel portal",
+        "Miles can be used as travel statement credits or transferred to 15+ partners",
+        "Global Entry/TSA PreCheck credit offsets annual fee in application year"
+      ],
+      "last_verified": "2026-03-19"
     },
     {
       "id": "capital-one-savor-one",
@@ -583,23 +923,31 @@
       "rewards_currency": "cash",
       "category_rates": {
         "dining": 3,
-        "groceries": 3,
-        "travel": 1,
+        "groceries_instore": 3,
+        "travel_other": 1,
         "gas": 1,
-        "online_shopping": 1,
         "streaming": 3,
+        "entertainment": 3,
         "pharmacy": 1,
         "other": 1
       },
-      "point_value_cash": 0.01,
-      "point_value_travel": 0.01,
-      "signup_bonus_points": 20000,
-      "signup_bonus_spend_requirement": 500,
-      "signup_bonus_timeframe_months": 3,
+      "signup_bonus": {
+        "points": 20000,
+        "spend_requirement": 500,
+        "timeframe_months": 3,
+        "estimated_value_cash": 200,
+        "high_volatility": false
+      },
+      "credits": {},
       "foreign_transaction_fee": false,
-      "min_credit_score": 670,
-      "notes": ["3% on dining, entertainment, streaming, and groceries", "No foreign transaction fee — great for international use"],
-      "last_verified": "2026-02-01"
+      "min_credit_score": 640,
+      "notes": [
+        "3% on dining, entertainment, streaming, and groceries — strong for no annual fee",
+        "Capital One is known for approving fair-credit applicants (640–669) — one of the most accessible rewards cards",
+        "No foreign transaction fee — good card for international use",
+        "Best no-annual-fee card for dining and entertainment spenders"
+      ],
+      "last_verified": "2026-03-19"
     },
     {
       "id": "capital-one-quicksilver",
@@ -609,49 +957,31 @@
       "rewards_currency": "cash",
       "category_rates": {
         "dining": 1.5,
-        "groceries": 1.5,
-        "travel": 1.5,
+        "groceries_instore": 1.5,
+        "travel_other": 1.5,
         "gas": 1.5,
         "online_shopping": 1.5,
         "streaming": 1.5,
         "pharmacy": 1.5,
         "other": 1.5
       },
-      "point_value_cash": 0.01,
-      "point_value_travel": 0.01,
-      "signup_bonus_points": 20000,
-      "signup_bonus_spend_requirement": 500,
-      "signup_bonus_timeframe_months": 3,
-      "foreign_transaction_fee": false,
-      "min_credit_score": 670,
-      "notes": ["Simple 1.5% cash back everywhere", "No annual fee, no foreign transaction fee"],
-      "last_verified": "2026-02-01"
-    },
-    {
-      "id": "capital-one-spark-cash-plus",
-      "name": "Capital One Spark Cash Plus",
-      "issuer": "Capital One",
-      "annual_fee": 150,
-      "rewards_currency": "cash",
-      "category_rates": {
-        "dining": 2,
-        "groceries": 2,
-        "travel": 5,
-        "gas": 2,
-        "online_shopping": 2,
-        "streaming": 2,
-        "pharmacy": 2,
-        "other": 2
+      "signup_bonus": {
+        "points": 20000,
+        "spend_requirement": 500,
+        "timeframe_months": 3,
+        "estimated_value_cash": 200,
+        "high_volatility": false
       },
-      "point_value_cash": 0.01,
-      "point_value_travel": 0.01,
-      "signup_bonus_points": 100000,
-      "signup_bonus_spend_requirement": 20000,
-      "signup_bonus_timeframe_months": 3,
+      "credits": {},
       "foreign_transaction_fee": false,
-      "min_credit_score": 700,
-      "notes": ["Business card — requires business income", "2% unlimited on all purchases, no preset spending limit", "Annual fee refunded if you spend $150,000+/year"],
-      "last_verified": "2026-02-01"
+      "min_credit_score": 640,
+      "notes": [
+        "Simple 1.5% cash back on everything — no categories to track",
+        "Capital One often approves fair-credit applicants (640–669) — good starter flat-rate card",
+        "No annual fee, no foreign transaction fee",
+        "Good starter or backup card; overshadowed by Wells Fargo Active Cash (2% flat) for most users"
+      ],
+      "last_verified": "2026-03-19"
     },
     {
       "id": "discover-it-cash-back",
@@ -660,28 +990,30 @@
       "annual_fee": 0,
       "rewards_currency": "cash",
       "category_rates": {
-        "dining": 1,
-        "groceries": 1,
-        "travel": 1,
-        "gas": 1,
-        "online_shopping": 1,
-        "streaming": 1,
-        "pharmacy": 1,
+        "rotating_quarterly_5pct": 5,
+        "rotating_quarterly_cap_per_quarter": 1500,
         "other": 1
       },
-      "point_value_cash": 0.01,
-      "point_value_travel": 0.01,
-      "signup_bonus_points": 0,
-      "signup_bonus_spend_requirement": 0,
-      "signup_bonus_timeframe_months": 0,
+      "signup_bonus": {
+        "points": 0,
+        "spend_requirement": 0,
+        "timeframe_months": 0,
+        "estimated_value_cash": 0,
+        "high_volatility": false,
+        "note": "No traditional signup bonus. Cashback Match doubles all cash back in year 1 — equivalent to 10% on rotating categories and 2% on everything else for the first year."
+      },
+      "credits": {},
       "foreign_transaction_fee": false,
-      "min_credit_score": 670,
+      "min_credit_score": 640,
       "notes": [
-        "5% on rotating quarterly categories (up to $1,500/quarter after enrollment)",
-        "Cashback Match: doubles all cash back earned in first year",
-        "Typical 5% categories: gas, groceries, restaurants, Amazon, PayPal"
+        "5% on rotating quarterly categories (gas, groceries, restaurants, Amazon, PayPal, etc.) up to $1,500/quarter after activation",
+        "1% on everything else",
+        "Cashback Match: Discover matches ALL cash back earned in first year automatically — powerful year-1 value",
+        "One of the most fair-credit-friendly cards — Discover explicitly targets applicants with limited or fair credit history",
+        "Must activate quarterly categories to earn 5%",
+        "Typical categories: gas, groceries, restaurants, Amazon, PayPal (varies by quarter)"
       ],
-      "last_verified": "2026-02-01"
+      "last_verified": "2026-03-19"
     },
     {
       "id": "discover-it-miles",
@@ -691,23 +1023,32 @@
       "rewards_currency": "cash",
       "category_rates": {
         "dining": 1.5,
-        "groceries": 1.5,
-        "travel": 1.5,
+        "groceries_instore": 1.5,
+        "travel_other": 1.5,
         "gas": 1.5,
         "online_shopping": 1.5,
         "streaming": 1.5,
         "pharmacy": 1.5,
         "other": 1.5
       },
-      "point_value_cash": 0.01,
-      "point_value_travel": 0.01,
-      "signup_bonus_points": 0,
-      "signup_bonus_spend_requirement": 0,
-      "signup_bonus_timeframe_months": 0,
+      "signup_bonus": {
+        "points": 0,
+        "spend_requirement": 0,
+        "timeframe_months": 0,
+        "estimated_value_cash": 0,
+        "high_volatility": false,
+        "note": "No traditional signup bonus. Miles Match in year 1 effectively makes it 3% cash back on everything."
+      },
+      "credits": {},
       "foreign_transaction_fee": false,
       "min_credit_score": 670,
-      "notes": ["1.5x miles on all purchases", "Miles Match: doubles all miles earned in first year (effectively 3% year 1)", "Redeem for travel statement credits"],
-      "last_verified": "2026-02-01"
+      "notes": [
+        "1.5x miles on all purchases",
+        "Miles Match doubles all miles earned in year 1 — effectively 3% everywhere in year 1",
+        "Redeem for travel statement credits or cash",
+        "No transfer partners — pure cash/travel statement credit redemption"
+      ],
+      "last_verified": "2026-03-19"
     },
     {
       "id": "wells-fargo-active-cash",
@@ -717,23 +1058,32 @@
       "rewards_currency": "cash",
       "category_rates": {
         "dining": 2,
-        "groceries": 2,
-        "travel": 2,
+        "groceries_instore": 2,
+        "travel_other": 2,
         "gas": 2,
         "online_shopping": 2,
         "streaming": 2,
         "pharmacy": 2,
         "other": 2
       },
-      "point_value_cash": 0.01,
-      "point_value_travel": 0.01,
-      "signup_bonus_points": 20000,
-      "signup_bonus_spend_requirement": 1000,
-      "signup_bonus_timeframe_months": 3,
+      "signup_bonus": {
+        "points": 20000,
+        "spend_requirement": 1000,
+        "timeframe_months": 3,
+        "estimated_value_cash": 200,
+        "high_volatility": false
+      },
+      "credits": {
+        "cell_phone_protection": 600
+      },
       "foreign_transaction_fee": false,
       "min_credit_score": 670,
-      "notes": ["Unlimited 2% cash rewards on all purchases", "No annual fee, no foreign transaction fee", "Cell phone protection up to $600"],
-      "last_verified": "2026-02-01"
+      "notes": [
+        "Unlimited 2% cash back on all purchases — best flat-rate no-annual-fee card alongside Citi Double Cash",
+        "No annual fee, no foreign transaction fee",
+        "Cell phone protection up to $600 (must pay phone bill with card)"
+      ],
+      "last_verified": "2026-03-19"
     },
     {
       "id": "wells-fargo-autograph",
@@ -743,23 +1093,31 @@
       "rewards_currency": "cash",
       "category_rates": {
         "dining": 3,
-        "groceries": 1,
-        "travel": 3,
+        "groceries_instore": 1,
+        "travel_other": 3,
         "gas": 3,
-        "online_shopping": 1,
         "streaming": 3,
+        "phone_plans": 3,
+        "transit": 3,
         "pharmacy": 1,
         "other": 1
       },
-      "point_value_cash": 0.01,
-      "point_value_travel": 0.01,
-      "signup_bonus_points": 30000,
-      "signup_bonus_spend_requirement": 1500,
-      "signup_bonus_timeframe_months": 3,
+      "signup_bonus": {
+        "points": 30000,
+        "spend_requirement": 1500,
+        "timeframe_months": 3,
+        "estimated_value_cash": 300,
+        "high_volatility": false
+      },
+      "credits": {},
       "foreign_transaction_fee": false,
       "min_credit_score": 670,
-      "notes": ["3x on restaurants, travel, gas, streaming, and phone plans", "No annual fee, no foreign transaction fee"],
-      "last_verified": "2026-02-01"
+      "notes": [
+        "3x on restaurants, travel, gas, streaming, phone plans, and transit",
+        "No annual fee, no foreign transaction fee",
+        "Underrated card — one of the best no-annual-fee category earners available"
+      ],
+      "last_verified": "2026-03-19"
     },
     {
       "id": "bofa-travel-rewards",
@@ -769,23 +1127,30 @@
       "rewards_currency": "cash",
       "category_rates": {
         "dining": 1.5,
-        "groceries": 1.5,
-        "travel": 1.5,
+        "groceries_instore": 1.5,
+        "travel_other": 1.5,
         "gas": 1.5,
         "online_shopping": 1.5,
         "streaming": 1.5,
         "pharmacy": 1.5,
         "other": 1.5
       },
-      "point_value_cash": 0.01,
-      "point_value_travel": 0.01,
-      "signup_bonus_points": 25000,
-      "signup_bonus_spend_requirement": 1000,
-      "signup_bonus_timeframe_months": 3,
+      "signup_bonus": {
+        "points": 25000,
+        "spend_requirement": 1000,
+        "timeframe_months": 3,
+        "estimated_value_cash": 250,
+        "high_volatility": false
+      },
+      "credits": {},
       "foreign_transaction_fee": false,
       "min_credit_score": 670,
-      "notes": ["1.5x on all purchases", "Preferred Rewards members earn up to 2.62x", "Redeem points for travel statement credits"],
-      "last_verified": "2026-02-01"
+      "notes": [
+        "1.5x on all purchases baseline — up to 2.62x for Preferred Rewards Platinum Honors members",
+        "Bank of America Preferred Rewards program significantly boosts earn rate if you have $100k+ with BofA/Merrill",
+        "Best for existing BofA/Merrill customers with large balances"
+      ],
+      "last_verified": "2026-03-19"
     },
     {
       "id": "bofa-customized-cash",
@@ -794,28 +1159,28 @@
       "annual_fee": 0,
       "rewards_currency": "cash",
       "category_rates": {
-        "dining": 2,
-        "groceries": 2,
-        "travel": 2,
-        "gas": 2,
-        "online_shopping": 2,
-        "streaming": 2,
-        "pharmacy": 2,
+        "chosen_category_3pct": 3,
+        "groceries_wholesale_clubs_2pct": 2,
+        "groceries_wholesale_clubs_cap_quarterly": 2500,
         "other": 1
       },
-      "point_value_cash": 0.01,
-      "point_value_travel": 0.01,
-      "signup_bonus_points": 20000,
-      "signup_bonus_spend_requirement": 1000,
-      "signup_bonus_timeframe_months": 90,
+      "signup_bonus": {
+        "points": 20000,
+        "spend_requirement": 1000,
+        "timeframe_months": 90,
+        "estimated_value_cash": 200,
+        "high_volatility": false
+      },
+      "credits": {},
       "foreign_transaction_fee": false,
       "min_credit_score": 670,
       "notes": [
-        "3% in chosen category: gas, online shopping, dining, travel, drug stores, or home",
+        "3% in one chosen category: gas, online shopping, dining, travel, drug stores, or home improvement",
         "2% at grocery stores and wholesale clubs (up to $2,500 combined quarterly)",
-        "1% on all other purchases"
+        "Chosen category can be changed monthly",
+        "Good flexible option if your top spend category is one of the 6 choices"
       ],
-      "last_verified": "2026-02-01"
+      "last_verified": "2026-03-19"
     },
     {
       "id": "usbank-altitude-go",
@@ -825,23 +1190,32 @@
       "rewards_currency": "cash",
       "category_rates": {
         "dining": 4,
-        "groceries": 2,
-        "travel": 1,
+        "groceries_instore": 2,
+        "travel_other": 1,
         "gas": 2,
-        "online_shopping": 1,
         "streaming": 2,
         "pharmacy": 1,
         "other": 1
       },
-      "point_value_cash": 0.01,
-      "point_value_travel": 0.01,
-      "signup_bonus_points": 20000,
-      "signup_bonus_spend_requirement": 1000,
-      "signup_bonus_timeframe_months": 3,
+      "signup_bonus": {
+        "points": 20000,
+        "spend_requirement": 1000,
+        "timeframe_months": 3,
+        "estimated_value_cash": 200,
+        "high_volatility": false
+      },
+      "credits": {
+        "streaming_credit_annual": 15
+      },
       "foreign_transaction_fee": false,
       "min_credit_score": 670,
-      "notes": ["4x on dining — highest no-annual-fee dining rate", "2x on groceries, gas, and streaming", "$15 streaming credit annually"],
-      "last_verified": "2026-02-01"
+      "notes": [
+        "4x on dining — highest dining rate among no-annual-fee cards",
+        "2x on groceries, gas, and streaming",
+        "$15 annual streaming credit",
+        "Best no-annual-fee card for dining-heavy spenders"
+      ],
+      "last_verified": "2026-03-19"
     },
     {
       "id": "usbank-cash-plus",
@@ -850,58 +1224,69 @@
       "annual_fee": 0,
       "rewards_currency": "cash",
       "category_rates": {
-        "dining": 2,
-        "groceries": 2,
-        "travel": 2,
-        "gas": 2,
-        "online_shopping": 2,
-        "streaming": 2,
-        "pharmacy": 2,
+        "two_chosen_categories_5pct": 5,
+        "chosen_category_cap_per_quarter": 2000,
+        "one_everyday_category_2pct": 2,
         "other": 1
       },
-      "point_value_cash": 0.01,
-      "point_value_travel": 0.01,
-      "signup_bonus_points": 20000,
-      "signup_bonus_spend_requirement": 1000,
-      "signup_bonus_timeframe_months": 4,
+      "signup_bonus": {
+        "points": 20000,
+        "spend_requirement": 1000,
+        "timeframe_months": 4,
+        "estimated_value_cash": 200,
+        "high_volatility": false
+      },
+      "credits": {},
       "foreign_transaction_fee": false,
       "min_credit_score": 670,
       "notes": [
-        "5% on two chosen categories (up to $2,000/quarter each): fast food, cell providers, home utilities, ground transport, TV/streaming, department stores, or electronics",
-        "2% on one everyday category: groceries, restaurants, or gas"
+        "5% on two chosen categories (up to $2,000/quarter each): fast food, cell providers, home utilities, ground transport, TV/streaming, department stores, electronics",
+        "2% on one everyday category: groceries, restaurants, or gas",
+        "1% on everything else",
+        "Requires choosing and tracking categories quarterly — not set-and-forget"
       ],
-      "last_verified": "2026-02-01"
+      "last_verified": "2026-03-19"
     },
     {
       "id": "bilt-mastercard",
       "name": "Bilt Mastercard",
       "issuer": "Wells Fargo",
       "annual_fee": 0,
-      "rewards_currency": "Bilt Points",
+      "rewards_currency": "bilt_points",
       "category_rates": {
+        "rent": 1,
         "dining": 3,
-        "groceries": 1,
-        "travel": 2,
+        "groceries_instore": 1,
+        "travel_other": 2,
         "gas": 1,
-        "online_shopping": 1,
         "streaming": 1,
         "pharmacy": 1,
         "other": 1
       },
-      "point_value_cash": 0.0125,
-      "point_value_travel": 0.015,
-      "signup_bonus_points": 0,
-      "signup_bonus_spend_requirement": 0,
-      "signup_bonus_timeframe_months": 0,
+      "signup_bonus": {
+        "points": 0,
+        "spend_requirement": 0,
+        "timeframe_months": 0,
+        "estimated_value_cash": 0,
+        "high_volatility": false,
+        "note": "No traditional signup bonus. Value is in earning points on rent with no transaction fee."
+      },
+      "credits": {},
       "foreign_transaction_fee": false,
       "min_credit_score": 700,
-      "notes": [
-        "1x on rent payments with no transaction fee (up to 100,000 points/year)",
-        "3x on dining, 2x on travel",
-        "Must use card 5+ times per statement period to earn rent points",
-        "Points transfer to airlines: United, AA, Air Canada, Hyatt, etc."
+      "eligibility_notes": [
+        "Must use card at least 5 times per statement period to earn points on rent",
+        "Rent points capped at 100,000 per year",
+        "Requires landlord to accept payment via Bilt's system or payment service"
       ],
-      "last_verified": "2026-02-01"
+      "notes": [
+        "Only card that earns points on rent payments with no transaction fee — unique niche",
+        "3x on dining, 2x on travel",
+        "Bilt Points are among the most valuable transferable currencies: transfer to United, AA, Air Canada, Hyatt, etc.",
+        "Must use card 5+ times per billing cycle to earn rent points",
+        "Best card for renters who pay $1,500+/month in rent"
+      ],
+      "last_verified": "2026-03-19"
     },
     {
       "id": "fidelity-rewards-visa",
@@ -911,53 +1296,78 @@
       "rewards_currency": "cash",
       "category_rates": {
         "dining": 2,
-        "groceries": 2,
-        "travel": 2,
+        "groceries_instore": 2,
+        "travel_other": 2,
         "gas": 2,
         "online_shopping": 2,
         "streaming": 2,
         "pharmacy": 2,
         "other": 2
       },
-      "point_value_cash": 0.01,
-      "point_value_travel": 0.01,
-      "signup_bonus_points": 15000,
-      "signup_bonus_spend_requirement": 1500,
-      "signup_bonus_timeframe_months": 3,
+      "signup_bonus": {
+        "points": 15000,
+        "spend_requirement": 1500,
+        "timeframe_months": 3,
+        "estimated_value_cash": 150,
+        "high_volatility": false
+      },
+      "credits": {},
       "foreign_transaction_fee": false,
       "min_credit_score": 670,
-      "notes": ["2% unlimited cash back deposited into a Fidelity account", "No redemption minimums, no categories to track"],
-      "last_verified": "2026-02-01"
+      "eligibility_notes": [
+        "Rewards deposited into a Fidelity brokerage, IRA, or cash management account"
+      ],
+      "notes": [
+        "Unlimited 2% cash back deposited into Fidelity account — no redemption minimums",
+        "No categories to track, no annual fee, no foreign transaction fee",
+        "Best for Fidelity account holders who want simple 2% cash back auto-invested"
+      ],
+      "last_verified": "2026-03-19"
     },
     {
       "id": "amex-business-gold",
       "name": "Amex Business Gold",
       "issuer": "American Express",
       "annual_fee": 375,
-      "rewards_currency": "Amex MR",
+      "rewards_currency": "amex_mr",
       "category_rates": {
+        "top_two_categories_auto_4x": 4,
+        "top_two_categories_cap_annual": 150000,
         "dining": 4,
-        "groceries": 1,
-        "travel": 4,
+        "travel_other": 1,
         "gas": 4,
+        "online_advertising": 4,
         "online_shopping": 4,
-        "streaming": 1,
-        "pharmacy": 1,
+        "shipping": 4,
         "other": 1
       },
-      "point_value_cash": 0.01,
-      "point_value_travel": 0.015,
-      "signup_bonus_points": 120000,
-      "signup_bonus_spend_requirement": 15000,
-      "signup_bonus_timeframe_months": 3,
+      "signup_bonus": {
+        "points": 120000,
+        "spend_requirement": 15000,
+        "timeframe_months": 3,
+        "estimated_value_cash": 1200,
+        "estimated_value_travel": 1800,
+        "high_volatility": true,
+        "note": "High spend requirement — $15,000 in 3 months. Best for businesses with high monthly spend."
+      },
+      "credits": {
+        "dining_credit_annual": 240,
+        "dining_credit_note": "$20/month at eligible US restaurants"
+      },
+      "effective_annual_fee_after_credits": 135,
       "foreign_transaction_fee": false,
       "min_credit_score": 700,
-      "notes": [
-        "Business card — requires business income",
-        "4x on two highest-spend categories each month from: dining, US gas, transit, US online advertising, US shipping (up to $150,000 combined/year)",
-        "Up to $240 annual dining credit"
+      "eligibility_notes": [
+        "Business card — requires business income (freelance/side income qualifies)",
+        "Amex once-per-lifetime bonus rule applies"
       ],
-      "last_verified": "2026-02-01"
+      "notes": [
+        "4x automatically applied to your top two highest-spend categories each month from: dining, US gas, US transit, US online advertising/internet services, US shipping (up to $150k/year combined)",
+        "4x on 'online advertising' includes internet/cable/phone services and select technology purchases (AWS, Azure, software subscriptions) — only applies if this is one of your top 2 monthly spend categories",
+        "$240 annual dining credit ($20/month) brings effective fee to ~$135",
+        "Best business card for variable high-spend categories"
+      ],
+      "last_verified": "2026-03-19"
     }
   ]
 }

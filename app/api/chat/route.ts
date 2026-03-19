@@ -98,6 +98,8 @@ export async function POST(req: NextRequest) {
             ? result.flightRecommendations.length
             : result.category === "credit_card"
             ? result.creditCardRecommendations.length
+            : result.category === "laptop"
+            ? result.laptopRecommendations.length
             : result.recommendations.length;
 
         console.log(JSON.stringify({
@@ -115,6 +117,9 @@ export async function POST(req: NextRequest) {
           hotelRecommendations: result.hotelRecommendations,
           flightRecommendations: result.flightRecommendations,
           creditCardRecommendations: result.creditCardRecommendations,
+          laptopRecommendations: result.laptopRecommendations,
+          missing_credit_card_fields: result.missing_credit_card_fields,
+          missing_laptop_use_case: result.category === "laptop" && result.missing_flight_fields.includes("use_case"),
           missing_flight_fields: result.missing_flight_fields,
           no_direct_available: result.no_direct_available,
           suggested_refinements: result.suggested_refinements,

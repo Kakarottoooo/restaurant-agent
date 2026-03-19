@@ -28,7 +28,8 @@ describe("parseIntent", () => {
     );
 
     const result = await parseIntent("romantic Italian dinner, ~$60", "Nashville, TN");
-    expect(result.cuisine).toBe("Italian");
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect((result as any).cuisine).toBe("Italian");
     expect(result.purpose).toBe("date");
     expect(result.budget_per_person).toBe(60);
   });

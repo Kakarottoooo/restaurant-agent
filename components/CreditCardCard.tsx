@@ -15,7 +15,9 @@ const CATEGORY_LABELS: Record<string, string> = {
   gas: "Gas",
   online_shopping: "Online Shopping",
   streaming: "Streaming",
+  entertainment: "Entertainment",
   pharmacy: "Pharmacy",
+  rent: "Rent",
   other: "Everything Else",
 };
 
@@ -34,7 +36,7 @@ const ISSUER_COLORS: Record<string, string> = {
 export default function CreditCardCard({ card, index }: CreditCardCardProps) {
   const [expanded, setExpanded] = useState(false);
 
-  const { card: cc, rank, annual_net_benefit, marginal_value, category_breakdown, signup_bonus_value, why_recommended, watch_out } = card;
+  const { card: cc, rank, annual_net_benefit, marginal_value, category_breakdown, signup_bonus_value, reward_preference, why_recommended, watch_out } = card;
 
   const issuerColor = ISSUER_COLORS[cc.issuer] ?? "#C9A84C";
   const gainSign = marginal_value >= 0 ? "+" : "";
@@ -344,7 +346,11 @@ export default function CreditCardCard({ card, index }: CreditCardCardProps) {
               {cc.signup_bonus_spend_requirement > 0 &&
                 ` after spending $${cc.signup_bonus_spend_requirement.toLocaleString()} in the first ${cc.signup_bonus_timeframe_months} months`}.
               {" "}Estimated value: <strong style={{ color: "var(--text-primary)" }}>≈${bonusEstimate.toLocaleString()}</strong>
-              {" "}({cc.rewards_currency === "cash" ? "cash" : "redeemed for travel"}).
+              {" "}({cc.rewards_currency === "cash"
+                ? "cash"
+                : reward_preference === "cash"
+                  ? "cash redemption — higher value via transfer partners"
+                  : "redeemed for travel"}).
             </div>
           </div>
         </div>
