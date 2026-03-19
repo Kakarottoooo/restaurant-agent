@@ -477,23 +477,27 @@ const CITY_TO_IATA: Record<string, string> = {
   "honolulu": "HNL",
   "anchorage": "ANC",
   "sf": "SFO",
+  "sfo": "SFO",
   "la": "LAX",
+  "lax": "LAX",
   "dc": "DCA",
   "ny": "JFK",
+  "nyc": "JFK",
+  "bna": "BNA",
 };
 
 /** Normalize a city name or IATA code to an IATA code for SerpAPI. */
 export function normalizeToIATA(input: string): string {
   const trimmed = input.trim();
-  // Already an IATA code (2-3 uppercase letters)
-  if (/^[A-Z]{2,3}$/.test(trimmed)) return trimmed;
   const lower = trimmed.toLowerCase();
-  // Check single-airport map
+  // Check city name maps first (handles "sf"→SFO, "nashville"→BNA, etc.)
   if (CITY_TO_IATA[lower]) return CITY_TO_IATA[lower];
-  // Check multi-airport map (return primary)
   if (MULTI_AIRPORT_CITIES[lower]) return MULTI_AIRPORT_CITIES[lower].primary;
-  // Return as-is (might be a valid IATA already in mixed case)
-  return trimmed.toUpperCase();
+  // If it's already a valid 3-letter IATA code, return as uppercase
+  const upper = trimmed.toUpperCase();
+  if (/^[A-Z]{3}$/.test(upper)) return upper;
+  // Last resort: return as-is
+  return trimmed;
 }
 
 // Multi-airport city mapping: city name (lowercase) → primary IATA + all IATA codes
