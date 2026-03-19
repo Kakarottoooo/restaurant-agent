@@ -341,7 +341,8 @@ export default function MapView({
               two_stop: `${f.stops} Stops`,
               cheapest: "Best Price",
             };
-            const stopDetail = f.stops === 0 ? "Nonstop" : f.stops === 1 ? `1 stop${f.layover_city ? ` · ${f.layover_city}` : ""}` : `${f.stops} stops`;
+            // Only show layover city as supplemental info (badge already shows stop count)
+            const stopDetail = f.layover_city ?? "";
             const accentColor = groupColor[card.group];
             return (
               <button
@@ -367,9 +368,11 @@ export default function MapView({
                   <span style={{ fontSize: "10px", fontWeight: 700, color: accentColor, background: `${accentColor}22`, borderRadius: "4px", padding: "1px 6px", fontFamily: "var(--font-dm-sans)", whiteSpace: "nowrap", flexShrink: 0 }}>
                     {groupLabel[card.group]}
                   </span>
-                  <span style={{ fontFamily: "var(--font-dm-sans)", fontSize: "10px", color: "var(--text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {stopDetail}
-                  </span>
+                  {stopDetail && (
+                    <span style={{ fontFamily: "var(--font-dm-sans)", fontSize: "10px", color: "var(--text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      via {stopDetail}
+                    </span>
+                  )}
                 </div>
                 <div style={{ fontFamily: "var(--font-playfair)", fontSize: "13px", fontWeight: 600, color: "var(--text-primary)", marginBottom: 2 }}>
                   {f.departure_airport} → {f.arrival_airport}
