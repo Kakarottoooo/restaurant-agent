@@ -113,6 +113,7 @@ export async function POST(req: NextRequest) {
           hotelRecommendations: result.hotelRecommendations,
           flightRecommendations: result.flightRecommendations,
           missing_flight_fields: result.missing_flight_fields,
+          no_direct_available: result.no_direct_available,
           suggested_refinements: result.suggested_refinements,
           category: result.category,
           request_id,

@@ -443,6 +443,59 @@ function getAirportCoords(iata: string): { lat: number; lng: number } | undefine
   return AIRPORT_COORDS[iata.toUpperCase()];
 }
 
+// Single-airport city name → IATA code lookup
+const CITY_TO_IATA: Record<string, string> = {
+  "nashville": "BNA",
+  "boston": "BOS",
+  "seattle": "SEA",
+  "denver": "DEN",
+  "phoenix": "PHX",
+  "las vegas": "LAS",
+  "atlanta": "ATL",
+  "minneapolis": "MSP",
+  "detroit": "DTW",
+  "philadelphia": "PHL",
+  "portland": "PDX",
+  "salt lake city": "SLC",
+  "san diego": "SAN",
+  "charlotte": "CLT",
+  "orlando": "MCO",
+  "tampa": "TPA",
+  "baltimore": "BWI",
+  "raleigh": "RDU",
+  "austin": "AUS",
+  "san antonio": "SAT",
+  "kansas city": "MCI",
+  "st louis": "STL",
+  "saint louis": "STL",
+  "pittsburgh": "PIT",
+  "cleveland": "CLE",
+  "cincinnati": "CVG",
+  "indianapolis": "IND",
+  "memphis": "MEM",
+  "new orleans": "MSY",
+  "honolulu": "HNL",
+  "anchorage": "ANC",
+  "sf": "SFO",
+  "la": "LAX",
+  "dc": "DCA",
+  "ny": "JFK",
+};
+
+/** Normalize a city name or IATA code to an IATA code for SerpAPI. */
+export function normalizeToIATA(input: string): string {
+  const trimmed = input.trim();
+  // Already an IATA code (2-3 uppercase letters)
+  if (/^[A-Z]{2,3}$/.test(trimmed)) return trimmed;
+  const lower = trimmed.toLowerCase();
+  // Check single-airport map
+  if (CITY_TO_IATA[lower]) return CITY_TO_IATA[lower];
+  // Check multi-airport map (return primary)
+  if (MULTI_AIRPORT_CITIES[lower]) return MULTI_AIRPORT_CITIES[lower].primary;
+  // Return as-is (might be a valid IATA already in mixed case)
+  return trimmed.toUpperCase();
+}
+
 // Multi-airport city mapping: city name (lowercase) → primary IATA + all IATA codes
 export const MULTI_AIRPORT_CITIES: Record<string, { primary: string; all: string[] }> = {
   "new york":       { primary: "JFK", all: ["JFK", "LGA", "EWR"] },
@@ -486,8 +539,8 @@ export async function searchFlights(params: {
   // Build SerpApi Google Flights URL
   const url = new URL("https://serpapi.com/search");
   url.searchParams.set("engine", "google_flights");
-  url.searchParams.set("departure_id", params.departure_city); // city name or IATA
-  url.searchParams.set("arrival_id", params.arrival_city);
+  url.searchParams.set("departure_id", normalizeToIATA(params.departure_city));
+  url.searchParams.set("arrival_id", normalizeToIATA(params.arrival_city));
   url.searchParams.set("outbound_date", params.date);
   if (params.is_round_trip && params.return_date) {
     url.searchParams.set("return_date", params.return_date);
@@ -594,11 +647,14 @@ export async function searchFlights(params: {
       .filter((f): f is Flight => f !== null);
 
     // Group: direct x3, 1-stop x1, 2-stop x1 (or direct x5 if prefer_direct)
-    const direct = parsed.filter((f) => f.stops === 0).slice(0, params.prefer_direct ? 5 : 3);
-    const oneStop = params.prefer_direct ? [] : parsed.filter((f) => f.stops === 1).slice(0, 1);
+    const direct = parsed.filter((f) => f.stops === 0);
+    if (params.prefer_direct && direct.length > 0) {
+      return direct.slice(0, params.maxResults ?? 5);
+    }
+    // No direct flights available (or prefer_direct not set): return mixed results
+    const oneStop = parsed.filter((f) => f.stops === 1).slice(0, params.prefer_direct ? 3 : 1);
     const twoStop = params.prefer_direct ? [] : parsed.filter((f) => f.stops >= 2).slice(0, 1);
-
-    return [...direct, ...oneStop, ...twoStop].slice(0, params.maxResults ?? 5);
+    return [...direct.slice(0, 3), ...oneStop, ...twoStop].slice(0, params.maxResults ?? 5);
   } catch (err) {
     console.warn("searchFlights error:", err);
     return [];

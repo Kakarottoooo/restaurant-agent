@@ -241,9 +241,13 @@ export function useChat({
                       },
                     ]);
                   } else {
+                    const noDirectAvailable: boolean = event.no_direct_available ?? false;
+                    const contentMsg = noDirectAvailable
+                      ? `No nonstop flights found for that route. Here are the best connecting options:`
+                      : `Found ${flightRecs.length} flight${flightRecs.length > 1 ? "s" : ""} for you.`;
                     const assistantMessage: Message = {
                       role: "assistant",
-                      content: `Found ${flightRecs.length} flight${flightRecs.length > 1 ? "s" : ""} for you.`,
+                      content: contentMsg,
                       flightCards: flightRecs,
                       category: "flight" as const,
                     };

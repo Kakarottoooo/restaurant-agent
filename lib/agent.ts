@@ -714,7 +714,7 @@ Return ONLY the JSON array.`,
 
 async function runFlightPipeline(
   intent: FlightIntent,
-): Promise<{ flightRecommendations: FlightRecommendationCard[]; missing_fields: string[] }> {
+): Promise<{ flightRecommendations: FlightRecommendationCard[]; missing_fields: string[]; no_direct_available: boolean }> {
   // Check required fields
   const missing: string[] = [];
   if (!intent.departure_city) missing.push("departure city");
@@ -722,7 +722,7 @@ async function runFlightPipeline(
   if (!intent.date) missing.push("travel date");
 
   if (missing.length > 0) {
-    return { flightRecommendations: [], missing_fields: missing };
+    return { flightRecommendations: [], missing_fields: missing, no_direct_available: false };
   }
 
   const searchParams = {
@@ -792,8 +792,10 @@ async function runFlightPipeline(
   }
 
   if (flights.length === 0) {
-    return { flightRecommendations: [], missing_fields: [] };
+    return { flightRecommendations: [], missing_fields: [], no_direct_available: false };
   }
+
+  const no_direct_available = intent.prefer_direct === true && flights.every((f) => f.stops > 0);
 
   const cards: FlightRecommendationCard[] = flights.map((flight, i) => {
     const group: FlightRecommendationCard["group"] =
@@ -814,7 +816,7 @@ async function runFlightPipeline(
     };
   });
 
-  return { flightRecommendations: cards, missing_fields: [] };
+  return { flightRecommendations: cards, missing_fields: [], no_direct_available };
 }
 
 // ─── Main Agent Function ──────────────────────────────────────────────────────
@@ -835,6 +837,7 @@ export async function runAgent(
   hotelRecommendations: HotelRecommendationCard[];
   flightRecommendations: FlightRecommendationCard[];
   missing_flight_fields: string[];
+  no_direct_available: boolean;
   suggested_refinements: string[];
   category: CategoryType;
 }> {
@@ -851,13 +854,14 @@ export async function runAgent(
 
   // Route to flight pipeline if needed
   if (intent.category === "flight") {
-    const { flightRecommendations, missing_fields } = await runFlightPipeline(intent);
+    const { flightRecommendations, missing_fields, no_direct_available } = await runFlightPipeline(intent);
     return {
       requirements: intent,
       recommendations: [],
       hotelRecommendations: [],
       flightRecommendations,
       missing_flight_fields: missing_fields,
+      no_direct_available,
       suggested_refinements: [],
       category: "flight",
     };
@@ -876,6 +880,7 @@ export async function runAgent(
       hotelRecommendations,
       flightRecommendations: [],
       missing_flight_fields: [],
+      no_direct_available: false,
       suggested_refinements,
       category: "hotel",
     };
@@ -945,5 +950,5 @@ export async function runAgent(
       : undefined,
   }));
 
-  return { requirements, recommendations: withOpenTable, hotelRecommendations: [], flightRecommendations: [], missing_flight_fields: [], suggested_refinements, category: "restaurant" };
+  return { requirements, recommendations: withOpenTable, hotelRecommendations: [], flightRecommendations: [], missing_flight_fields: [], no_direct_available: false, suggested_refinements, category: "restaurant" };
 }
