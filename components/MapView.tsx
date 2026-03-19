@@ -257,10 +257,10 @@ export default function MapView({
                         key={`dur-${i}`}
                         position={mid}
                         icon={L.divIcon({
-                          html: `<div style="background:rgba(44,36,22,0.82);color:#F0EAD6;border-radius:8px;padding:3px 8px;font-size:11px;font-weight:600;white-space:nowrap;font-family:'DM Sans',sans-serif;box-shadow:0 1px 4px rgba(0,0,0,0.4);border:1px solid #C9A84C55;">${seg.duration}</div>`,
+                          html: `<div style="display:inline-block;background:rgba(44,36,22,0.82);color:#F0EAD6;border-radius:8px;padding:3px 8px;font-size:11px;font-weight:600;white-space:nowrap;font-family:'DM Sans',sans-serif;box-shadow:0 1px 4px rgba(0,0,0,0.4);border:1px solid #C9A84C55;">${seg.duration}</div>`,
                           className: "",
-                          iconSize: [80, 22],
-                          iconAnchor: [40, 11],
+                          iconSize: undefined,
+                          iconAnchor: [22, 11],
                         })}
                       />
                     )}
