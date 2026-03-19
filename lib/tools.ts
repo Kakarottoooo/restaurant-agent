@@ -680,11 +680,13 @@ export async function searchFlights(params: {
         const toCoords = getAirportCoords(toId);
         const layoverAfter = layovers?.[i];
         const layoverMin = layoverAfter ? Number((layoverAfter as Record<string, unknown>).duration ?? 0) : 0;
+        const legDurationMin = Number(leg.duration ?? 0);
         return {
           from_airport: fromId,
           to_airport: toId,
           departure_time: String((leg.departure_airport as Record<string, unknown>)?.time ?? ""),
           arrival_time: String((leg.arrival_airport as Record<string, unknown>)?.time ?? ""),
+          duration: legDurationMin > 0 ? `${Math.floor(legDurationMin / 60)}h ${legDurationMin % 60}m` : undefined,
           from_lat: fromCoords?.lat,
           from_lng: fromCoords?.lng,
           to_lat: toCoords?.lat,

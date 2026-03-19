@@ -5,6 +5,34 @@ import { MapContainer, TileLayer, Marker, Polyline, useMap } from "react-leaflet
 import "leaflet/dist/leaflet.css";
 import type { FlightRecommendationCard } from "@/lib/types";
 
+// Animated plane that travels along combined arc points
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function AnimatedPlane({ points, L }: { points: [number, number][]; L: any }) {
+  const [idx, setIdx] = useState(0);
+  useEffect(() => {
+    setIdx(0);
+    if (points.length < 2) return;
+    const t = setInterval(() => setIdx(p => (p + 1) % points.length), 40);
+    return () => clearInterval(t);
+  }, [points]);
+  if (!points[idx]) return null;
+  const pos = points[idx];
+  const nxt = points[Math.min(idx + 1, points.length - 1)];
+  // Angle for right-pointing icon: atan2(-dlat, dlng) because screen y is inverted
+  const angle = Math.atan2(-(nxt[0] - pos[0]), nxt[1] - pos[1]) * (180 / Math.PI);
+  return (
+    <Marker
+      position={pos}
+      icon={L.divIcon({
+        html: `<div style="font-size:22px;transform:rotate(${angle}deg);transform-origin:center;line-height:1;filter:drop-shadow(0 1px 3px rgba(0,0,0,0.5));">✈</div>`,
+        className: "",
+        iconSize: [24, 24],
+        iconAnchor: [12, 12],
+      })}
+    />
+  );
+}
+
 export interface MapPin {
   id: string;
   name: string;
@@ -122,7 +150,7 @@ export default function MapView({
     const legs = flight.legs && flight.legs.length > 0 ? flight.legs : null;
 
     // Build arc segments: one per leg
-    type ArcSegment = { points: [number, number][]; fromId: string; toId: string; depTime: string; arrTime: string; layover?: string };
+    type ArcSegment = { points: [number, number][]; fromId: string; toId: string; depTime: string; arrTime: string; layover?: string; duration?: string };
     const arcSegments: ArcSegment[] = [];
 
     if (legs) {
@@ -135,6 +163,7 @@ export default function MapView({
             depTime: leg.departure_time,
             arrTime: leg.arrival_time,
             layover: leg.layover_duration,
+            duration: leg.duration,
           });
         }
       }
@@ -148,24 +177,27 @@ export default function MapView({
         toId: flight.arrival_airport,
         depTime: flight.departure_time,
         arrTime: flight.arrival_time,
+        duration: flight.duration,
       });
     }
 
     const hasCoords = arcSegments.length > 0;
 
+    // Combined arc points for animated plane (all legs sequentially)
+    const allArcPoints: [number, number][] = arcSegments.flatMap(s => s.points);
+
     // Collect all unique airport markers
     type AirportMarker = { id: string; lat: number; lng: number; time: string; isOrigin: boolean; isDest: boolean; layover?: string };
     const markerMap = new Map<string, AirportMarker>();
     arcSegments.forEach((seg, i) => {
-      const fromLeg = legs ? legs[i] : null;
-      const toLeg = legs ? legs[i] : null;
-      const fromLat = fromLeg ? fromLeg.from_lat : flight.departure_lat;
-      const fromLng = fromLeg ? fromLeg.from_lng : flight.departure_lng;
-      const toLat = toLeg ? toLeg.to_lat : flight.arrival_lat;
-      const toLng = toLeg ? toLeg.to_lng : flight.arrival_lng;
+      const leg = legs?.[i];
+      const fromLat = leg?.from_lat ?? flight.departure_lat;
+      const fromLng = leg?.from_lng ?? flight.departure_lng;
+      const toLat = leg?.to_lat ?? flight.arrival_lat;
+      const toLng = leg?.to_lng ?? flight.arrival_lng;
       if (fromLat != null && fromLng != null) {
-        const existing = markerMap.get(seg.fromId);
-        markerMap.set(seg.fromId, { id: seg.fromId, lat: fromLat, lng: fromLng, time: seg.depTime, isOrigin: i === 0, isDest: false, layover: existing?.layover });
+        if (!markerMap.has(seg.fromId))
+          markerMap.set(seg.fromId, { id: seg.fromId, lat: fromLat, lng: fromLng, time: seg.depTime, isOrigin: i === 0, isDest: false });
       }
       if (toLat != null && toLng != null) {
         const isLast = i === arcSegments.length - 1;
@@ -195,43 +227,78 @@ export default function MapView({
                 attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                 url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
               />
-              {/* Draw one arc per leg */}
-              {arcSegments.map((seg, i) => (
-                <Polyline
-                  key={i}
-                  positions={seg.points}
-                  pathOptions={{ color: "#C9A84C", weight: 2, dashArray: "6 4", opacity: 0.9 }}
-                />
-              ))}
+              {/* Draw one arc + arrowhead + duration label per leg */}
+              {arcSegments.map((seg, i) => {
+                const mid = seg.points[Math.floor(seg.points.length / 2)];
+                const last = seg.points[seg.points.length - 1];
+                const prev = seg.points[seg.points.length - 4];
+                const arrowAngle = Math.atan2(-(last[0] - prev[0]), last[1] - prev[1]) * (180 / Math.PI);
+                return (
+                  <>
+                    <Polyline
+                      key={`arc-${i}`}
+                      positions={seg.points}
+                      pathOptions={{ color: "#C9A84C", weight: 2.5, dashArray: "6 4", opacity: 0.9 }}
+                    />
+                    {/* Arrowhead at end of arc */}
+                    <Marker
+                      key={`arrow-${i}`}
+                      position={last}
+                      icon={L.divIcon({
+                        html: `<div style="font-size:14px;color:#C9A84C;transform:rotate(${arrowAngle}deg);transform-origin:center;line-height:1;text-shadow:0 1px 3px rgba(0,0,0,0.6);">▶</div>`,
+                        className: "",
+                        iconSize: [14, 14],
+                        iconAnchor: [7, 7],
+                      })}
+                    />
+                    {/* Duration label at arc midpoint */}
+                    {seg.duration && (
+                      <Marker
+                        key={`dur-${i}`}
+                        position={mid}
+                        icon={L.divIcon({
+                          html: `<div style="background:rgba(44,36,22,0.82);color:#F0EAD6;border-radius:8px;padding:3px 8px;font-size:11px;font-weight:600;white-space:nowrap;font-family:'DM Sans',sans-serif;box-shadow:0 1px 4px rgba(0,0,0,0.4);border:1px solid #C9A84C55;">✈ ${seg.duration}</div>`,
+                          className: "",
+                          iconSize: [80, 22],
+                          iconAnchor: [40, 11],
+                        })}
+                      />
+                    )}
+                  </>
+                );
+              })}
               {/* Airport markers */}
               {markers.map((m) => {
                 const isStop = !m.isOrigin && !m.isDest;
-                const bg = m.isOrigin ? "#2C2416" : m.isDest ? "#C9A84C" : "#888";
+                const bg = m.isOrigin ? "#2C2416" : m.isDest ? "#C9A84C" : "#555";
                 const fg = m.isOrigin ? "#F0EAD6" : "#fff";
-                const label = isStop && m.layover
-                  ? `<div style="font-size:8px;opacity:0.85;margin-top:1px">${m.layover}</div>`
+                const layoverHtml = isStop && m.layover
+                  ? `<div style="font-size:10px;opacity:0.9;margin-top:2px;white-space:nowrap;">${m.layover} wait</div>`
                   : "";
-                const timeLabel = m.time
-                  ? `<div style="position:absolute;top:-18px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.65);color:#fff;border-radius:4px;padding:1px 5px;font-size:9px;white-space:nowrap;font-family:'DM Sans',sans-serif;">${m.time}</div>`
+                const timeHtml = m.time
+                  ? `<div style="position:absolute;top:-22px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.72);color:#fff;border-radius:5px;padding:2px 7px;font-size:11px;font-weight:600;white-space:nowrap;font-family:'DM Sans',sans-serif;box-shadow:0 1px 4px rgba(0,0,0,0.4);">${m.time}</div>`
                   : "";
+                const size = isStop ? 46 : 40;
                 return (
                   <Marker
                     key={m.id}
                     position={[m.lat, m.lng]}
                     icon={L.divIcon({
                       html: `<div style="position:relative;">
-                        ${timeLabel}
-                        <div style="background:${bg};color:${fg};border-radius:${isStop ? "6px" : "50%"};width:32px;height:${isStop ? "auto" : "32px"};min-height:32px;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:9px;font-weight:700;font-family:'DM Sans',sans-serif;border:2px solid #C9A84C;box-shadow:0 2px 8px rgba(0,0,0,0.4);padding:2px 4px;text-align:center;line-height:1.2;">
-                          ${m.id}${label}
+                        ${timeHtml}
+                        <div style="background:${bg};color:${fg};border-radius:${isStop ? "8px" : "50%"};width:${size}px;${isStop ? "min-height:" + size + "px;" : "height:" + size + "px;"}display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:12px;font-weight:700;font-family:'DM Sans',sans-serif;border:2.5px solid #C9A84C;box-shadow:0 2px 10px rgba(0,0,0,0.45);padding:4px 6px;text-align:center;line-height:1.2;">
+                          ${m.id}${layoverHtml}
                         </div>
                       </div>`,
                       className: "",
-                      iconSize: [32, isStop ? 44 : 32],
-                      iconAnchor: [16, isStop ? 22 : 16],
+                      iconSize: [size, size + (isStop && m.layover ? 18 : 0)],
+                      iconAnchor: [size / 2, (size + (isStop && m.layover ? 18 : 0)) / 2],
                     })}
                   />
                 );
               })}
+              {/* Animated plane */}
+              {allArcPoints.length > 1 && <AnimatedPlane points={allArcPoints} L={L} />}
             </MapContainer>
           ) : (
             <div style={{ height: "100%", backgroundColor: "var(--card-2)", display: "flex", alignItems: "center", justifyContent: "center" }}>

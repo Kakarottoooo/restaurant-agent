@@ -216,6 +216,7 @@ export interface FlightLeg {
   to_airport: string;     // IATA
   departure_time: string; // e.g. "08:30"
   arrival_time: string;   // e.g. "11:45"
+  duration?: string;      // e.g. "2h 15m"
   from_lat?: number;
   from_lng?: number;
   to_lat?: number;
