@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import RecommendationCard from "@/components/RecommendationCard";
 import HotelCard from "@/components/HotelCard";
 import FlightCard from "@/components/FlightCard";
+import CreditCardCard from "@/components/CreditCardCard";
 import DateRangePicker from "@/components/DateRangePicker";
 import { CITIES_SORTED } from "@/lib/cities";
 import { useChat, LOADING_STEPS } from "@/app/hooks/useChat";
@@ -126,7 +127,7 @@ export default function Home() {
   const hasMessages = chat.messages.length > 0;
   const lastUserQuery =
     [...chat.messages].reverse().find((m) => m.role === "user")?.content ?? "";
-  const hasResults = chat.allCards.length > 0 || chat.allHotelCards.length > 0 || chat.allFlightCards.length > 0;
+  const hasResults = chat.allCards.length > 0 || chat.allHotelCards.length > 0 || chat.allFlightCards.length > 0 || chat.allCreditCardCards.length > 0;
   const isMapMode = chat.viewMode === "map" && hasResults;
 
   // Unified map pins for restaurants and hotels (flights use arc lines, not pins)
@@ -1473,6 +1474,36 @@ export default function Home() {
                     {chat.allFlightCards.map((card, i) => (
                       <FlightCard key={card.flight.id} card={card} index={i} />
                     ))}
+                  </div>
+                )}
+
+                {/* Credit Card Results */}
+                {chat.resultCategory === "credit_card" && chat.allCreditCardCards.length > 0 && (
+                  <div className="flex flex-col gap-3">
+                    <div
+                      style={{
+                        fontSize: "11px",
+                        color: "var(--text-secondary)",
+                        fontFamily: "var(--font-dm-sans)",
+                        padding: "0 2px 4px",
+                      }}
+                    >
+                      Ranked by annual net gain vs your current card portfolio · Rates as of last verification date
+                    </div>
+                    {chat.allCreditCardCards.map((card, i) => (
+                      <CreditCardCard key={card.card.id} card={card} index={i} />
+                    ))}
+                    <div
+                      style={{
+                        fontSize: "11px",
+                        color: "var(--text-secondary)",
+                        fontFamily: "var(--font-dm-sans)",
+                        padding: "4px 2px 0",
+                        fontStyle: "italic",
+                      }}
+                    >
+                      This tool provides information for reference only and does not constitute financial advice. Confirm current terms at the issuer&apos;s website before applying.
+                    </div>
                   </div>
                 )}
 
