@@ -493,10 +493,17 @@ export function normalizeToIATA(input: string): string {
   // Check city name maps first (handles "sf"→SFO, "nashville"→BNA, etc.)
   if (CITY_TO_IATA[lower]) return CITY_TO_IATA[lower];
   if (MULTI_AIRPORT_CITIES[lower]) return MULTI_AIRPORT_CITIES[lower].primary;
+  // Strip state suffix like "Nashville, TN" → "Nashville"
+  const cityOnly = lower.replace(/,\s*[a-z]{2}$/, "").trim();
+  if (cityOnly !== lower) {
+    if (CITY_TO_IATA[cityOnly]) return CITY_TO_IATA[cityOnly];
+    if (MULTI_AIRPORT_CITIES[cityOnly]) return MULTI_AIRPORT_CITIES[cityOnly].primary;
+  }
   // If it's already a valid 3-letter IATA code, return as uppercase
   const upper = trimmed.toUpperCase();
   if (/^[A-Z]{3}$/.test(upper)) return upper;
-  // Last resort: return as-is
+  // Log unrecognized input so we can debug
+  console.warn(`[normalizeToIATA] unrecognized input: "${input}"`);
   return trimmed;
 }
 
