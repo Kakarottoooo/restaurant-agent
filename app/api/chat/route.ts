@@ -96,6 +96,8 @@ export async function POST(req: NextRequest) {
             ? result.hotelRecommendations.length
             : result.category === "flight"
             ? result.flightRecommendations.length
+            : result.category === "credit_card"
+            ? result.creditCardRecommendations.length
             : result.recommendations.length;
 
         console.log(JSON.stringify({
@@ -112,6 +114,7 @@ export async function POST(req: NextRequest) {
           recommendations: result.recommendations,
           hotelRecommendations: result.hotelRecommendations,
           flightRecommendations: result.flightRecommendations,
+          creditCardRecommendations: result.creditCardRecommendations,
           missing_flight_fields: result.missing_flight_fields,
           no_direct_available: result.no_direct_available,
           suggested_refinements: result.suggested_refinements,

@@ -2,9 +2,10 @@
 // const client = new Anthropic();
 
 import { googlePlacesSearch, tavilySearch, geocodeLocation, fetchReviewSignals, searchHotels, searchFlights, resolveMultiAirport } from "./tools";
-import { UserRequirements, Restaurant, RecommendationCard, SessionPreferences, ScoringDimensions, HotelIntent, RestaurantIntent, FlightIntent, ParsedIntent, HotelRecommendationCard, FlightRecommendationCard, CategoryType, Flight } from "./types";
+import { UserRequirements, Restaurant, RecommendationCard, SessionPreferences, ScoringDimensions, HotelIntent, RestaurantIntent, FlightIntent, CreditCardIntent, ParsedIntent, HotelRecommendationCard, FlightRecommendationCard, CreditCardRecommendationCard, SpendingProfile, CategoryType, Flight } from "./types";
 import { CITIES, DEFAULT_CITY } from "./cities";
 import { UserRequirementsSchema, RankedItemArraySchema } from "./schemas";
+import { recommendCreditCards } from "./creditCardEngine";
 
 const MINIMAX_API_URL = "https://api.minimaxi.chat/v1/chat/completions";
 const MINIMAX_MODEL = "MiniMax-Text-01";
@@ -131,6 +132,13 @@ export const HOTEL_DEFAULT_WEIGHTS = {
 
 async function detectCategory(message: string): Promise<CategoryType> {
   const lower = message.toLowerCase();
+  const creditCardKeywords = [
+    "credit card", "credit cards", "cash back", "cashback", "rewards card",
+    "points card", "travel card", "which card", "best card", "card recommendation",
+    "signup bonus", "sign-up bonus", "annual fee", "no annual fee",
+    "chase sapphire", "amex gold", "amex platinum", "venture x", "capital one",
+    "信用卡", "哪张卡", "积分卡", "返现卡", "推荐卡", "开卡奖励",
+  ];
   const flightKeywords = [
     "flight", "flights", "fly", "flying", "plane", "airline", "airport",
     "ticket", "tickets", "one way", "round trip", "roundtrip", "nonstop",
@@ -144,6 +152,8 @@ async function detectCategory(message: string): Promise<CategoryType> {
     "stay at", "book a room", "accommodation", "suite", "booking",
     "酒店", "旅馆", "住", "入住", "退房", "晚", "客房",
   ];
+  // Credit card check first to avoid collision with "travel card" → hotel
+  if (creditCardKeywords.some((kw) => lower.includes(kw))) return "credit_card";
   if (flightKeywords.some((kw) => lower.includes(kw))) return "flight";
   if (hotelKeywords.some((kw) => lower.includes(kw))) return "hotel";
   return "restaurant";
@@ -307,13 +317,113 @@ Default cabin_class to "economy" if not specified.`,
   }
 }
 
+async function parseCreditCardIntent(
+  userMessage: string,
+  conversationHistory: Array<{ role: "user" | "assistant"; content: string }>
+): Promise<CreditCardIntent> {
+  // Combine conversation for context
+  const context = conversationHistory
+    .slice(-6)
+    .map((m) => `${m.role}: ${m.content}`)
+    .join("\n");
+
+  const text = await minimaxChat({
+    messages: [
+      {
+        role: "user",
+        content: `Extract credit card recommendation requirements from this conversation. Return ONLY valid JSON.
+
+User message: "${userMessage}"
+${context ? `Recent conversation:\n${context}` : ""}
+
+Return JSON:
+{
+  "category": "credit_card",
+  "reward_preference": "cash" | "travel" | null,
+  "existing_cards": ["card id string", ...] or [],
+  "spending_profile": {
+    "dining": monthly_usd or 0,
+    "groceries": monthly_usd or 0,
+    "travel": monthly_usd or 0,
+    "gas": monthly_usd or 0,
+    "online_shopping": monthly_usd or 0,
+    "streaming": monthly_usd or 0,
+    "pharmacy": monthly_usd or 0,
+    "other": monthly_usd or 0
+  }
+}
+
+For existing_cards, use these ids if mentioned: chase-sapphire-preferred, chase-sapphire-reserve, chase-freedom-unlimited, chase-freedom-flex, amex-platinum, amex-gold, amex-blue-cash-preferred, citi-strata-premier, citi-double-cash, capital-one-venture-x, capital-one-venture, capital-one-savor-one, discover-it-cash-back, wells-fargo-active-cash, bilt-mastercard.
+If user has not provided spending details, use these defaults: dining=300, groceries=400, travel=200, gas=100, online_shopping=150, streaming=30, pharmacy=50, other=200.
+If user has not stated reward_preference, default to "travel".`,
+      },
+    ],
+  });
+
+  const jsonMatch = text.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) {
+    return {
+      category: "credit_card",
+      reward_preference: "travel",
+      existing_cards: [],
+      spending_profile: {
+        dining: 300,
+        groceries: 400,
+        travel: 200,
+        gas: 100,
+        online_shopping: 150,
+        streaming: 30,
+        pharmacy: 50,
+        other: 200,
+      },
+    };
+  }
+  try {
+    const parsed = JSON.parse(jsonMatch[0]);
+    return { category: "credit_card", ...parsed };
+  } catch {
+    return { category: "credit_card", reward_preference: "travel", existing_cards: [] };
+  }
+}
+
+// ─── Phase 9: Credit Card Pipeline ───────────────────────────────────────────
+
+async function runCreditCardPipeline(
+  intent: CreditCardIntent
+): Promise<{ creditCardRecommendations: CreditCardRecommendationCard[] }> {
+  const spending: SpendingProfile = intent.spending_profile ?? {
+    dining: 300,
+    groceries: 400,
+    travel: 200,
+    gas: 100,
+    online_shopping: 150,
+    streaming: 30,
+    pharmacy: 50,
+    other: 200,
+  };
+  const existingCards = intent.existing_cards ?? [];
+  const rewardPreference = intent.reward_preference ?? "travel";
+
+  const creditCardRecommendations = recommendCreditCards(
+    spending,
+    existingCards,
+    rewardPreference
+  );
+
+  return { creditCardRecommendations };
+}
+
 export async function parseIntent(
   userMessage: string,
   cityFullName: string,
   sessionPreferences?: SessionPreferences,
-  profileContext?: string
+  profileContext?: string,
+  conversationHistory?: Array<{ role: "user" | "assistant"; content: string }>
 ): Promise<ParsedIntent> {
   const category = await detectCategory(userMessage);
+  if (category === "credit_card") {
+    return parseCreditCardIntent(userMessage, conversationHistory ?? []);
+  }
   if (category === "flight") {
     return parseFlightIntent(userMessage, cityFullName);
   }
@@ -847,10 +957,11 @@ export async function runAgent(
   streamCallbacks?: StreamCallbacks,
   customWeights?: Partial<typeof DEFAULT_WEIGHTS>
 ): Promise<{
-  requirements: UserRequirements | HotelIntent | FlightIntent;
+  requirements: UserRequirements | HotelIntent | FlightIntent | CreditCardIntent;
   recommendations: RecommendationCard[];
   hotelRecommendations: HotelRecommendationCard[];
   flightRecommendations: FlightRecommendationCard[];
+  creditCardRecommendations: CreditCardRecommendationCard[];
   missing_flight_fields: string[];
   no_direct_available: boolean;
   suggested_refinements: string[];
@@ -864,8 +975,25 @@ export async function runAgent(
     userMessage,
     cityFullName,
     sessionPreferences,
-    profileContext
+    profileContext,
+    conversationHistory
   );
+
+  // Route to credit card pipeline if needed
+  if (intent.category === "credit_card") {
+    const { creditCardRecommendations } = await runCreditCardPipeline(intent);
+    return {
+      requirements: intent,
+      recommendations: [],
+      hotelRecommendations: [],
+      flightRecommendations: [],
+      creditCardRecommendations,
+      missing_flight_fields: [],
+      no_direct_available: false,
+      suggested_refinements: [],
+      category: "credit_card",
+    };
+  }
 
   // Route to flight pipeline if needed
   if (intent.category === "flight") {
@@ -875,6 +1003,7 @@ export async function runAgent(
       recommendations: [],
       hotelRecommendations: [],
       flightRecommendations,
+      creditCardRecommendations: [],
       missing_flight_fields: missing_fields,
       no_direct_available,
       suggested_refinements: [],
@@ -894,6 +1023,7 @@ export async function runAgent(
       recommendations: [],
       hotelRecommendations,
       flightRecommendations: [],
+      creditCardRecommendations: [],
       missing_flight_fields: [],
       no_direct_available: false,
       suggested_refinements,
@@ -965,5 +1095,5 @@ export async function runAgent(
       : undefined,
   }));
 
-  return { requirements, recommendations: withOpenTable, hotelRecommendations: [], flightRecommendations: [], missing_flight_fields: [], no_direct_available: false, suggested_refinements, category: "restaurant" };
+  return { requirements, recommendations: withOpenTable, hotelRecommendations: [], flightRecommendations: [], creditCardRecommendations: [], missing_flight_fields: [], no_direct_available: false, suggested_refinements, category: "restaurant" };
 }

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
-import { RecommendationCard as CardType, Message, SessionPreferences, HotelRecommendationCard, FlightRecommendationCard, CategoryType } from "@/lib/types";
+import { RecommendationCard as CardType, Message, SessionPreferences, HotelRecommendationCard, FlightRecommendationCard, CreditCardRecommendationCard, CategoryType } from "@/lib/types";
 import { LearnedWeights } from "@/lib/types";
 
 export const LOADING_STEPS = [
@@ -50,6 +50,7 @@ export function useChat({
   const [suggestedRefinements, setSuggestedRefinements] = useState<string[]>([]);
   const [allHotelCards, setAllHotelCards] = useState<HotelRecommendationCard[]>([]);
   const [allFlightCards, setAllFlightCards] = useState<FlightRecommendationCard[]>([]);
+  const [allCreditCardCards, setAllCreditCardCards] = useState<CreditCardRecommendationCard[]>([]);
   const [resultCategory, setResultCategory] = useState<CategoryType>("restaurant");
 
   // Stable ref to always-current messages (avoids stale closure in sendMessage)
@@ -218,7 +219,28 @@ export function useChat({
                 const refinements: string[] = event.suggested_refinements ?? [];
                 setSuggestedRefinements(refinements);
 
-                if (category === "flight") {
+                if (category === "credit_card") {
+                  const ccRecs: CreditCardRecommendationCard[] = event.creditCardRecommendations ?? [];
+                  if (ccRecs.length === 0) {
+                    setMessages((prev) => [
+                      ...prev,
+                      {
+                        role: "assistant",
+                        content: "I couldn't generate card recommendations. Please tell me your monthly spending and whether you prefer cash back or travel rewards.",
+                        category: "credit_card" as const,
+                      },
+                    ]);
+                  } else {
+                    const assistantMessage: Message = {
+                      role: "assistant",
+                      content: `Here are the top ${ccRecs.length} credit cards ranked by annual net gain for your spending profile.`,
+                      creditCardCards: ccRecs,
+                      category: "credit_card" as const,
+                    };
+                    setMessages((prev) => [...prev, assistantMessage]);
+                    setAllCreditCardCards(ccRecs);
+                  }
+                } else if (category === "flight") {
                   const flightRecs: FlightRecommendationCard[] = event.flightRecommendations ?? [];
                   const missingFields: string[] = event.missing_flight_fields ?? [];
 
@@ -390,6 +412,7 @@ export function useChat({
     allCards,
     allHotelCards,
     allFlightCards,
+    allCreditCardCards,
     resultCategory,
     activePrice,
     setActivePrice,

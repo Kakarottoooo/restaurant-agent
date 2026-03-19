@@ -128,6 +128,7 @@ export interface AgentResponse {
   recommendations: RecommendationCard[];
   hotelRecommendations?: HotelRecommendationCard[];
   flightRecommendations?: FlightRecommendationCard[];
+  creditCardRecommendations?: CreditCardRecommendationCard[];
   category?: CategoryType;
 }
 
@@ -137,12 +138,13 @@ export interface Message {
   cards?: RecommendationCard[];
   hotelCards?: HotelRecommendationCard[];
   flightCards?: FlightRecommendationCard[];
+  creditCardCards?: CreditCardRecommendationCard[];
   category?: CategoryType;
 }
 
 // ─── Phase 7: Multi-category types ───────────────────────────────────────────
 
-export type CategoryType = "restaurant" | "hotel" | "flight" | "unknown";
+export type CategoryType = "restaurant" | "hotel" | "flight" | "credit_card" | "unknown";
 
 export interface BaseIntent {
   category: CategoryType;
@@ -191,7 +193,7 @@ export interface FlightIntent extends BaseIntent {
   max_stops?: number | null; // null = no preference, 0 = nonstop only, 1 = max 1 stop
 }
 
-export type ParsedIntent = RestaurantIntent | HotelIntent | FlightIntent;
+export type ParsedIntent = RestaurantIntent | HotelIntent | FlightIntent | CreditCardIntent;
 
 export interface Hotel {
   id: string;
@@ -274,4 +276,68 @@ export interface HotelRecommendationCard {
   location_summary: string;
   scoring?: ScoringDimensions;
   suggested_refinements?: string[];
+}
+
+// ─── Phase 9: Credit Card types ───────────────────────────────────────────────
+
+export interface SpendingProfile {
+  dining: number;        // monthly USD
+  groceries: number;
+  travel: number;
+  gas: number;
+  online_shopping: number;
+  streaming: number;
+  pharmacy: number;
+  other: number;
+}
+
+export interface CreditCardIntent extends BaseIntent {
+  category: "credit_card";
+  spending_profile?: SpendingProfile;
+  existing_cards?: string[];           // card ids
+  reward_preference?: "cash" | "travel";
+}
+
+export interface CreditCard {
+  id: string;
+  name: string;
+  issuer: string;
+  annual_fee: number;
+  rewards_currency: string;
+  category_rates: {
+    dining: number;
+    groceries: number;
+    travel: number;
+    gas: number;
+    online_shopping: number;
+    streaming: number;
+    pharmacy: number;
+    other: number;
+  };
+  point_value_cash: number;
+  point_value_travel: number;
+  signup_bonus_points: number;
+  signup_bonus_spend_requirement: number;
+  signup_bonus_timeframe_months: number;
+  foreign_transaction_fee: boolean;
+  min_credit_score?: number;
+  notes?: string[];
+  last_verified: string;
+}
+
+export interface CreditCardRecommendationCard {
+  card: CreditCard;
+  rank: number;
+  annual_net_benefit: number;       // marginal value after adding this card (net of annual fee)
+  marginal_value: number;           // vs current card portfolio
+  category_breakdown: {
+    category: string;
+    old_rate: number;
+    new_rate: number;
+    monthly_spend: number;
+    annual_gain: number;
+  }[];
+  signup_bonus_value: number;       // estimated dollar value of signup bonus
+  why_recommended: string;
+  watch_out: string[];
 }
