@@ -273,7 +273,7 @@ export default function MapView({
                 const bg = m.isOrigin ? "#2C2416" : m.isDest ? "#C9A84C" : "#555";
                 const fg = m.isOrigin ? "#F0EAD6" : "#fff";
                 const layoverHtml = isStop && m.layover
-                  ? `<div style="font-size:10px;opacity:0.9;margin-top:2px;white-space:nowrap;">${m.layover} wait</div>`
+                  ? `<div style="margin-top:4px;background:#2C2416;color:#F0EAD6;border-radius:5px;padding:2px 6px;font-size:10px;font-weight:600;white-space:nowrap;font-family:'DM Sans',sans-serif;box-shadow:0 1px 3px rgba(0,0,0,0.4);text-align:center;">${m.layover} wait</div>`
                   : "";
                 const timeHtml = m.time
                   ? `<div style="position:absolute;top:-22px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.72);color:#fff;border-radius:5px;padding:2px 7px;font-size:11px;font-weight:600;white-space:nowrap;font-family:'DM Sans',sans-serif;box-shadow:0 1px 4px rgba(0,0,0,0.4);">${m.time}</div>`
@@ -284,15 +284,16 @@ export default function MapView({
                     key={m.id}
                     position={[m.lat, m.lng]}
                     icon={L.divIcon({
-                      html: `<div style="position:relative;">
+                      html: `<div style="position:relative;display:flex;flex-direction:column;align-items:center;">
                         ${timeHtml}
-                        <div style="background:${bg};color:${fg};border-radius:${isStop ? "8px" : "50%"};width:${size}px;${isStop ? "min-height:" + size + "px;" : "height:" + size + "px;"}display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:12px;font-weight:700;font-family:'DM Sans',sans-serif;border:2.5px solid #C9A84C;box-shadow:0 2px 10px rgba(0,0,0,0.45);padding:4px 6px;text-align:center;line-height:1.2;">
-                          ${m.id}${layoverHtml}
+                        <div style="background:${bg};color:${fg};border-radius:${isStop ? "8px" : "50%"};width:${size}px;height:${size}px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;font-family:'DM Sans',sans-serif;border:2.5px solid #C9A84C;box-shadow:0 2px 10px rgba(0,0,0,0.45);text-align:center;line-height:1.2;">
+                          ${m.id}
                         </div>
+                        ${layoverHtml}
                       </div>`,
                       className: "",
-                      iconSize: [size, size + (isStop && m.layover ? 18 : 0)],
-                      iconAnchor: [size / 2, (size + (isStop && m.layover ? 18 : 0)) / 2],
+                      iconSize: [size, size + (isStop && m.layover ? 26 : 0)],
+                      iconAnchor: [size / 2, size / 2],
                     })}
                   />
                 );
