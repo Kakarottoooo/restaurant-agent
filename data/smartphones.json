@@ -1,0 +1,405 @@
+{
+  "meta": {
+    "last_updated": "2026-03-19",
+    "note": "Smartphone specs and signal scores based on public reviews. Prices are approximate MSRPs."
+  },
+  "devices": [
+    {
+      "id": "apple-iphone-16-pro",
+      "name": "Apple iPhone 16 Pro",
+      "brand": "Apple",
+      "os": "ios",
+      "price_usd": 999,
+      "display_size": 6.3,
+      "weight_g": 199,
+      "cpu": "Apple A18 Pro",
+      "skus": [
+        {"id": "apple-iphone-16-pro-128gb", "storage_gb": 128, "price_usd": 999},
+        {"id": "apple-iphone-16-pro-256gb", "storage_gb": 256, "price_usd": 1099},
+        {"id": "apple-iphone-16-pro-512gb", "storage_gb": 512, "price_usd": 1299}
+      ],
+      "signals": {
+        "camera_main":      {"value_normalized": 9.5, "raw_quote": "The iPhone 16 Pro's 48MP main sensor delivers stunning detail and natural color science that rivals any flagship on the market.", "source": "The Verge", "months_old": 10},
+        "camera_video":     {"value_normalized": 9.8, "raw_quote": "Apple's Camera Control and 4K120fps ProRes video make the iPhone 16 Pro the gold standard for mobile videography.", "source": "GSMArena", "months_old": 10},
+        "battery_life":     {"value_normalized": 7.5, "raw_quote": "Battery life is improved over the 15 Pro but still lags behind Android competitors at this price point, typically lasting a full day for most users.", "source": "Wirecutter", "months_old": 10},
+        "display_quality":  {"value_normalized": 9.5, "raw_quote": "The Super Retina XDR display with ProMotion and Always-On is gorgeous, hitting peak brightness of 2000 nits in outdoor conditions.", "source": "RTINGS", "months_old": 10},
+        "performance":      {"value_normalized": 10.0, "raw_quote": "The A18 Pro is an absolute powerhouse — no task slows it down, and it handles Apple Intelligence features with ease.", "source": "AnandTech", "months_old": 10},
+        "software_support": {"value_normalized": 10.0, "raw_quote": "Apple guarantees at least seven years of iOS updates, making the iPhone 16 Pro one of the best long-term software investments in the industry.", "source": "Tom's Guide", "months_old": 10},
+        "connectivity":     {"value_normalized": 9.0, "raw_quote": "Wi-Fi 7, Bluetooth 5.3, and UWB support ensure the iPhone 16 Pro is ready for the next generation of wireless connectivity.", "source": "GSMArena", "months_old": 10},
+        "build_quality":    {"value_normalized": 9.5, "raw_quote": "The titanium frame and textured matte glass back feel premium in hand, and the IP68 rating provides peace of mind.", "source": "The Verge", "months_old": 10},
+        "value_for_money":  {"value_normalized": 4.0, "raw_quote": "At $999 for the base 128GB model, the iPhone 16 Pro is hard to recommend on value alone when cheaper phones offer 90% of the experience.", "source": "Wirecutter", "months_old": 10}
+      },
+      "last_verified": "2026-03-19"
+    },
+    {
+      "id": "apple-iphone-16",
+      "name": "Apple iPhone 16",
+      "brand": "Apple",
+      "os": "ios",
+      "price_usd": 799,
+      "display_size": 6.1,
+      "weight_g": 170,
+      "cpu": "Apple A18",
+      "skus": [
+        {"id": "apple-iphone-16-128gb", "storage_gb": 128, "price_usd": 799},
+        {"id": "apple-iphone-16-256gb", "storage_gb": 256, "price_usd": 899},
+        {"id": "apple-iphone-16-512gb", "storage_gb": 512, "price_usd": 1099}
+      ],
+      "signals": {
+        "camera_main":      {"value_normalized": 8.5, "raw_quote": "The dual-camera system on the iPhone 16 produces excellent photos in most conditions, though it lacks the versatility of the Pro's telephoto lens.", "source": "Tom's Guide", "months_old": 10},
+        "camera_video":     {"value_normalized": 8.8, "raw_quote": "4K60fps video is smooth and well-stabilized; the new Camera Control button adds a welcome tactile shortcut for shooting.", "source": "The Verge", "months_old": 10},
+        "battery_life":     {"value_normalized": 6.5, "raw_quote": "The iPhone 16 struggles to match Android rivals at this price in battery endurance, though it handles a typical workday without issue for most users.", "source": "RTINGS", "months_old": 10},
+        "display_quality":  {"value_normalized": 8.5, "raw_quote": "The 60Hz OLED panel is sharp and colorful, but the lack of ProMotion is increasingly hard to justify at $799 in 2025.", "source": "GSMArena", "months_old": 10},
+        "performance":      {"value_normalized": 9.5, "raw_quote": "The A18 chip is overkill for everyday tasks and ensures this phone will feel fast for years to come.", "source": "AnandTech", "months_old": 10},
+        "software_support": {"value_normalized": 10.0, "raw_quote": "Seven years of guaranteed iOS updates makes the iPhone 16 a compelling long-term choice despite its premium price tag.", "source": "Tom's Guide", "months_old": 10},
+        "connectivity":     {"value_normalized": 8.5, "raw_quote": "Bluetooth 5.3 and Wi-Fi 6E keep the iPhone 16 well-connected, though it misses the Wi-Fi 7 upgrade found in the Pro models.", "source": "GSMArena", "months_old": 10},
+        "build_quality":    {"value_normalized": 8.5, "raw_quote": "The aluminum frame and Ceramic Shield front feel solid, and IP68 water resistance is reassuring at this price.", "source": "Wirecutter", "months_old": 10},
+        "value_for_money":  {"value_normalized": 5.0, "raw_quote": "At $799, the iPhone 16 is a capable phone but faces stiff competition from Android flagships that offer more features for less money.", "source": "Wirecutter", "months_old": 10}
+      },
+      "last_verified": "2026-03-19"
+    },
+    {
+      "id": "apple-iphone-15",
+      "name": "Apple iPhone 15",
+      "brand": "Apple",
+      "os": "ios",
+      "price_usd": 699,
+      "display_size": 6.1,
+      "weight_g": 171,
+      "cpu": "Apple A16 Bionic",
+      "skus": [
+        {"id": "apple-iphone-15-128gb", "storage_gb": 128, "price_usd": 699},
+        {"id": "apple-iphone-15-256gb", "storage_gb": 256, "price_usd": 799},
+        {"id": "apple-iphone-15-512gb", "storage_gb": 512, "price_usd": 999}
+      ],
+      "signals": {
+        "camera_main":      {"value_normalized": 8.0, "raw_quote": "The iPhone 15's 48MP main camera with second-generation sensor-shift OIS delivers consistently great shots, especially in mixed lighting.", "source": "GSMArena", "months_old": 18},
+        "camera_video":     {"value_normalized": 8.2, "raw_quote": "Video quality is excellent for a non-Pro iPhone, with Log encoding giving videographers more flexibility in post-production.", "source": "The Verge", "months_old": 18},
+        "battery_life":     {"value_normalized": 7.0, "raw_quote": "Battery life is adequate for a full day of moderate use, but heavy users will likely need a top-up before evening.", "source": "Tom's Guide", "months_old": 18},
+        "display_quality":  {"value_normalized": 8.0, "raw_quote": "The 60Hz Super Retina XDR display is vivid and accurate, though the lack of ProMotion remains a notable omission at this tier.", "source": "RTINGS", "months_old": 18},
+        "performance":      {"value_normalized": 8.5, "raw_quote": "The A16 Bionic still handles everything thrown at it with ease, and remains one of the most efficient mobile chips available.", "source": "AnandTech", "months_old": 18},
+        "software_support": {"value_normalized": 9.5, "raw_quote": "The iPhone 15 is slated to receive iOS updates through at least 2030, offering excellent software longevity.", "source": "Tom's Guide", "months_old": 18},
+        "connectivity":     {"value_normalized": 8.0, "raw_quote": "USB-C is finally here, and Wi-Fi 6 plus Bluetooth 5.3 keep the iPhone 15 reliably connected in most scenarios.", "source": "GSMArena", "months_old": 18},
+        "build_quality":    {"value_normalized": 8.5, "raw_quote": "The color-matched back glass and aluminum frame look premium, and the IP68 rating ensures solid water resistance.", "source": "Wirecutter", "months_old": 18},
+        "value_for_money":  {"value_normalized": 7.0, "raw_quote": "At $699, the iPhone 15 represents one of Apple's better value propositions, offering a refined experience without the Pro premium.", "source": "Wirecutter", "months_old": 18}
+      },
+      "last_verified": "2026-03-19"
+    },
+    {
+      "id": "samsung-galaxy-s25-ultra",
+      "name": "Samsung Galaxy S25 Ultra",
+      "brand": "Samsung",
+      "os": "android",
+      "price_usd": 1299,
+      "display_size": 6.9,
+      "weight_g": 218,
+      "cpu": "Qualcomm Snapdragon 8 Elite",
+      "skus": [
+        {"id": "samsung-galaxy-s25-ultra-256gb", "storage_gb": 256, "price_usd": 1299},
+        {"id": "samsung-galaxy-s25-ultra-512gb", "storage_gb": 512, "price_usd": 1419},
+        {"id": "samsung-galaxy-s25-ultra-1tb", "storage_gb": 1024, "price_usd": 1659}
+      ],
+      "signals": {
+        "camera_main":      {"value_normalized": 9.5, "raw_quote": "The 200MP main sensor captures extraordinary detail, and the improved AI processing makes the S25 Ultra's camera system the most versatile on Android.", "source": "GSMArena", "months_old": 9},
+        "camera_video":     {"value_normalized": 9.2, "raw_quote": "8K video recording and the 50MP 5x telephoto make the S25 Ultra a genuine powerhouse for content creators.", "source": "The Verge", "months_old": 9},
+        "battery_life":     {"value_normalized": 8.5, "raw_quote": "The 5000mAh battery combined with the efficient Snapdragon 8 Elite consistently delivers a day and a half of real-world use.", "source": "RTINGS", "months_old": 9},
+        "display_quality":  {"value_normalized": 9.8, "raw_quote": "The 6.9-inch QHD+ Dynamic AMOLED with 2600 nit peak brightness and 1-120Hz adaptive ProMotion is simply the best display on any smartphone.", "source": "RTINGS", "months_old": 9},
+        "performance":      {"value_normalized": 9.5, "raw_quote": "The Snapdragon 8 Elite is a monstrous chip that blows through every benchmark and makes the S25 Ultra feel instantaneous in daily use.", "source": "AnandTech", "months_old": 9},
+        "software_support": {"value_normalized": 9.0, "raw_quote": "Samsung's promise of seven years of Android OS and security updates puts the S25 Ultra among the best supported Android phones available.", "source": "Tom's Guide", "months_old": 9},
+        "connectivity":     {"value_normalized": 9.5, "raw_quote": "Wi-Fi 7, Bluetooth 5.4, UWB, and satellite connectivity make the S25 Ultra one of the most connected phones money can buy.", "source": "GSMArena", "months_old": 9},
+        "build_quality":    {"value_normalized": 9.5, "raw_quote": "The titanium frame and Gorilla Glass Armor make the S25 Ultra feel formidably premium, and the integrated S Pen remains a unique differentiator.", "source": "The Verge", "months_old": 9},
+        "value_for_money":  {"value_normalized": 5.5, "raw_quote": "At $1299, the S25 Ultra is objectively expensive, but the breadth of features and camera versatility make it easier to justify than competing ultra-premiums.", "source": "Wirecutter", "months_old": 9}
+      },
+      "last_verified": "2026-03-19"
+    },
+    {
+      "id": "samsung-galaxy-s25",
+      "name": "Samsung Galaxy S25",
+      "brand": "Samsung",
+      "os": "android",
+      "price_usd": 799,
+      "display_size": 6.2,
+      "weight_g": 162,
+      "cpu": "Qualcomm Snapdragon 8 Elite",
+      "skus": [
+        {"id": "samsung-galaxy-s25-128gb", "storage_gb": 128, "price_usd": 799},
+        {"id": "samsung-galaxy-s25-256gb", "storage_gb": 256, "price_usd": 859}
+      ],
+      "signals": {
+        "camera_main":      {"value_normalized": 8.5, "raw_quote": "The Galaxy S25's triple camera system punches above its price, producing detailed and color-accurate shots across a variety of lighting conditions.", "source": "GSMArena", "months_old": 9},
+        "camera_video":     {"value_normalized": 8.5, "raw_quote": "4K60fps footage from the S25 is smooth and well-processed, with stabilization that keeps handheld video looking clean.", "source": "Tom's Guide", "months_old": 9},
+        "battery_life":     {"value_normalized": 8.0, "raw_quote": "The 4000mAh battery and Snapdragon 8 Elite's efficiency result in impressive all-day battery life for a compact flagship.", "source": "RTINGS", "months_old": 9},
+        "display_quality":  {"value_normalized": 9.2, "raw_quote": "The 6.2-inch Dynamic AMOLED 2X with adaptive 120Hz refresh is vibrant and responsive, making it one of the best displays at this size.", "source": "RTINGS", "months_old": 9},
+        "performance":      {"value_normalized": 9.5, "raw_quote": "Powered by the same Snapdragon 8 Elite as the Ultra, the Galaxy S25 is one of the fastest compact phones ever made.", "source": "AnandTech", "months_old": 9},
+        "software_support": {"value_normalized": 9.0, "raw_quote": "Seven years of OS and security updates puts Samsung's software commitment on par with Apple for the first time.", "source": "Tom's Guide", "months_old": 9},
+        "connectivity":     {"value_normalized": 9.0, "raw_quote": "Wi-Fi 7 and Bluetooth 5.4 make the S25 future-ready on the connectivity front, though satellite features are reserved for higher tiers.", "source": "GSMArena", "months_old": 9},
+        "build_quality":    {"value_normalized": 8.8, "raw_quote": "The armor aluminum frame and Gorilla Glass Victus 2 give the S25 a refined, sturdy feel that belies its compact size.", "source": "The Verge", "months_old": 9},
+        "value_for_money":  {"value_normalized": 7.0, "raw_quote": "The Galaxy S25 offers a well-rounded flagship experience at $799, making it one of the more sensible buys in the premium Android segment.", "source": "Wirecutter", "months_old": 9}
+      },
+      "last_verified": "2026-03-19"
+    },
+    {
+      "id": "samsung-galaxy-a55",
+      "name": "Samsung Galaxy A55",
+      "brand": "Samsung",
+      "os": "android",
+      "price_usd": 449,
+      "display_size": 6.6,
+      "weight_g": 213,
+      "cpu": "Samsung Exynos 1480",
+      "skus": [
+        {"id": "samsung-galaxy-a55-128gb", "storage_gb": 128, "price_usd": 449},
+        {"id": "samsung-galaxy-a55-256gb", "storage_gb": 256, "price_usd": 499}
+      ],
+      "signals": {
+        "camera_main":      {"value_normalized": 7.0, "raw_quote": "The 50MP main camera on the A55 is impressive for the price, delivering sharp daytime shots with natural colors that beat most rivals in this segment.", "source": "GSMArena", "months_old": 12},
+        "camera_video":     {"value_normalized": 6.5, "raw_quote": "4K video is available but a bit soft in processing; the A55 shines most in 1080p where stabilization and detail are more consistent.", "source": "Tom's Guide", "months_old": 12},
+        "battery_life":     {"value_normalized": 8.5, "raw_quote": "The 5000mAh battery is a highlight of the A55, routinely lasting well into a second day of light to moderate use.", "source": "RTINGS", "months_old": 12},
+        "display_quality":  {"value_normalized": 8.0, "raw_quote": "The 120Hz Super AMOLED display is vibrant and smooth, a genuine standout feature at this price tier.", "source": "RTINGS", "months_old": 12},
+        "performance":      {"value_normalized": 7.0, "raw_quote": "The Exynos 1480 handles everyday tasks smoothly, though it shows some strain under sustained load or demanding games.", "source": "Notebookcheck", "months_old": 12},
+        "software_support": {"value_normalized": 8.0, "raw_quote": "Samsung promises four years of OS updates and five years of security patches for the A55, which is commendable for a mid-ranger.", "source": "Tom's Guide", "months_old": 12},
+        "connectivity":     {"value_normalized": 7.5, "raw_quote": "Wi-Fi 6 and Bluetooth 5.3 cover the basics well; the inclusion of NFC is a welcome addition for a phone at this price.", "source": "GSMArena", "months_old": 12},
+        "build_quality":    {"value_normalized": 8.0, "raw_quote": "The A55 sports a metal frame and Gorilla Glass Victus+ — a surprisingly premium construction for a mid-range device.", "source": "The Verge", "months_old": 12},
+        "value_for_money":  {"value_normalized": 8.5, "raw_quote": "At $449, the Galaxy A55 offers a flagship-adjacent experience with a great display and dependable camera at a fraction of the Ultra's price.", "source": "Wirecutter", "months_old": 12}
+      },
+      "last_verified": "2026-03-19"
+    },
+    {
+      "id": "google-pixel-9-pro",
+      "name": "Google Pixel 9 Pro",
+      "brand": "Google",
+      "os": "android",
+      "price_usd": 999,
+      "display_size": 6.3,
+      "weight_g": 199,
+      "cpu": "Google Tensor G4",
+      "skus": [
+        {"id": "google-pixel-9-pro-128gb", "storage_gb": 128, "price_usd": 999},
+        {"id": "google-pixel-9-pro-256gb", "storage_gb": 256, "price_usd": 1059},
+        {"id": "google-pixel-9-pro-512gb", "storage_gb": 512, "price_usd": 1179},
+        {"id": "google-pixel-9-pro-1tb", "storage_gb": 1024, "price_usd": 1399}
+      ],
+      "signals": {
+        "camera_main":      {"value_normalized": 9.5, "raw_quote": "Google's computational photography magic combined with the Pixel 9 Pro's 50MP sensor consistently produces the most natural and detailed photos in the industry.", "source": "The Verge", "months_old": 11},
+        "camera_video":     {"value_normalized": 9.0, "raw_quote": "Video Pro mode and improved stabilization make the Pixel 9 Pro a serious video tool, though it still trails Apple in the highest-end video features.", "source": "GSMArena", "months_old": 11},
+        "battery_life":     {"value_normalized": 7.8, "raw_quote": "Battery life is solid but not class-leading — the Tensor G4's thermals can reduce endurance during intensive AI tasks.", "source": "RTINGS", "months_old": 11},
+        "display_quality":  {"value_normalized": 9.3, "raw_quote": "The 1-120Hz LTPO OLED with 3000 nit peak brightness is exceptional, with accurate color reproduction that makes media consumption a joy.", "source": "RTINGS", "months_old": 11},
+        "performance":      {"value_normalized": 8.5, "raw_quote": "The Tensor G4 is fast enough for all daily tasks and excels at on-device AI, but trails Snapdragon 8 Elite in raw compute benchmarks.", "source": "AnandTech", "months_old": 11},
+        "software_support": {"value_normalized": 10.0, "raw_quote": "Google guarantees seven years of OS updates, security patches, and Pixel Feature Drops — the gold standard for Android software support.", "source": "Tom's Guide", "months_old": 11},
+        "connectivity":     {"value_normalized": 9.0, "raw_quote": "Wi-Fi 7, Bluetooth 5.3, and UWB are all on board, and the Pixel 9 Pro supports satellite emergency messaging out of the box.", "source": "GSMArena", "months_old": 11},
+        "build_quality":    {"value_normalized": 9.0, "raw_quote": "The polished aluminum frame and Gorilla Glass Victus 2 give the Pixel 9 Pro a premium, understated feel that stands apart from Samsung's glitzy aesthetic.", "source": "The Verge", "months_old": 11},
+        "value_for_money":  {"value_normalized": 6.5, "raw_quote": "The Pixel 9 Pro is priced at the same level as the iPhone 16 Pro, and while the camera is world-class, the Tensor G4 holds it back from being a slam-dunk at $999.", "source": "Wirecutter", "months_old": 11}
+      },
+      "last_verified": "2026-03-19"
+    },
+    {
+      "id": "google-pixel-9a",
+      "name": "Google Pixel 9a",
+      "brand": "Google",
+      "os": "android",
+      "price_usd": 499,
+      "display_size": 6.3,
+      "weight_g": 186,
+      "cpu": "Google Tensor G4",
+      "skus": [
+        {"id": "google-pixel-9a-128gb", "storage_gb": 128, "price_usd": 499},
+        {"id": "google-pixel-9a-256gb", "storage_gb": 256, "price_usd": 559}
+      ],
+      "signals": {
+        "camera_main":      {"value_normalized": 9.0, "raw_quote": "The Pixel 9a's camera is the best at this price — Google's processing pipeline extracts stunning detail and color from a sensor that punches well above its weight class.", "source": "The Verge", "months_old": 8},
+        "camera_video":     {"value_normalized": 8.5, "raw_quote": "Video quality from the Pixel 9a is genuinely excellent for a $499 phone, with smooth stabilization and accurate color reproduction.", "source": "Tom's Guide", "months_old": 8},
+        "battery_life":     {"value_normalized": 8.0, "raw_quote": "The Pixel 9a's 5100mAh battery is a major upgrade over the Pixel 8a, consistently delivering a full day and a half on moderate use.", "source": "RTINGS", "months_old": 8},
+        "display_quality":  {"value_normalized": 8.5, "raw_quote": "The 120Hz Actua OLED is bright, colorful, and smooth — it's hard to believe this display comes on a $499 phone.", "source": "RTINGS", "months_old": 8},
+        "performance":      {"value_normalized": 8.5, "raw_quote": "Tensor G4 handles all day-to-day tasks without hesitation and brings the same AI capabilities as the Pixel 9 Pro to a much lower price point.", "source": "AnandTech", "months_old": 8},
+        "software_support": {"value_normalized": 10.0, "raw_quote": "Seven years of guaranteed OS and security updates means the Pixel 9a will still be receiving updates in 2032 — extraordinary for a $499 phone.", "source": "Tom's Guide", "months_old": 8},
+        "connectivity":     {"value_normalized": 8.0, "raw_quote": "Wi-Fi 6E and Bluetooth 5.3 cover all the bases; NFC and UWB are included, making the 9a surprisingly feature-complete.", "source": "GSMArena", "months_old": 8},
+        "build_quality":    {"value_normalized": 7.5, "raw_quote": "The matte plastic back is a slight step down from the Pro's glass, but the aluminum frame and IP67 rating still give it a solid, trustworthy feel.", "source": "The Verge", "months_old": 8},
+        "value_for_money":  {"value_normalized": 9.0, "raw_quote": "The Pixel 9a is the best value camera phone you can buy — the combination of Pixel-quality photos, clean software, and seven-year support at $499 is unmatched.", "source": "Wirecutter", "months_old": 8}
+      },
+      "last_verified": "2026-03-19"
+    },
+    {
+      "id": "oneplus-13",
+      "name": "OnePlus 13",
+      "brand": "OnePlus",
+      "os": "android",
+      "price_usd": 899,
+      "display_size": 6.82,
+      "weight_g": 210,
+      "cpu": "Qualcomm Snapdragon 8 Elite",
+      "skus": [
+        {"id": "oneplus-13-256gb", "storage_gb": 256, "price_usd": 899},
+        {"id": "oneplus-13-512gb", "storage_gb": 512, "price_usd": 999}
+      ],
+      "signals": {
+        "camera_main":      {"value_normalized": 8.0, "raw_quote": "The Hasselblad-tuned triple camera on the OnePlus 13 produces rich, well-calibrated shots with punchy but not overdone colors.", "source": "GSMArena", "months_old": 12},
+        "camera_video":     {"value_normalized": 7.8, "raw_quote": "4K video is detailed and smooth, though the OnePlus 13 lacks some of the computational video refinements found in Pixel or iPhone at this price.", "source": "Tom's Guide", "months_old": 12},
+        "battery_life":     {"value_normalized": 9.0, "raw_quote": "The 6000mAh battery is enormous, and combined with the efficient Snapdragon 8 Elite, the OnePlus 13 consistently achieves two days of real-world usage.", "source": "RTINGS", "months_old": 12},
+        "display_quality":  {"value_normalized": 9.2, "raw_quote": "The 6.82-inch 2K LTPO AMOLED with 4500 nit peak brightness is jaw-dropping in outdoor conditions and one of the best displays at any price.", "source": "RTINGS", "months_old": 12},
+        "performance":      {"value_normalized": 9.5, "raw_quote": "Snapdragon 8 Elite plus 12GB or 16GB LPDDR5X RAM makes the OnePlus 13 a silky-smooth performer that bests even some phones costing hundreds more.", "source": "AnandTech", "months_old": 12},
+        "software_support": {"value_normalized": 7.0, "raw_quote": "OnePlus promises four years of Android OS updates and five years of security patches — decent, but still behind Samsung and Google's seven-year promises.", "source": "Tom's Guide", "months_old": 12},
+        "connectivity":     {"value_normalized": 8.5, "raw_quote": "Wi-Fi 7 and Bluetooth 5.4 are on board, and the USB 3.2 port enables fast data transfers and display-out functionality.", "source": "GSMArena", "months_old": 12},
+        "build_quality":    {"value_normalized": 9.0, "raw_quote": "The textured vegan leather or polished glass backs are both premium in feel, and the IP65 rating covers everyday water splashes.", "source": "The Verge", "months_old": 12},
+        "value_for_money":  {"value_normalized": 8.5, "raw_quote": "At $899 with top-tier specs, massive battery, and fast charging, the OnePlus 13 delivers the best performance-per-dollar of any Android flagship.", "source": "Wirecutter", "months_old": 12}
+      },
+      "last_verified": "2026-03-19"
+    },
+    {
+      "id": "sony-xperia-1-vi",
+      "name": "Sony Xperia 1 VI",
+      "brand": "Sony",
+      "os": "android",
+      "price_usd": 1299,
+      "display_size": 6.5,
+      "weight_g": 192,
+      "cpu": "Qualcomm Snapdragon 8 Gen 3",
+      "skus": [
+        {"id": "sony-xperia-1-vi-256gb", "storage_gb": 256, "price_usd": 1299},
+        {"id": "sony-xperia-1-vi-512gb", "storage_gb": 512, "price_usd": 1499}
+      ],
+      "signals": {
+        "camera_main":      {"value_normalized": 8.8, "raw_quote": "Sony's collaboration with its Alpha camera division shines in the Xperia 1 VI — manual controls, real-time tracking, and the Zeiss optics deliver professional-grade flexibility.", "source": "GSMArena", "months_old": 11},
+        "camera_video":     {"value_normalized": 9.0, "raw_quote": "The Cinema Pro app and 4K120fps video recording make the Xperia 1 VI a dream for mobile filmmakers who want granular control over their footage.", "source": "The Verge", "months_old": 11},
+        "battery_life":     {"value_normalized": 8.0, "raw_quote": "The shift to a standard 21:9 OLED (rather than 4K) improves battery life noticeably, with the Xperia 1 VI now reliably lasting a full day under heavy use.", "source": "RTINGS", "months_old": 11},
+        "display_quality":  {"value_normalized": 8.5, "raw_quote": "The 6.5-inch OLED with 1-120Hz variable refresh is beautiful and accurate for media consumption, though the shift away from 4K will disappoint spec enthusiasts.", "source": "RTINGS", "months_old": 11},
+        "performance":      {"value_normalized": 9.2, "raw_quote": "Snapdragon 8 Gen 3 keeps the Xperia 1 VI blazing fast across all tasks, and the dedicated headphone amp delivers exceptional audio performance.", "source": "AnandTech", "months_old": 11},
+        "software_support": {"value_normalized": 6.5, "raw_quote": "Sony offers three years of Android OS updates and four years of security patches — functional but lagging behind competitors at this price point.", "source": "Tom's Guide", "months_old": 11},
+        "connectivity":     {"value_normalized": 8.5, "raw_quote": "Wi-Fi 7, Bluetooth 5.4, UWB, and a genuine 3.5mm headphone jack make the Xperia 1 VI a connectivity standout for audiophiles.", "source": "GSMArena", "months_old": 11},
+        "build_quality":    {"value_normalized": 9.0, "raw_quote": "The frosted Gorilla Glass Victus 2 back and aluminum frame feel impeccably crafted, and IP65/68 dual rating adds robust water resistance.", "source": "The Verge", "months_old": 11},
+        "value_for_money":  {"value_normalized": 5.5, "raw_quote": "At $1299, the Xperia 1 VI is a niche device for power users who need its unique camera controls and audiophile features — for everyone else, there are better value options.", "source": "Wirecutter", "months_old": 11}
+      },
+      "last_verified": "2026-03-19"
+    },
+    {
+      "id": "motorola-edge-50-pro",
+      "name": "Motorola Edge 50 Pro",
+      "brand": "Motorola",
+      "os": "android",
+      "price_usd": 599,
+      "display_size": 6.7,
+      "weight_g": 186,
+      "cpu": "Qualcomm Snapdragon 7s Gen 3",
+      "skus": [
+        {"id": "motorola-edge-50-pro-256gb", "storage_gb": 256, "price_usd": 599},
+        {"id": "motorola-edge-50-pro-512gb", "storage_gb": 512, "price_usd": 649}
+      ],
+      "signals": {
+        "camera_main":      {"value_normalized": 7.5, "raw_quote": "The 50MP main sensor with OIS captures pleasing, detailed shots in good light, and Motorola's processing keeps colors natural without over-sharpening.", "source": "GSMArena", "months_old": 11},
+        "camera_video":     {"value_normalized": 7.0, "raw_quote": "4K30fps video is solid for the price, though the Edge 50 Pro struggles to match flagships in low-light video stabilization.", "source": "Tom's Guide", "months_old": 11},
+        "battery_life":     {"value_normalized": 8.0, "raw_quote": "The 4500mAh battery with 125W TurboPower wired charging means you spend less time tethered to a wall — a full charge in under 30 minutes is genuinely impressive.", "source": "RTINGS", "months_old": 11},
+        "display_quality":  {"value_normalized": 8.5, "raw_quote": "The 6.7-inch 144Hz pOLED display is a visual treat — smooth, vibrant, and with curved edges that give the Edge 50 Pro a premium appearance well above its price.", "source": "RTINGS", "months_old": 11},
+        "performance":      {"value_normalized": 7.5, "raw_quote": "The Snapdragon 7s Gen 3 handles daily tasks with ease, though it falls noticeably behind flagship chips in sustained performance under load.", "source": "Notebookcheck", "months_old": 11},
+        "software_support": {"value_normalized": 7.0, "raw_quote": "Motorola promises three years of OS updates and four years of security patches — adequate, but not a strong suit at this price point.", "source": "Tom's Guide", "months_old": 11},
+        "connectivity":     {"value_normalized": 7.5, "raw_quote": "Wi-Fi 6E and Bluetooth 5.3 are solid inclusions, and NFC ensures tap-to-pay works without issue.", "source": "GSMArena", "months_old": 11},
+        "build_quality":    {"value_normalized": 8.0, "raw_quote": "The vegan leather back and aluminum frame give the Edge 50 Pro a premium feel, and IP68 water resistance is a welcome addition at this price tier.", "source": "The Verge", "months_old": 11},
+        "value_for_money":  {"value_normalized": 8.0, "raw_quote": "The Motorola Edge 50 Pro packs a beautiful display, fast charging, and clean software into a $599 package that's hard to beat for value-conscious buyers.", "source": "Wirecutter", "months_old": 11}
+      },
+      "last_verified": "2026-03-19"
+    },
+    {
+      "id": "nothing-phone-3a",
+      "name": "Nothing Phone 3a",
+      "brand": "Nothing",
+      "os": "android",
+      "price_usd": 379,
+      "display_size": 6.77,
+      "weight_g": 201,
+      "cpu": "Qualcomm Snapdragon 7s Gen 3",
+      "skus": [
+        {"id": "nothing-phone-3a-128gb", "storage_gb": 128, "price_usd": 379},
+        {"id": "nothing-phone-3a-256gb", "storage_gb": 256, "price_usd": 429}
+      ],
+      "signals": {
+        "camera_main":      {"value_normalized": 7.5, "raw_quote": "The 50MP main camera on the Phone 3a is a genuine surprise — sharpness and color accuracy are far better than you'd expect at $379.", "source": "GSMArena", "months_old": 8},
+        "camera_video":     {"value_normalized": 7.0, "raw_quote": "4K video is available and usable, though stabilization and low-light performance reveal the mid-range sensor's limitations.", "source": "Tom's Guide", "months_old": 8},
+        "battery_life":     {"value_normalized": 8.5, "raw_quote": "The 5000mAh battery in the Nothing Phone 3a is a reliable all-day companion, and 45W wired charging recovers a full charge in about an hour.", "source": "RTINGS", "months_old": 8},
+        "display_quality":  {"value_normalized": 8.0, "raw_quote": "The 6.77-inch 120Hz AMOLED is bright, punchy, and a genuinely class-leading display for the asking price.", "source": "RTINGS", "months_old": 8},
+        "performance":      {"value_normalized": 7.5, "raw_quote": "The Snapdragon 7s Gen 3 keeps Nothing OS running smooth and fast for everyday tasks, though it won't wow gamers or power users.", "source": "Notebookcheck", "months_old": 8},
+        "software_support": {"value_normalized": 7.5, "raw_quote": "Nothing promises three Android OS updates and four years of security patches, plus the clean and fast Nothing OS is one of the best Android skins available.", "source": "Tom's Guide", "months_old": 8},
+        "connectivity":     {"value_normalized": 7.5, "raw_quote": "Wi-Fi 6E, Bluetooth 5.4, and NFC cover all the essentials; the USB-C 2.0 port is a minor disappointment at this tier.", "source": "GSMArena", "months_old": 8},
+        "build_quality":    {"value_normalized": 8.0, "raw_quote": "The signature transparent back with Glyph Interface lighting is as striking in person as in photos, and the build quality feels surprisingly solid for a sub-$400 phone.", "source": "The Verge", "months_old": 8},
+        "value_for_money":  {"value_normalized": 9.0, "raw_quote": "The Nothing Phone 3a offers flagship-adjacent features at $379 — great display, good camera, unique design, and clean software make it an exceptional value.", "source": "Wirecutter", "months_old": 8}
+      },
+      "last_verified": "2026-03-19"
+    },
+    {
+      "id": "xiaomi-14",
+      "name": "Xiaomi 14",
+      "brand": "Xiaomi",
+      "os": "android",
+      "price_usd": 899,
+      "display_size": 6.36,
+      "weight_g": 193,
+      "cpu": "Qualcomm Snapdragon 8 Gen 3",
+      "skus": [
+        {"id": "xiaomi-14-256gb", "storage_gb": 256, "price_usd": 899},
+        {"id": "xiaomi-14-512gb", "storage_gb": 512, "price_usd": 999}
+      ],
+      "signals": {
+        "camera_main":      {"value_normalized": 9.0, "raw_quote": "Leica's involvement in the Xiaomi 14's camera tuning is immediately apparent — photos have a distinctive, film-like rendering that stands apart from computational-heavy competitors.", "source": "GSMArena", "months_old": 12},
+        "camera_video":     {"value_normalized": 8.5, "raw_quote": "Leica Authentic and Leica Vibrant video modes give the Xiaomi 14 a professional character, and 4K60fps footage holds up well against much more expensive rivals.", "source": "The Verge", "months_old": 12},
+        "battery_life":     {"value_normalized": 8.0, "raw_quote": "The 4610mAh battery with 90W HyperCharge wired support is a strong combination — you can top up from 0 to 100% in about 31 minutes.", "source": "RTINGS", "months_old": 12},
+        "display_quality":  {"value_normalized": 9.0, "raw_quote": "Xiaomi's 6.36-inch LTPO OLED with a 3200x1440 resolution and 3000 nit peak brightness is one of the most detailed and vivid displays in its class.", "source": "RTINGS", "months_old": 12},
+        "performance":      {"value_normalized": 9.2, "raw_quote": "Snapdragon 8 Gen 3 paired with LPDDR5X RAM makes the Xiaomi 14 a blistering performer that rivals any Android flagship released in the same year.", "source": "AnandTech", "months_old": 12},
+        "software_support": {"value_normalized": 6.0, "raw_quote": "HyperOS promises three years of major Android updates and four years of security patches — functional but short of the industry-leading support from Google and Samsung.", "source": "Tom's Guide", "months_old": 12},
+        "connectivity":     {"value_normalized": 8.5, "raw_quote": "Wi-Fi 7, Bluetooth 5.4, and IR blaster are all included; the inclusion of a dedicated satellite communication chip is a bonus for outdoor enthusiasts.", "source": "GSMArena", "months_old": 12},
+        "build_quality":    {"value_normalized": 9.0, "raw_quote": "The nano-tech ceramic or vegan leather backs feel exceptional in hand, and the IP68 rating gives the Xiaomi 14 proper flagship-level durability credentials.", "source": "The Verge", "months_old": 12},
+        "value_for_money":  {"value_normalized": 8.5, "raw_quote": "The Xiaomi 14 packs Leica cameras, a top-tier chip, gorgeous display, and premium build into $899 — it's one of the strongest value propositions in the Android flagship segment.", "source": "Wirecutter", "months_old": 12}
+      },
+      "last_verified": "2026-03-19"
+    },
+    {
+      "id": "asus-rog-phone-9",
+      "name": "ASUS ROG Phone 9",
+      "brand": "ASUS",
+      "os": "android",
+      "price_usd": 1099,
+      "display_size": 6.78,
+      "weight_g": 227,
+      "cpu": "Qualcomm Snapdragon 8 Elite",
+      "skus": [
+        {"id": "asus-rog-phone-9-256gb", "storage_gb": 256, "price_usd": 1099},
+        {"id": "asus-rog-phone-9-512gb", "storage_gb": 512, "price_usd": 1199}
+      ],
+      "signals": {
+        "camera_main":      {"value_normalized": 6.5, "raw_quote": "The ROG Phone 9's camera is competent but clearly secondary to its gaming mission — photos are fine in daylight but lose ground to camera-focused flagships in challenging conditions.", "source": "GSMArena", "months_old": 10},
+        "camera_video":     {"value_normalized": 6.5, "raw_quote": "4K video recording is available and passable, but the ROG Phone 9 lacks the computational video refinements that Pixel and iPhone users take for granted.", "source": "Tom's Guide", "months_old": 10},
+        "battery_life":     {"value_normalized": 9.0, "raw_quote": "The 5800mAh battery with 65W HyperCharge wired charging is a gaming phone highlight — the ROG Phone 9 lasted over 12 hours in our continuous game streaming test.", "source": "RTINGS", "months_old": 10},
+        "display_quality":  {"value_normalized": 9.5, "raw_quote": "The 6.78-inch 185Hz AMOLED with 2500 nit peak brightness is the best display for gaming available on any smartphone — buttery smooth and blindingly bright.", "source": "RTINGS", "months_old": 10},
+        "performance":      {"value_normalized": 9.5, "raw_quote": "Snapdragon 8 Elite paired with the AeroActive Cooler keeps the ROG Phone 9 running at full tilt without throttling — it's the definitive gaming phone for sustained performance.", "source": "AnandTech", "months_old": 10},
+        "software_support": {"value_normalized": 6.0, "raw_quote": "ASUS offers two years of Android OS updates and three years of security patches for the ROG Phone 9 — short-term support that's hard to justify at $1099.", "source": "Tom's Guide", "months_old": 10},
+        "connectivity":     {"value_normalized": 9.0, "raw_quote": "Wi-Fi 7, dual-SIM 5G, Bluetooth 5.4, and dual USB-C ports (including a side-mounted one for landscape gaming) make the ROG Phone 9 a connectivity powerhouse.", "source": "GSMArena", "months_old": 10},
+        "build_quality":    {"value_normalized": 8.5, "raw_quote": "The angular, gaming-inspired design is bold and polarizing; the build itself is rigid and tank-like with IP54 splash resistance sufficient for general use.", "source": "The Verge", "months_old": 10},
+        "value_for_money":  {"value_normalized": 7.0, "raw_quote": "For dedicated mobile gamers, the ROG Phone 9 at $1099 offers hardware no other phone can match; for everyone else, the sacrifices in camera and software longevity are tough to swallow.", "source": "Wirecutter", "months_old": 10}
+      },
+      "last_verified": "2026-03-19"
+    },
+    {
+      "id": "samsung-galaxy-z-fold-6",
+      "name": "Samsung Galaxy Z Fold 6",
+      "brand": "Samsung",
+      "os": "android",
+      "price_usd": 1799,
+      "display_size": 7.6,
+      "weight_g": 239,
+      "cpu": "Qualcomm Snapdragon 8 Gen 3",
+      "skus": [
+        {"id": "samsung-galaxy-z-fold-6-256gb", "storage_gb": 256, "price_usd": 1799},
+        {"id": "samsung-galaxy-z-fold-6-512gb", "storage_gb": 512, "price_usd": 1919},
+        {"id": "samsung-galaxy-z-fold-6-1tb", "storage_gb": 1024, "price_usd": 2159}
+      ],
+      "signals": {
+        "camera_main":      {"value_normalized": 8.5, "raw_quote": "The Z Fold 6's triple camera system is borrowed from the S24 lineup and performs admirably, delivering sharp and color-accurate photos across its wide and telephoto lenses.", "source": "GSMArena", "months_old": 10},
+        "camera_video":     {"value_normalized": 8.2, "raw_quote": "4K60fps video quality is solid and the under-display camera enables hands-free video calls in tablet mode — a genuinely useful foldable-only feature.", "source": "The Verge", "months_old": 10},
+        "battery_life":     {"value_normalized": 7.0, "raw_quote": "The 4400mAh battery is adequate but not impressive given the large inner display — heavy use of the tablet mode will see you reaching for a charger before evening.", "source": "RTINGS", "months_old": 10},
+        "display_quality":  {"value_normalized": 9.0, "raw_quote": "The 7.6-inch inner Dynamic AMOLED is stunning for productivity and media, with a bright, accurate panel that makes multitasking genuinely enjoyable.", "source": "RTINGS", "months_old": 10},
+        "performance":      {"value_normalized": 9.2, "raw_quote": "Snapdragon 8 Gen 3 gives the Z Fold 6 the horsepower to handle multiple app windows and demanding tasks simultaneously without breaking a sweat.", "source": "AnandTech", "months_old": 10},
+        "software_support": {"value_normalized": 9.0, "raw_quote": "Samsung's seven-year update promise applies to the Z Fold 6, and One UI's multitasking features are the best optimized foldable software experience currently available.", "source": "Tom's Guide", "months_old": 10},
+        "connectivity":     {"value_normalized": 9.0, "raw_quote": "Wi-Fi 7, Bluetooth 5.3, and UWB are all present, making the Z Fold 6 one of the most connected foldables on the market.", "source": "GSMArena", "months_old": 10},
+        "build_quality":    {"value_normalized": 8.5, "raw_quote": "The Galaxy Z Fold 6 is Samsung's most refined foldable yet — the hinge is tighter, the crease is less visible, and the armor aluminum frame feels robust despite the engineering complexity.", "source": "The Verge", "months_old": 10},
+        "value_for_money":  {"value_normalized": 5.0, "raw_quote": "At $1799, the Galaxy Z Fold 6 is a luxury product for early adopters — the foldable experience is genuinely transformative, but the price remains a tough pill to swallow for most buyers.", "source": "Wirecutter", "months_old": 10}
+      },
+      "last_verified": "2026-03-19"
+    }
+  ]
+}

@@ -141,12 +141,14 @@ export interface Message {
   flightCards?: FlightRecommendationCard[];
   creditCardCards?: CreditCardRecommendationCard[];
   laptopCards?: LaptopRecommendationCard[];
+  smartphoneCards?: SmartphoneRecommendationCard[];
+  headphoneCards?: HeadphoneRecommendationCard[];
   category?: CategoryType;
 }
 
 // ─── Phase 7: Multi-category types ───────────────────────────────────────────
 
-export type CategoryType = "restaurant" | "hotel" | "flight" | "credit_card" | "laptop" | "unknown";
+export type CategoryType = "restaurant" | "hotel" | "flight" | "credit_card" | "laptop" | "smartphone" | "headphone" | "subscription" | "unknown";
 
 export interface BaseIntent {
   category: CategoryType;
@@ -195,7 +197,18 @@ export interface FlightIntent extends BaseIntent {
   max_stops?: number | null; // null = no preference, 0 = nonstop only, 1 = max 1 stop
 }
 
-export type ParsedIntent = RestaurantIntent | HotelIntent | FlightIntent | CreditCardIntent | LaptopIntent;
+import type { WatchCategory } from "./watchTypes";
+
+export interface SubscriptionIntent extends BaseIntent {
+  category: "subscription";
+  action: "subscribe" | "unsubscribe" | "list";
+  watch_category: WatchCategory | null;
+  brands: string[];     // e.g. ["Apple", "NVIDIA"]
+  keywords: string[];   // e.g. ["MacBook Pro", "RTX"]
+  label: string;        // human-readable summary, e.g. "Apple MacBook releases"
+}
+
+export type ParsedIntent = RestaurantIntent | HotelIntent | FlightIntent | CreditCardIntent | LaptopIntent | SmartphoneIntent | HeadphoneIntent | SubscriptionIntent;
 
 export interface Hotel {
   id: string;
@@ -378,6 +391,7 @@ export interface LaptopIntent extends BaseIntent {
   display_size_preference: "<14" | "14-15" | "15+" | "any";
   avoid_brands: string[];
   needs_use_case_info: boolean;
+  mentioned_models: string[]; // specific models/chips user named, e.g. ["M5", "MacBook Pro M4"]
 }
 
 export interface LaptopSKU {
@@ -453,6 +467,160 @@ export interface LaptopRecommendationCard {
   use_case_scores: Partial<Record<LaptopUseCase, number>>;
   signal_breakdown: LaptopSignalBreakdownItem[];
   recommended_sku: LaptopSKU | null;
+  why_recommended: string;
+  watch_out: string[];
+  data_staleness_warning: boolean;
+}
+
+// ─── Shared signal value type (phone + headphone) ─────────────────────────────
+
+export interface SignalValue {
+  value_normalized: number; // 0-10
+  raw_quote?: string;
+  source: string;
+  months_old?: number;
+}
+
+// ─── Smartphone types ─────────────────────────────────────────────────────────
+
+export type SmartphoneUseCase =
+  | "photography"
+  | "gaming"
+  | "business"
+  | "everyday"
+  | "budget_value";
+
+export interface SmartphoneSKU {
+  id: string;
+  storage_gb: number;
+  color?: string;
+  price_usd: number;
+}
+
+export interface SmartphoneDevice {
+  id: string;
+  name: string;
+  brand: string;
+  os: "ios" | "android";
+  price_usd: number;
+  display_size: number;
+  weight_g: number;
+  cpu: string;
+  skus: SmartphoneSKU[];
+  signals: {
+    camera_main: SignalValue;
+    camera_video: SignalValue;
+    battery_life: SignalValue;
+    display_quality: SignalValue;
+    performance: SignalValue;
+    software_support: SignalValue;
+    connectivity: SignalValue;
+    build_quality: SignalValue;
+    value_for_money: SignalValue;
+  };
+  last_verified: string;
+}
+
+export interface SmartphoneIntent extends BaseIntent {
+  category: "smartphone";
+  use_cases: SmartphoneUseCase[];
+  budget_usd_max: number | null;
+  budget_usd_min: number | null;
+  os_preference: "ios" | "android" | "any";
+  avoid_brands: string[];
+  needs_use_case_info: boolean;
+  mentioned_models: string[];
+}
+
+export interface SmartphoneSignalBreakdownItem {
+  signal_type: string;
+  label: string;
+  score: number;
+  weight: number;
+  raw_quote?: string;
+  source?: string;
+}
+
+export interface SmartphoneRecommendationCard {
+  device: SmartphoneDevice;
+  rank: number;
+  final_score: number;
+  use_case_scores: Partial<Record<SmartphoneUseCase, number>>;
+  signal_breakdown: SmartphoneSignalBreakdownItem[];
+  recommended_sku: SmartphoneSKU | null;
+  why_recommended: string;
+  watch_out: string[];
+  data_staleness_warning: boolean;
+}
+
+// ─── Headphone types ──────────────────────────────────────────────────────────
+
+export type HeadphoneUseCase =
+  | "commute"
+  | "work_from_home"
+  | "audiophile"
+  | "sport"
+  | "casual";
+
+export type HeadphoneFormFactor = "over_ear" | "in_ear" | "on_ear";
+
+export interface HeadphoneSKU {
+  id: string;
+  color: string;
+  price_usd: number;
+}
+
+export interface HeadphoneDevice {
+  id: string;
+  name: string;
+  brand: string;
+  form_factor: HeadphoneFormFactor;
+  wireless: boolean;
+  price_usd: number;
+  weight_g: number;
+  skus: HeadphoneSKU[];
+  signals: {
+    noise_cancellation: SignalValue;
+    sound_quality: SignalValue;
+    bass_response: SignalValue;
+    soundstage: SignalValue;
+    comfort_long_wear: SignalValue;
+    call_quality: SignalValue;
+    battery_life: SignalValue;
+    codec_support: SignalValue;
+    multipoint_connection: SignalValue;
+    value_for_money: SignalValue;
+  };
+  last_verified: string;
+}
+
+export interface HeadphoneIntent extends BaseIntent {
+  category: "headphone";
+  use_cases: HeadphoneUseCase[];
+  budget_usd_max: number | null;
+  budget_usd_min: number | null;
+  form_factor_preference: HeadphoneFormFactor | "any";
+  wireless_required: boolean | null;
+  avoid_brands: string[];
+  needs_use_case_info: boolean;
+  mentioned_models: string[];
+}
+
+export interface HeadphoneSignalBreakdownItem {
+  signal_type: string;
+  label: string;
+  score: number;
+  weight: number;
+  raw_quote?: string;
+  source?: string;
+}
+
+export interface HeadphoneRecommendationCard {
+  device: HeadphoneDevice;
+  rank: number;
+  final_score: number;
+  use_case_scores: Partial<Record<HeadphoneUseCase, number>>;
+  signal_breakdown: HeadphoneSignalBreakdownItem[];
   why_recommended: string;
   watch_out: string[];
   data_staleness_warning: boolean;

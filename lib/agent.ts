@@ -2,11 +2,14 @@
 // const client = new Anthropic();
 
 import { googlePlacesSearch, tavilySearch, geocodeLocation, fetchReviewSignals, searchHotels, searchFlights, resolveMultiAirport } from "./tools";
-import { UserRequirements, Restaurant, RecommendationCard, SessionPreferences, ScoringDimensions, HotelIntent, RestaurantIntent, FlightIntent, CreditCardIntent, LaptopIntent, LaptopUseCase, ParsedIntent, HotelRecommendationCard, FlightRecommendationCard, CreditCardRecommendationCard, LaptopRecommendationCard, SpendingProfile, CategoryType, Flight } from "./types";
+import { UserRequirements, Restaurant, RecommendationCard, SessionPreferences, ScoringDimensions, HotelIntent, RestaurantIntent, FlightIntent, CreditCardIntent, LaptopIntent, LaptopUseCase, ParsedIntent, HotelRecommendationCard, FlightRecommendationCard, CreditCardRecommendationCard, LaptopRecommendationCard, SpendingProfile, CategoryType, Flight, SubscriptionIntent, SmartphoneIntent, SmartphoneUseCase, SmartphoneRecommendationCard, HeadphoneIntent, HeadphoneUseCase, HeadphoneRecommendationCard } from "./types";
+import type { WatchCategory } from "./watchTypes";
 import { CITIES, DEFAULT_CITY } from "./cities";
 import { UserRequirementsSchema, RankedItemArraySchema } from "./schemas";
 import { recommendCreditCards } from "./creditCardEngine";
-import { recommendLaptops } from "./laptopEngine";
+import { recommendLaptops, classifyMentionedModels } from "./laptopEngine";
+import { recommendSmartphones, classifyMentionedSmartphones } from "./smartphoneEngine";
+import { recommendHeadphones, classifyMentionedHeadphones } from "./headphoneEngine";
 
 const MINIMAX_API_URL = "https://api.minimaxi.chat/v1/chat/completions";
 const MINIMAX_MODEL = "MiniMax-Text-01";
@@ -178,16 +181,83 @@ async function detectCategory(message: string): Promise<CategoryType> {
     "software development laptop", "video editing laptop", "coding laptop",
     "work from home laptop", "wfh laptop", "college laptop", "student laptop",
     "light laptop", "portable laptop", "budget laptop", "laptop under",
+    // use-case descriptions without explicit device name
+    "photo editing", "photo edit", "video editing", "note-taking", "note taking", "notetaking",
+    "college student", "for school", "for college", "for uni", "for university",
+    "for coding", "for programming", "for development", "for gaming",
     "笔记本", "笔记本电脑", "电脑推荐", "哪款电脑", "苹果电脑", "游戏本",
     "轻薄本", "商务本", "编程用什么电脑", "剪辑用什么电脑",
   ];
 
+  // Subscription detection — must come before other categories
+  const subscriptionKeywords = [
+    "tell me when", "let me know when", "notify me", "notify me when",
+    "alert me", "alert me when", "keep me posted", "keep me updated",
+    "watch for", "monitor for", "subscribe", "track releases",
+    "when.*release", "when.*announce", "when.*come out", "when.*launch",
+    "新品提醒", "发布提醒", "出了告诉我", "新款提醒",
+  ];
+  const hasSubscriptionTrigger = subscriptionKeywords.some((kw) =>
+    kw.includes(".*") ? new RegExp(kw).test(lower) : lower.includes(kw)
+  );
+  // Also detect unsubscribe / list
+  const hasUnsubscribe = lower.includes("stop notif") || lower.includes("unsubscribe") || lower.includes("取消订阅");
+  const hasListSubs = (lower.includes("what am i") && lower.includes("watch")) ||
+    lower.includes("my subscriptions") || lower.includes("show subscriptions") ||
+    lower.includes("我的订阅");
+  if (hasSubscriptionTrigger || hasUnsubscribe || hasListSubs) return "subscription";
+
   // Credit card check first to avoid collision with "travel card" → hotel
   if (creditCardKeywords.some((kw) => lower.includes(kw))) return "credit_card";
+
+  // Smartphone keywords
+  const smartphoneKeywords = [
+    "phone", "smartphone", "iphone", "galaxy", "pixel phone", "android phone",
+    "mobile phone", "cell phone", "which phone", "best phone", "new phone",
+    "recommend a phone", "buy a phone", "upgrade my phone",
+    "galaxy s", "galaxy a", "nothing phone", "oneplus", "xperia",
+    "手机", "苹果手机", "安卓手机", "换手机", "买手机", "推荐手机",
+  ];
+  // Headphone keywords
+  const headphoneKeywords = [
+    "headphone", "headphones", "earbuds", "earphones", "airpods", "buds",
+    "noise canceling", "noise cancelling", "noise-cancelling", "anc headphone",
+    "over-ear", "in-ear", "wireless headphone", "wired headphone",
+    "wh-1000xm", "wf-1000xm", "quietcomfort", "momentum wireless",
+    "which headphones", "best headphones", "recommend headphones",
+    "耳机", "无线耳机", "降噪耳机", "入耳式", "头戴式",
+  ];
+
+  if (headphoneKeywords.some((kw) => lower.includes(kw))) return "headphone";
+  if (smartphoneKeywords.some((kw) => lower.includes(kw))) return "smartphone";
   // Laptop check before flight/hotel to avoid collision
   if (laptopKeywords.some((kw) => lower.includes(kw))) return "laptop";
   if (flightKeywords.some((kw) => lower.includes(kw))) return "flight";
   if (hotelKeywords.some((kw) => lower.includes(kw))) return "hotel";
+
+  // No keyword matched — ask LLM to classify rather than blindly defaulting to restaurant
+  try {
+    const raw = await minimaxChat({
+      system: `You are a query classifier. Given a user message, reply with exactly one word — the category it belongs to:
+- "laptop"     : asking for a laptop, computer, notebook recommendation
+- "smartphone" : asking for a phone, iPhone, Android phone recommendation
+- "headphone"  : asking for headphones, earbuds, earphones recommendation
+- "credit_card": asking for a credit card recommendation
+- "flight"     : asking about flights or plane tickets
+- "hotel"      : asking about hotel or accommodation
+- "restaurant" : asking about food, dining, eating out, or a restaurant
+
+Reply with only the single word. No explanation.`,
+      messages: [{ role: "user", content: message }],
+      max_tokens: 5,
+    });
+    const category = raw.trim().toLowerCase().replace(/[^a-z_]/g, "") as CategoryType;
+    if (["laptop", "smartphone", "headphone", "credit_card", "flight", "hotel", "restaurant"].includes(category)) {
+      return category;
+    }
+  } catch {
+    // ignore, fall through to default
+  }
   return "restaurant";
 }
 
@@ -509,6 +579,204 @@ async function runCreditCardPipeline(
   return { creditCardRecommendations };
 }
 
+// ─── Subscription Intent Parsing ─────────────────────────────────────────────
+
+async function parseSubscriptionIntent(
+  userMessage: string,
+  conversationHistory: Array<{ role: "user" | "assistant"; content: string }>
+): Promise<SubscriptionIntent> {
+  const recentHistory = conversationHistory.slice(-4);
+  const fallback: SubscriptionIntent = {
+    category: "subscription",
+    action: "subscribe",
+    watch_category: null,
+    brands: [],
+    keywords: [],
+    label: "new product releases",
+  };
+
+  try {
+    const text = await minimaxChat({
+      system: `You parse product release subscription requests.
+Return ONLY a valid JSON object:
+{
+  "action": "subscribe",       // "subscribe" | "unsubscribe" | "list"
+  "watch_category": "laptop",  // "laptop" | "gpu" | "phone" | "car" | "tablet" | "monitor" | null
+  "brands": [],                // brand names explicitly mentioned, e.g. ["Apple","NVIDIA"]
+  "keywords": [],              // specific product line keywords, e.g. ["MacBook Pro","RTX 5090"]
+  "label": ""                  // short human-readable label, e.g. "Apple MacBook releases"
+}
+
+Rules:
+- action: "list" if user asks what they're subscribed to
+- action: "unsubscribe" if user wants to stop notifications
+- watch_category: detect from context:
+    laptop → laptop, MacBook, ThinkPad, notebook computer
+    gpu → GPU, graphics card, RTX, Radeon, GeForce
+    phone → phone, iPhone, smartphone, Galaxy, Pixel
+    car → car, EV, Tesla, electric vehicle
+    tablet → tablet, iPad
+    monitor → monitor, display, screen
+- brands: only names explicitly stated, no inference
+- keywords: specific product names mentioned (e.g. "RTX 5090") but NOT generic category words
+- label: concise English summary, max 6 words`,
+      messages: [
+        ...recentHistory,
+        { role: "user" as const, content: userMessage },
+      ],
+      max_tokens: 256,
+    });
+
+    const match = text.match(/\{[\s\S]*\}/);
+    if (!match) return fallback;
+    const parsed = JSON.parse(match[0]);
+
+    const validActions = ["subscribe", "unsubscribe", "list"];
+    const validCategories: WatchCategory[] = ["laptop", "smartphone", "headphone", "gpu", "car", "tablet", "monitor"];
+
+    return {
+      category: "subscription",
+      action: validActions.includes(parsed.action) ? parsed.action : "subscribe",
+      watch_category: validCategories.includes(parsed.watch_category) ? parsed.watch_category : null,
+      brands: Array.isArray(parsed.brands) ? parsed.brands : [],
+      keywords: Array.isArray(parsed.keywords) ? parsed.keywords : [],
+      label: typeof parsed.label === "string" ? parsed.label : fallback.label,
+    };
+  } catch {
+    return fallback;
+  }
+}
+
+// ─── Smartphone Intent Parsing ───────────────────────────────────────────────
+
+async function parseSmartphoneIntent(
+  userMessage: string,
+  conversationHistory: Array<{ role: "user" | "assistant"; content: string }>
+): Promise<SmartphoneIntent> {
+  const recentHistory = conversationHistory.slice(-6);
+  const fallback: SmartphoneIntent = {
+    category: "smartphone",
+    use_cases: [],
+    budget_usd_max: null,
+    budget_usd_min: null,
+    os_preference: "any",
+    avoid_brands: [],
+    needs_use_case_info: true,
+    mentioned_models: [],
+  };
+  try {
+    const text = await minimaxChat({
+      system: `You extract smartphone purchase intent from user messages.
+Return ONLY a valid JSON object:
+{
+  "use_cases": [],           // array of: "photography","gaming","business","everyday","budget_value"
+  "budget_usd_max": null,    // number or null
+  "budget_usd_min": null,    // number or null
+  "os_preference": "any",    // "ios","android","any"
+  "avoid_brands": [],        // brands to exclude
+  "needs_use_case_info": false, // true if unclear what they'll use it for
+  "mentioned_models": []     // specific models named e.g. ["iPhone 17","Galaxy S26"]
+}
+Rules:
+- photography, camera, vlogging, TikTok, YouTube, content creation, selfie, front camera, video stabilization → "photography"
+- gaming, high performance, benchmark, fps → "gaming"
+- work, email, productivity, business → "business"
+- general/all-around, display, battery, everyday use, screen, SOT, storage → "everyday"
+- cheap, affordable, budget, under $X, value → "budget_value"
+- "iOS","iPhone","Apple phone" → os_preference:"ios"
+- "Android" → os_preference:"android"
+- If user mentions battery life, screen quality, storage as primary concerns with no specific use case → "everyday"
+- needs_use_case_info should be false whenever there is enough context to pick at least one use_case
+- Extract budget ranges precisely`,
+      messages: [...recentHistory, { role: "user" as const, content: userMessage }],
+      max_tokens: 384,
+    });
+    const match = text.match(/\{[\s\S]*\}/);
+    if (!match) return fallback;
+    const p = JSON.parse(match[0]);
+    const validUC: SmartphoneUseCase[] = ["photography", "gaming", "business", "everyday", "budget_value"];
+    const use_cases = (p.use_cases ?? []).filter((u: string) => validUC.includes(u as SmartphoneUseCase));
+    return {
+      category: "smartphone",
+      use_cases,
+      budget_usd_max: p.budget_usd_max ?? null,
+      budget_usd_min: p.budget_usd_min ?? null,
+      os_preference: ["ios","android","any"].includes(p.os_preference) ? p.os_preference : "any",
+      avoid_brands: Array.isArray(p.avoid_brands) ? p.avoid_brands : [],
+      needs_use_case_info: p.needs_use_case_info ?? (use_cases.length === 0),
+      mentioned_models: Array.isArray(p.mentioned_models) ? p.mentioned_models : [],
+    };
+  } catch {
+    return fallback;
+  }
+}
+
+// ─── Headphone Intent Parsing ─────────────────────────────────────────────────
+
+async function parseHeadphoneIntent(
+  userMessage: string,
+  conversationHistory: Array<{ role: "user" | "assistant"; content: string }>
+): Promise<HeadphoneIntent> {
+  const recentHistory = conversationHistory.slice(-6);
+  const fallback: HeadphoneIntent = {
+    category: "headphone",
+    use_cases: [],
+    budget_usd_max: null,
+    budget_usd_min: null,
+    form_factor_preference: "any",
+    wireless_required: null,
+    avoid_brands: [],
+    needs_use_case_info: true,
+    mentioned_models: [],
+  };
+  try {
+    const text = await minimaxChat({
+      system: `You extract headphone purchase intent from user messages.
+Return ONLY a valid JSON object:
+{
+  "use_cases": [],                   // array of: "commute","work_from_home","audiophile","sport","casual"
+  "budget_usd_max": null,            // number or null
+  "budget_usd_min": null,            // number or null
+  "form_factor_preference": "any",   // "over_ear","in_ear","on_ear","any"
+  "wireless_required": null,         // true/false/null
+  "avoid_brands": [],
+  "needs_use_case_info": false,
+  "mentioned_models": []             // e.g. ["WH-1000XM6","AirPods Pro 3"]
+}
+Rules:
+- commute, travel, subway, plane → "commute"
+- office, work, calls, meetings → "work_from_home"
+- audiophile, critical listening, studio, hi-fi → "audiophile"
+- gym, running, workout, sport → "sport"
+- general, everyday, music → "casual"
+- over-ear, over ear, headphones → form_factor:"over_ear"
+- in-ear, earbuds, earphones → form_factor:"in_ear"
+- "wireless","bluetooth" → wireless_required:true
+- "wired" → wireless_required:false`,
+      messages: [...recentHistory, { role: "user" as const, content: userMessage }],
+      max_tokens: 384,
+    });
+    const match = text.match(/\{[\s\S]*\}/);
+    if (!match) return fallback;
+    const p = JSON.parse(match[0]);
+    const validUC: HeadphoneUseCase[] = ["commute", "work_from_home", "audiophile", "sport", "casual"];
+    const use_cases = (p.use_cases ?? []).filter((u: string) => validUC.includes(u as HeadphoneUseCase));
+    return {
+      category: "headphone",
+      use_cases,
+      budget_usd_max: p.budget_usd_max ?? null,
+      budget_usd_min: p.budget_usd_min ?? null,
+      form_factor_preference: ["over_ear","in_ear","on_ear","any"].includes(p.form_factor_preference) ? p.form_factor_preference : "any",
+      wireless_required: p.wireless_required ?? null,
+      avoid_brands: Array.isArray(p.avoid_brands) ? p.avoid_brands : [],
+      needs_use_case_info: p.needs_use_case_info ?? (use_cases.length === 0),
+      mentioned_models: Array.isArray(p.mentioned_models) ? p.mentioned_models : [],
+    };
+  } catch {
+    return fallback;
+  }
+}
+
 // ─── Phase 10: Laptop Intent Parsing ─────────────────────────────────────────
 
 async function parseLaptopIntent(
@@ -529,7 +797,8 @@ Return ONLY a valid JSON object with exactly these fields:
   "gaming_required": false,  // boolean
   "display_size_preference": "any",    // "<14","14-15","15+","any"
   "avoid_brands": [],        // e.g. ["Dell","HP"]
-  "needs_use_case_info": false  // true if user didn't clearly specify what they'll use it for
+  "needs_use_case_info": false,  // true if user didn't clearly specify what they'll use it for
+  "mentioned_models": []     // specific device names or chip generations explicitly named by the user, e.g. ["MacBook Pro M5","M4 Pro","RTX 5090"]. Empty if none mentioned.
 }
 
 Rules:
@@ -543,7 +812,8 @@ Rules:
 - If user says "MacBook" or "Mac" or "Apple" → os_preference: "mac"
 - If user says "Windows" → os_preference: "windows"
 - Extract budget: "$1000-1500" → budget_usd_min:1000, budget_usd_max:1500; "under $1200" → budget_usd_max:1200; "budget" → budget_usd_max:800
-- If user doesn't mention what they'll use it for, set needs_use_case_info: true`,
+- If user doesn't mention what they'll use it for, set needs_use_case_info: true
+- For mentioned_models: only include names the user explicitly stated, not inferred ones`,
       messages: [
         ...recentHistory,
         { role: "user" as const, content: userMessage },
@@ -570,6 +840,7 @@ Rules:
       display_size_preference: parsed.display_size_preference ?? "any",
       avoid_brands: parsed.avoid_brands ?? [],
       needs_use_case_info: parsed.needs_use_case_info ?? (use_cases.length === 0),
+      mentioned_models: Array.isArray(parsed.mentioned_models) ? parsed.mentioned_models : [],
     };
   } catch {
     return {
@@ -583,6 +854,7 @@ Rules:
       display_size_preference: "any",
       avoid_brands: [],
       needs_use_case_info: true,
+      mentioned_models: [],
     };
   }
 }
@@ -591,14 +863,84 @@ Rules:
 
 async function runLaptopPipeline(
   intent: LaptopIntent
-): Promise<{ laptopRecommendations: LaptopRecommendationCard[] }> {
+): Promise<{ laptopRecommendations: LaptopRecommendationCard[]; laptop_db_gap_warning: string | null }> {
   // Default to light_productivity if no use case specified
   const effectiveIntent: LaptopIntent = {
     ...intent,
     use_cases: intent.use_cases.length > 0 ? intent.use_cases : ["light_productivity"],
   };
   const laptopRecommendations = recommendLaptops(effectiveIntent);
-  return { laptopRecommendations };
+
+  // Check if user mentioned specific models not covered by our database
+  let laptop_db_gap_warning: string | null = null;
+  if (intent.mentioned_models.length > 0) {
+    const { announced, unknown } = classifyMentionedModels(intent.mentioned_models);
+    const parts: string[] = [];
+    if (announced.length > 0) {
+      parts.push(
+        `${announced.join(", ")} ${announced.length > 1 ? "have" : "has"} been announced — we're tracking ${announced.length > 1 ? "them" : "it"} but don't have full review data yet.`
+      );
+    }
+    if (unknown.length > 0) {
+      parts.push(
+        `${unknown.join(", ")} ${unknown.length > 1 ? "aren't" : "isn't"} in our database yet.`
+      );
+    }
+    if (parts.length > 0) {
+      laptop_db_gap_warning =
+        parts.join(" ") +
+        " The recommendations below are the best matches from our current reviewed dataset.";
+    }
+  }
+
+  return { laptopRecommendations, laptop_db_gap_warning };
+}
+
+// ─── Smartphone Pipeline ──────────────────────────────────────────────────────
+
+function buildDbGapWarning(announced: string[], unknown: string[]): string | null {
+  const parts: string[] = [];
+  if (announced.length > 0)
+    parts.push(`${announced.join(", ")} ${announced.length > 1 ? "have" : "has"} been announced — we're tracking ${announced.length > 1 ? "them" : "it"} but don't have full review data yet.`);
+  if (unknown.length > 0)
+    parts.push(`${unknown.join(", ")} ${unknown.length > 1 ? "aren't" : "isn't"} in our database yet.`);
+  return parts.length > 0
+    ? parts.join(" ") + " The recommendations below are the best matches from our current reviewed dataset."
+    : null;
+}
+
+async function runSmartphonePipeline(
+  intent: SmartphoneIntent
+): Promise<{ smartphoneRecommendations: SmartphoneRecommendationCard[]; db_gap_warning: string | null }> {
+  const effectiveIntent: SmartphoneIntent = {
+    ...intent,
+    use_cases: intent.use_cases.length > 0 ? intent.use_cases : ["everyday"],
+  };
+  const smartphoneRecommendations = recommendSmartphones(effectiveIntent);
+  let db_gap_warning: string | null = null;
+  if (intent.mentioned_models.length > 0) {
+    const { announced, unknown } = classifyMentionedSmartphones(intent.mentioned_models);
+    db_gap_warning = buildDbGapWarning(announced, unknown);
+  }
+  return { smartphoneRecommendations, db_gap_warning };
+}
+
+// ─── Headphone Pipeline ───────────────────────────────────────────────────────
+
+async function runHeadphonePipeline(
+  intent: HeadphoneIntent
+): Promise<{ headphoneRecommendations: HeadphoneRecommendationCard[]; db_gap_warning: string | null }> {
+  const effectiveIntent: HeadphoneIntent = {
+    ...intent,
+    use_cases: intent.use_cases.length > 0 ? intent.use_cases : ["casual"],
+  };
+  const headphoneRecommendations = recommendHeadphones(effectiveIntent);
+  let db_gap_warning: string | null = null;
+  if (intent.mentioned_models.length > 0) {
+    const { announced, unknown } = classifyMentionedHeadphones(intent.mentioned_models);
+    db_gap_warning = buildDbGapWarning(announced, unknown);
+  }
+  return { headphoneRecommendations, db_gap_warning };
 }
 
 export async function parseIntent(
@@ -609,11 +951,20 @@ export async function parseIntent(
   conversationHistory?: Array<{ role: "user" | "assistant"; content: string }>
 ): Promise<ParsedIntent> {
   const category = await detectCategory(userMessage);
+  if (category === "subscription") {
+    return parseSubscriptionIntent(userMessage, conversationHistory ?? []);
+  }
   if (category === "credit_card") {
     return parseCreditCardIntent(userMessage, conversationHistory ?? []);
   }
   if (category === "laptop") {
     return parseLaptopIntent(userMessage, conversationHistory ?? []);
+  }
+  if (category === "smartphone") {
+    return parseSmartphoneIntent(userMessage, conversationHistory ?? []);
+  }
+  if (category === "headphone") {
+    return parseHeadphoneIntent(userMessage, conversationHistory ?? []);
   }
   if (category === "flight") {
     return parseFlightIntent(userMessage, cityFullName);
@@ -1148,12 +1499,17 @@ export async function runAgent(
   streamCallbacks?: StreamCallbacks,
   customWeights?: Partial<typeof DEFAULT_WEIGHTS>
 ): Promise<{
-  requirements: UserRequirements | HotelIntent | FlightIntent | CreditCardIntent | LaptopIntent;
+  requirements: UserRequirements | HotelIntent | FlightIntent | CreditCardIntent | LaptopIntent | SmartphoneIntent | HeadphoneIntent | SubscriptionIntent;
   recommendations: RecommendationCard[];
   hotelRecommendations: HotelRecommendationCard[];
   flightRecommendations: FlightRecommendationCard[];
   creditCardRecommendations: CreditCardRecommendationCard[];
   laptopRecommendations: LaptopRecommendationCard[];
+  laptop_db_gap_warning: string | null;
+  smartphoneRecommendations: SmartphoneRecommendationCard[];
+  headphoneRecommendations: HeadphoneRecommendationCard[];
+  device_db_gap_warning: string | null;
+  subscriptionIntent: SubscriptionIntent | null;
   missing_credit_card_fields: string[];
   missing_flight_fields: string[];
   no_direct_available: boolean;
@@ -1172,6 +1528,28 @@ export async function runAgent(
     conversationHistory
   );
 
+  // Route to subscription intent — no server-side pipeline, client handles storage
+  if (intent.category === "subscription") {
+    return {
+      requirements: intent,
+      recommendations: [],
+      hotelRecommendations: [],
+      flightRecommendations: [],
+      creditCardRecommendations: [],
+      laptopRecommendations: [],
+      laptop_db_gap_warning: null,
+      smartphoneRecommendations: [],
+      headphoneRecommendations: [],
+      device_db_gap_warning: null,
+      subscriptionIntent: intent,
+      missing_credit_card_fields: [],
+      missing_flight_fields: [],
+      no_direct_available: false,
+      suggested_refinements: [],
+      category: "subscription",
+    };
+  }
+
   // Route to credit card pipeline if needed
   if (intent.category === "credit_card") {
     if (intent.needs_spending_info) {
@@ -1182,6 +1560,11 @@ export async function runAgent(
         flightRecommendations: [],
         creditCardRecommendations: [],
         laptopRecommendations: [],
+        laptop_db_gap_warning: null,
+        smartphoneRecommendations: [],
+        headphoneRecommendations: [],
+        device_db_gap_warning: null,
+        subscriptionIntent: null,
         missing_credit_card_fields: ["monthly spending by category", "cash back or travel rewards preference", "any cards you already hold"],
         missing_flight_fields: [],
         no_direct_available: false,
@@ -1197,6 +1580,11 @@ export async function runAgent(
       flightRecommendations: [],
       creditCardRecommendations,
       laptopRecommendations: [],
+      laptop_db_gap_warning: null,
+      smartphoneRecommendations: [],
+      headphoneRecommendations: [],
+      device_db_gap_warning: null,
+      subscriptionIntent: null,
       missing_credit_card_fields: [],
       missing_flight_fields: [],
       no_direct_available: false,
@@ -1215,6 +1603,11 @@ export async function runAgent(
         flightRecommendations: [],
         creditCardRecommendations: [],
         laptopRecommendations: [],
+        laptop_db_gap_warning: null,
+        smartphoneRecommendations: [],
+        headphoneRecommendations: [],
+        device_db_gap_warning: null,
+        subscriptionIntent: null,
         missing_credit_card_fields: [],
         missing_flight_fields: ["use_case"],
         no_direct_available: false,
@@ -1222,7 +1615,7 @@ export async function runAgent(
         category: "laptop",
       };
     }
-    const { laptopRecommendations } = await runLaptopPipeline(intent);
+    const { laptopRecommendations, laptop_db_gap_warning } = await runLaptopPipeline(intent);
     return {
       requirements: intent,
       recommendations: [],
@@ -1230,11 +1623,102 @@ export async function runAgent(
       flightRecommendations: [],
       creditCardRecommendations: [],
       laptopRecommendations,
+      laptop_db_gap_warning,
+      smartphoneRecommendations: [],
+      headphoneRecommendations: [],
+      device_db_gap_warning: null,
+      subscriptionIntent: null,
       missing_credit_card_fields: [],
       missing_flight_fields: [],
       no_direct_available: false,
       suggested_refinements: [],
       category: "laptop",
+    };
+  }
+
+  // Route to smartphone pipeline if needed
+  if (intent.category === "smartphone") {
+    if ((intent as SmartphoneIntent).needs_use_case_info) {
+      return {
+        requirements: intent,
+        recommendations: [],
+        hotelRecommendations: [],
+        flightRecommendations: [],
+        creditCardRecommendations: [],
+        laptopRecommendations: [],
+        laptop_db_gap_warning: null,
+        smartphoneRecommendations: [],
+        headphoneRecommendations: [],
+        device_db_gap_warning: null,
+        subscriptionIntent: null,
+        missing_credit_card_fields: [],
+        missing_flight_fields: ["use_case"],
+        no_direct_available: false,
+        suggested_refinements: [],
+        category: "smartphone",
+      };
+    }
+    const { smartphoneRecommendations, db_gap_warning } = await runSmartphonePipeline(intent as SmartphoneIntent);
+    return {
+      requirements: intent,
+      recommendations: [],
+      hotelRecommendations: [],
+      flightRecommendations: [],
+      creditCardRecommendations: [],
+      laptopRecommendations: [],
+      laptop_db_gap_warning: null,
+      smartphoneRecommendations,
+      headphoneRecommendations: [],
+      device_db_gap_warning: db_gap_warning,
+      subscriptionIntent: null,
+      missing_credit_card_fields: [],
+      missing_flight_fields: [],
+      no_direct_available: false,
+      suggested_refinements: [],
+      category: "smartphone",
+    };
+  }
+
+  // Route to headphone pipeline if needed
+  if (intent.category === "headphone") {
+    if ((intent as HeadphoneIntent).needs_use_case_info) {
+      return {
+        requirements: intent,
+        recommendations: [],
+        hotelRecommendations: [],
+        flightRecommendations: [],
+        creditCardRecommendations: [],
+        laptopRecommendations: [],
+        laptop_db_gap_warning: null,
+        smartphoneRecommendations: [],
+        headphoneRecommendations: [],
+        device_db_gap_warning: null,
+        subscriptionIntent: null,
+        missing_credit_card_fields: [],
+        missing_flight_fields: ["use_case"],
+        no_direct_available: false,
+        suggested_refinements: [],
+        category: "headphone",
+      };
+    }
+    const { headphoneRecommendations, db_gap_warning } = await runHeadphonePipeline(intent as HeadphoneIntent);
+    return {
+      requirements: intent,
+      recommendations: [],
+      hotelRecommendations: [],
+      flightRecommendations: [],
+      creditCardRecommendations: [],
+      laptopRecommendations: [],
+      laptop_db_gap_warning: null,
+      smartphoneRecommendations: [],
+      headphoneRecommendations,
+      device_db_gap_warning: db_gap_warning,
+      subscriptionIntent: null,
+      missing_credit_card_fields: [],
+      missing_flight_fields: [],
+      no_direct_available: false,
+      suggested_refinements: [],
+      category: "headphone",
     };
   }
 
@@ -1248,6 +1732,11 @@ export async function runAgent(
       flightRecommendations,
       creditCardRecommendations: [],
       laptopRecommendations: [],
+      laptop_db_gap_warning: null,
+      smartphoneRecommendations: [],
+      headphoneRecommendations: [],
+      device_db_gap_warning: null,
+      subscriptionIntent: null,
       missing_credit_card_fields: [],
       missing_flight_fields: missing_fields,
       no_direct_available,
@@ -1270,6 +1759,11 @@ export async function runAgent(
       flightRecommendations: [],
       creditCardRecommendations: [],
       laptopRecommendations: [],
+      laptop_db_gap_warning: null,
+      smartphoneRecommendations: [],
+      headphoneRecommendations: [],
+      device_db_gap_warning: null,
+      subscriptionIntent: null,
       missing_credit_card_fields: [],
       missing_flight_fields: [],
       no_direct_available: false,
@@ -1342,5 +1836,5 @@ export async function runAgent(
       : undefined,
   }));
 
-  return { requirements, recommendations: withOpenTable, hotelRecommendations: [], flightRecommendations: [], creditCardRecommendations: [], laptopRecommendations: [], missing_credit_card_fields: [], missing_flight_fields: [], no_direct_available: false, suggested_refinements, category: "restaurant" };
+  return { requirements, recommendations: withOpenTable, hotelRecommendations: [], flightRecommendations: [], creditCardRecommendations: [], laptopRecommendations: [], laptop_db_gap_warning: null, smartphoneRecommendations: [], headphoneRecommendations: [], device_db_gap_warning: null, subscriptionIntent: null, missing_credit_card_fields: [], missing_flight_fields: [], no_direct_available: false, suggested_refinements, category: "restaurant" };
 }

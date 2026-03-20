@@ -7,9 +7,13 @@ import HotelCard from "@/components/HotelCard";
 import FlightCard from "@/components/FlightCard";
 import CreditCardCard from "@/components/CreditCardCard";
 import LaptopCard from "@/components/LaptopCard";
+import SmartphoneCard from "@/components/SmartphoneCard";
+import HeadphoneCard from "@/components/HeadphoneCard";
 import DateRangePicker from "@/components/DateRangePicker";
 import { CITIES_SORTED } from "@/lib/cities";
 import { useChat, LOADING_STEPS } from "@/app/hooks/useChat";
+import { useSubscriptions } from "@/app/hooks/useSubscriptions";
+import { WATCH_CATEGORY_META } from "@/lib/watchTypes";
 import type { MapPin } from "@/components/MapView";
 import { useLocation } from "@/app/hooks/useLocation";
 import { useFavorites } from "@/app/hooks/useFavorites";
@@ -66,6 +70,7 @@ export default function Home() {
   const profileContext = formatProfileForPrompt(profile);
 
   const location = useLocation();
+  const subs = useSubscriptions();
   const chat = useChat({
     cityId: location.cityId,
     gpsCoords: location.gpsCoords,
@@ -73,6 +78,11 @@ export default function Home() {
     nearLocation: location.nearLocation,
     profileContext,
     learnedWeights,
+    onSubscriptionIntent: (intent) => {
+      if (intent.action === "subscribe") subs.addSubscription(intent);
+      else if (intent.action === "unsubscribe") subs.removeSubscription(intent);
+      // "list" is handled by the chat message sentinel
+    },
   });
   const { favorites, toggleFavorite } = useFavorites(learnFromFavorite);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -128,7 +138,7 @@ export default function Home() {
   const hasMessages = chat.messages.length > 0;
   const lastUserQuery =
     [...chat.messages].reverse().find((m) => m.role === "user")?.content ?? "";
-  const hasResults = chat.allCards.length > 0 || chat.allHotelCards.length > 0 || chat.allFlightCards.length > 0 || chat.allCreditCardCards.length > 0 || chat.allLaptopCards.length > 0;
+  const hasResults = chat.allCards.length > 0 || chat.allHotelCards.length > 0 || chat.allFlightCards.length > 0 || chat.allCreditCardCards.length > 0 || chat.allLaptopCards.length > 0 || chat.allSmartphoneCards.length > 0 || chat.allHeadphoneCards.length > 0;
   const isMapMode = chat.viewMode === "map" && hasResults;
 
   // Unified map pins for restaurants and hotels (flights use arc lines, not pins)
@@ -1312,6 +1322,49 @@ export default function Home() {
               </div>
             ) : (
               <div className="flex flex-col gap-4">
+                {/* New-product notification banners (from subscriptions) */}
+                {subs.newMatches.length > 0 && (
+                  <div className="flex flex-col gap-2">
+                    {subs.newMatches.map((match) => {
+                      const meta = WATCH_CATEGORY_META[match.subscription.watch_category];
+                      return (
+                        <div
+                          key={match.subscription.id}
+                          style={{
+                            background: "var(--card)",
+                            border: "1px solid var(--gold)",
+                            borderLeft: "3px solid var(--gold)",
+                            borderRadius: "10px",
+                            padding: "12px 14px",
+                            fontFamily: "var(--font-dm-sans)",
+                          }}
+                        >
+                          <div style={{ fontWeight: 600, fontSize: "13px", color: "var(--gold)", marginBottom: "6px" }}>
+                            {meta.emoji} New {meta.label} announcement — {match.subscription.label}
+                          </div>
+                          {match.products.map((p) => (
+                            <div key={p.id} style={{ fontSize: "13px", color: "var(--text-primary)", marginBottom: "4px" }}>
+                              <span style={{ fontWeight: 500 }}>{p.name}</span>
+                              {p.extracted_specs.cpu && <span style={{ color: "var(--text-secondary)", marginLeft: "6px" }}>{p.extracted_specs.cpu}</span>}
+                              {p.extracted_specs.price_usd && <span style={{ color: "var(--text-secondary)", marginLeft: "6px" }}>${p.extracted_specs.price_usd}</span>}
+                              <a href={p.source_url} target="_blank" rel="noopener noreferrer" style={{ marginLeft: "8px", color: "var(--gold)", fontSize: "12px" }}>Source →</a>
+                            </div>
+                          ))}
+                          <div style={{ fontSize: "11px", color: "var(--text-secondary)", marginTop: "6px" }}>
+                            We&apos;re gathering full review data — check back soon for complete recommendations.
+                          </div>
+                          <button
+                            onClick={subs.clearNewMatches}
+                            style={{ marginTop: "8px", fontSize: "11px", color: "var(--text-secondary)", background: "none", border: "none", cursor: "pointer", padding: 0 }}
+                          >
+                            Dismiss
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
                 {/* Message Thread */}
                 {chat.messages.map((msg, i) => (
                   <div key={i}>
@@ -1330,6 +1383,31 @@ export default function Home() {
                         >
                           {msg.content}
                         </div>
+                      </div>
+                    ) : msg.content === "__LIST_SUBSCRIPTIONS__" ? (
+                      /* Subscription list view */
+                      <div style={{ fontFamily: "var(--font-dm-sans)", fontSize: "13px" }}>
+                        {subs.subscriptions.length === 0 ? (
+                          <p style={{ color: "var(--text-secondary)" }}>You&apos;re not watching anything yet. Try: &quot;Tell me when Apple releases a new MacBook&quot;.</p>
+                        ) : (
+                          <div className="flex flex-col gap-2">
+                            <p style={{ color: "var(--text-secondary)", marginBottom: "4px" }}>You&apos;re watching {subs.subscriptions.length} release{subs.subscriptions.length > 1 ? "s" : ""}:</p>
+                            {subs.subscriptions.map((sub) => {
+                              const meta = WATCH_CATEGORY_META[sub.watch_category];
+                              return (
+                                <div key={sub.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "var(--card)", borderRadius: "8px", padding: "8px 12px" }}>
+                                  <span style={{ color: "var(--text-primary)" }}>{meta.emoji} {sub.label}</span>
+                                  <button
+                                    onClick={() => subs.removeSubscription({ action: "unsubscribe", watch_category: sub.watch_category, brands: sub.brands, keywords: sub.keywords, label: sub.label, category: "subscription" })}
+                                    style={{ fontSize: "11px", color: "var(--text-secondary)", background: "none", border: "none", cursor: "pointer" }}
+                                  >
+                                    Remove
+                                  </button>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
                       </div>
                     ) : (
                       <p
@@ -1521,8 +1599,122 @@ export default function Home() {
                     >
                       Ranked by weighted signal score for your use case · Specs from Wirecutter, NotebookCheck, The Verge · Prices are MSRP
                     </div>
+                    {chat.laptopDbGapWarning && (
+                      <div
+                        style={{
+                          background: "var(--card)",
+                          border: "1px solid #E8A020",
+                          borderLeft: "3px solid #E8A020",
+                          borderRadius: "8px",
+                          padding: "10px 14px",
+                          fontFamily: "var(--font-dm-sans)",
+                          fontSize: "13px",
+                          color: "var(--text-primary)",
+                          lineHeight: "1.5",
+                        }}
+                      >
+                        <span style={{ fontWeight: 600, color: "#E8A020", marginRight: "6px" }}>⚠ Data gap:</span>
+                        {chat.laptopDbGapWarning}
+                      </div>
+                    )}
                     {chat.allLaptopCards.map((card, i) => (
                       <LaptopCard key={card.device.id} card={card} index={i} />
+                    ))}
+                    <div
+                      style={{
+                        fontSize: "11px",
+                        color: "var(--text-secondary)",
+                        fontFamily: "var(--font-dm-sans)",
+                        padding: "4px 2px 0",
+                        fontStyle: "italic",
+                      }}
+                    >
+                      Recommendations are based on static review data and may not reflect the latest models or price changes. Always verify specs and pricing before purchase.
+                    </div>
+                  </div>
+                )}
+
+                {/* Smartphone Results */}
+                {chat.resultCategory === "smartphone" && chat.allSmartphoneCards.length > 0 && (
+                  <div className="flex flex-col gap-3">
+                    <div
+                      style={{
+                        fontSize: "11px",
+                        color: "var(--text-secondary)",
+                        fontFamily: "var(--font-dm-sans)",
+                        padding: "0 2px 4px",
+                      }}
+                    >
+                      Ranked by weighted signal score for your use case · Data from GSMA, GSMArena, The Verge · Prices are MSRP
+                    </div>
+                    {chat.deviceDbGapWarning && (
+                      <div
+                        style={{
+                          background: "var(--card)",
+                          border: "1px solid #E8A020",
+                          borderLeft: "3px solid #E8A020",
+                          borderRadius: "8px",
+                          padding: "10px 14px",
+                          fontFamily: "var(--font-dm-sans)",
+                          fontSize: "13px",
+                          color: "var(--text-primary)",
+                          lineHeight: "1.5",
+                        }}
+                      >
+                        <span style={{ fontWeight: 600, color: "#E8A020", marginRight: "6px" }}>⚠ Data gap:</span>
+                        {chat.deviceDbGapWarning}
+                      </div>
+                    )}
+                    {chat.allSmartphoneCards.map((card, i) => (
+                      <SmartphoneCard key={card.device.id} card={card} index={i} />
+                    ))}
+                    <div
+                      style={{
+                        fontSize: "11px",
+                        color: "var(--text-secondary)",
+                        fontFamily: "var(--font-dm-sans)",
+                        padding: "4px 2px 0",
+                        fontStyle: "italic",
+                      }}
+                    >
+                      Recommendations are based on static review data and may not reflect the latest models or price changes. Always verify specs and pricing before purchase.
+                    </div>
+                  </div>
+                )}
+
+                {/* Headphone Results */}
+                {chat.resultCategory === "headphone" && chat.allHeadphoneCards.length > 0 && (
+                  <div className="flex flex-col gap-3">
+                    <div
+                      style={{
+                        fontSize: "11px",
+                        color: "var(--text-secondary)",
+                        fontFamily: "var(--font-dm-sans)",
+                        padding: "0 2px 4px",
+                      }}
+                    >
+                      Ranked by weighted signal score for your use case · Data from Rtings, The Verge, SoundGuys · Prices are MSRP
+                    </div>
+                    {chat.deviceDbGapWarning && (
+                      <div
+                        style={{
+                          background: "var(--card)",
+                          border: "1px solid #E8A020",
+                          borderLeft: "3px solid #E8A020",
+                          borderRadius: "8px",
+                          padding: "10px 14px",
+                          fontFamily: "var(--font-dm-sans)",
+                          fontSize: "13px",
+                          color: "var(--text-primary)",
+                          lineHeight: "1.5",
+                        }}
+                      >
+                        <span style={{ fontWeight: 600, color: "#E8A020", marginRight: "6px" }}>⚠ Data gap:</span>
+                        {chat.deviceDbGapWarning}
+                      </div>
+                    )}
+                    {chat.allHeadphoneCards.map((card, i) => (
+                      <HeadphoneCard key={card.device.id} card={card} index={i} />
                     ))}
                     <div
                       style={{

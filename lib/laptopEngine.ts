@@ -370,3 +370,49 @@ export function recommendLaptops(intent: LaptopIntent): LaptopRecommendationCard
     } satisfies LaptopRecommendationCard;
   });
 }
+
+/**
+ * Given a list of model names mentioned by the user, classifies each one as:
+ *   - "in_db"      : already in laptops.json (no warning needed)
+ *   - "announced"  : detected by laptop-watch but no review data yet
+ *   - "unknown"    : not found anywhere in our knowledge
+ */
+export function classifyMentionedModels(mentionedModels: string[]): {
+  announced: string[];   // seen in pending_devices.json
+  unknown: string[];     // truly not in our system at all
+} {
+  if (mentionedModels.length === 0) return { announced: [], unknown: [] };
+
+  const devices = loadDevices();
+  const dbText = devices.map((d) => `${d.name} ${d.cpu}`).join(" ").toLowerCase();
+
+  // Lazy import to avoid circular deps
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { readPendingProducts } = require("./subscriptions") as typeof import("./subscriptions");
+  const pendingFile = readPendingProducts();
+  const pendingText = pendingFile.pending
+    .map((d) => `${d.name} ${d.extracted_specs.cpu ?? ""}`)
+    .join(" ")
+    .toLowerCase();
+
+  const announced: string[] = [];
+  const unknown: string[] = [];
+
+  for (const model of mentionedModels) {
+    const lower = model.toLowerCase();
+    if (dbText.includes(lower)) continue;          // already in DB
+    if (pendingText.includes(lower)) {
+      announced.push(model);
+    } else {
+      unknown.push(model);
+    }
+  }
+
+  return { announced, unknown };
+}
+
+/** Convenience wrapper — returns only models missing from laptops.json (any status). */
+export function findMissingModels(mentionedModels: string[]): string[] {
+  const { announced, unknown } = classifyMentionedModels(mentionedModels);
+  return [...announced, ...unknown];
+}

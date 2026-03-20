@@ -100,6 +100,10 @@ export async function POST(req: NextRequest) {
             ? result.creditCardRecommendations.length
             : result.category === "laptop"
             ? result.laptopRecommendations.length
+            : result.category === "smartphone"
+            ? result.smartphoneRecommendations.length
+            : result.category === "headphone"
+            ? result.headphoneRecommendations.length
             : result.recommendations.length;
 
         console.log(JSON.stringify({
@@ -118,8 +122,15 @@ export async function POST(req: NextRequest) {
           flightRecommendations: result.flightRecommendations,
           creditCardRecommendations: result.creditCardRecommendations,
           laptopRecommendations: result.laptopRecommendations,
+          laptop_db_gap_warning: result.laptop_db_gap_warning,
+          smartphoneRecommendations: result.smartphoneRecommendations,
+          headphoneRecommendations: result.headphoneRecommendations,
+          device_db_gap_warning: result.device_db_gap_warning,
+          subscriptionIntent: result.subscriptionIntent,
           missing_credit_card_fields: result.missing_credit_card_fields,
           missing_laptop_use_case: result.category === "laptop" && result.missing_flight_fields.includes("use_case"),
+          missing_smartphone_use_case: result.category === "smartphone" && result.missing_flight_fields.includes("use_case"),
+          missing_headphone_use_case: result.category === "headphone" && result.missing_flight_fields.includes("use_case"),
           missing_flight_fields: result.missing_flight_fields,
           no_direct_available: result.no_direct_available,
           suggested_refinements: result.suggested_refinements,

@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
-import { RecommendationCard as CardType, Message, SessionPreferences, HotelRecommendationCard, FlightRecommendationCard, CreditCardRecommendationCard, LaptopRecommendationCard, CategoryType } from "@/lib/types";
+import { RecommendationCard as CardType, Message, SessionPreferences, HotelRecommendationCard, FlightRecommendationCard, CreditCardRecommendationCard, LaptopRecommendationCard, SmartphoneRecommendationCard, HeadphoneRecommendationCard, CategoryType, SubscriptionIntent } from "@/lib/types";
 import { LearnedWeights } from "@/lib/types";
+import { WATCH_CATEGORY_META } from "@/lib/watchTypes";
 
 export const LOADING_STEPS = [
   "Parsing your request...",
@@ -23,6 +24,7 @@ interface UseChatParams {
   nearLocation: string;
   profileContext?: string;
   learnedWeights?: LearnedWeights | null;
+  onSubscriptionIntent?: (intent: SubscriptionIntent) => void;
 }
 
 export function useChat({
@@ -32,6 +34,7 @@ export function useChat({
   nearLocation,
   profileContext,
   learnedWeights,
+  onSubscriptionIntent,
 }: UseChatParams) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -52,6 +55,10 @@ export function useChat({
   const [allFlightCards, setAllFlightCards] = useState<FlightRecommendationCard[]>([]);
   const [allCreditCardCards, setAllCreditCardCards] = useState<CreditCardRecommendationCard[]>([]);
   const [allLaptopCards, setAllLaptopCards] = useState<LaptopRecommendationCard[]>([]);
+  const [laptopDbGapWarning, setLaptopDbGapWarning] = useState<string | null>(null);
+  const [allSmartphoneCards, setAllSmartphoneCards] = useState<SmartphoneRecommendationCard[]>([]);
+  const [allHeadphoneCards, setAllHeadphoneCards] = useState<HeadphoneRecommendationCard[]>([]);
+  const [deviceDbGapWarning, setDeviceDbGapWarning] = useState<string | null>(null);
   const [resultCategory, setResultCategory] = useState<CategoryType>("restaurant");
 
   // Stable ref to always-current messages (avoids stale closure in sendMessage)
@@ -358,7 +365,87 @@ export function useChat({
                     };
                     setMessages((prev) => [...prev, assistantMessage]);
                     setAllLaptopCards(laptopRecs);
+                    setLaptopDbGapWarning(event.laptop_db_gap_warning ?? null);
                   }
+                } else if (category === "smartphone") {
+                  const smartphoneRecs: SmartphoneRecommendationCard[] = event.smartphoneRecommendations ?? [];
+                  const missingUseCase: boolean = event.missing_smartphone_use_case ?? false;
+
+                  if (missingUseCase || smartphoneRecs.length === 0) {
+                    setMessages((prev) => [
+                      ...prev,
+                      {
+                        role: "assistant",
+                        content: `To find the best smartphone for you, I need to know **how you'll use it**. Please tell me:\n\n1. **Primary use case** — e.g. photography, gaming, business, everyday, or best value\n2. **Budget** — rough price range in USD (optional)\n3. **OS preference** — iOS, Android, or no preference\n4. **Brands to avoid** (optional)`,
+                        category: "smartphone" as const,
+                      },
+                    ]);
+                  } else {
+                    const assistantMessage: Message = {
+                      role: "assistant",
+                      content: `Here are the top ${smartphoneRecs.length} smartphone${smartphoneRecs.length > 1 ? "s" : ""} ranked for your use case.`,
+                      smartphoneCards: smartphoneRecs,
+                      category: "smartphone" as const,
+                    };
+                    setMessages((prev) => [...prev, assistantMessage]);
+                    setAllSmartphoneCards(smartphoneRecs);
+                    setDeviceDbGapWarning(event.device_db_gap_warning ?? null);
+                  }
+                } else if (category === "headphone") {
+                  const headphoneRecs: HeadphoneRecommendationCard[] = event.headphoneRecommendations ?? [];
+                  const missingUseCase: boolean = event.missing_headphone_use_case ?? false;
+
+                  if (missingUseCase || headphoneRecs.length === 0) {
+                    setMessages((prev) => [
+                      ...prev,
+                      {
+                        role: "assistant",
+                        content: `To find the best headphones for you, I need to know **how you'll use them**. Please tell me:\n\n1. **Primary use case** — e.g. commuting, work from home, audiophile listening, sport/workout, or casual\n2. **Budget** — rough price range in USD (optional)\n3. **Form factor preference** — over-ear, in-ear, on-ear, or no preference\n4. **Wireless required?** (yes/no)`,
+                        category: "headphone" as const,
+                      },
+                    ]);
+                  } else {
+                    const assistantMessage: Message = {
+                      role: "assistant",
+                      content: `Here are the top ${headphoneRecs.length} headphone${headphoneRecs.length > 1 ? "s" : ""} ranked for your use case.`,
+                      headphoneCards: headphoneRecs,
+                      category: "headphone" as const,
+                    };
+                    setMessages((prev) => [...prev, assistantMessage]);
+                    setAllHeadphoneCards(headphoneRecs);
+                    setDeviceDbGapWarning(event.device_db_gap_warning ?? null);
+                  }
+                } else if (category === "subscription") {
+                  const intent = event.subscriptionIntent as SubscriptionIntent | null;
+                  if (!intent) return;
+
+                  // Delegate to parent — parent owns the subscription state
+                  onSubscriptionIntent?.(intent);
+
+                  // Build a confirmation message for the chat
+                  let content = "";
+                  if (intent.action === "list") {
+                    content = "__LIST_SUBSCRIPTIONS__"; // sentinel; page.tsx renders the real list
+                  } else if (intent.action === "unsubscribe") {
+                    const meta = intent.watch_category ? WATCH_CATEGORY_META[intent.watch_category] : null;
+                    content = intent.watch_category
+                      ? `Got it — I'll stop watching ${intent.brands.length > 0 ? intent.brands.join(" & ") + " " : ""}${meta?.label ?? intent.watch_category} releases for you.`
+                      : "Subscription removed.";
+                  } else {
+                    // subscribe
+                    if (!intent.watch_category) {
+                      content = "I couldn't figure out which product category to watch. Could you tell me more? e.g. \"tell me when Apple releases a new MacBook\" or \"notify me about new NVIDIA GPUs\".";
+                    } else {
+                      const meta = WATCH_CATEGORY_META[intent.watch_category];
+                      const brandText = intent.brands.length > 0 ? ` from ${intent.brands.join(" & ")}` : "";
+                      const keywordText = intent.keywords.length > 0 ? ` (${intent.keywords.join(", ")})` : "";
+                      content = `${meta.emoji} Got it! I'll watch for new **${meta.label}** releases${brandText}${keywordText} and let you know when something is announced.`;
+                    }
+                  }
+                  setMessages((prev) => [
+                    ...prev,
+                    { role: "assistant", content, category: "subscription" as const },
+                  ]);
                 } else {
                   const recommendations: CardType[] = event.recommendations ?? [];
                   finalRecommendations = recommendations;
@@ -475,6 +562,10 @@ export function useChat({
     allFlightCards,
     allCreditCardCards,
     allLaptopCards,
+    laptopDbGapWarning,
+    allSmartphoneCards,
+    allHeadphoneCards,
+    deviceDbGapWarning,
     resultCategory,
     activePrice,
     setActivePrice,

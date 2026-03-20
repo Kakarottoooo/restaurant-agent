@@ -1,0 +1,401 @@
+{
+  "meta": {
+    "last_updated": "2026-03-19",
+    "note": "Headphone specs and signal scores based on public reviews from RTINGS, The Verge, Wirecutter, SoundGuys. Prices are approximate MSRPs."
+  },
+  "devices": [
+    {
+      "id": "sony-wh-1000xm6",
+      "name": "Sony WH-1000XM6",
+      "brand": "Sony",
+      "form_factor": "over_ear",
+      "wireless": true,
+      "price_usd": 399,
+      "weight_g": 250,
+      "skus": [
+        {"id": "sony-wh-1000xm6-black", "color": "black", "price_usd": 399},
+        {"id": "sony-wh-1000xm6-silver", "color": "silver", "price_usd": 399}
+      ],
+      "signals": {
+        "noise_cancellation":    {"value_normalized": 9.5, "raw_quote": "Sony's XM6 delivers class-leading active noise cancellation, effectively silencing everything from airplane engines to office chatter.", "source": "RTINGS", "months_old": 2},
+        "sound_quality":         {"value_normalized": 8.5, "raw_quote": "The XM6 produces a beautifully balanced sound signature with impressive detail retrieval and a wide, immersive soundstage.", "source": "The Verge", "months_old": 2},
+        "bass_response":         {"value_normalized": 8.5, "raw_quote": "Bass is punchy and satisfying without overwhelming the mids, and LDAC streaming reveals texture that lesser codecs obscure.", "source": "SoundGuys", "months_old": 2},
+        "soundstage":            {"value_normalized": 8.0, "raw_quote": "360 Reality Audio support and Sony's spatial processing give the XM6 a convincing sense of space for a closed-back headphone.", "source": "RTINGS", "months_old": 2},
+        "comfort_long_wear":     {"value_normalized": 8.5, "raw_quote": "The redesigned headband and plush ear cushions make the XM6 one of the most comfortable headphones for extended listening sessions.", "source": "Wirecutter", "months_old": 2},
+        "call_quality":          {"value_normalized": 8.0, "raw_quote": "Call quality is excellent, with the beamforming microphone array isolating voice clearly even in noisy environments.", "source": "SoundGuys", "months_old": 2},
+        "battery_life":          {"value_normalized": 9.5, "raw_quote": "Sony promises 30 hours of battery life with ANC on, and real-world testing confirmed figures close to that claim.", "source": "RTINGS", "months_old": 2},
+        "codec_support":         {"value_normalized": 9.0, "raw_quote": "LDAC, AAC, and SBC support covers virtually every device; the high-resolution LDAC codec is a standout for Android users.", "source": "SoundGuys", "months_old": 2},
+        "multipoint_connection": {"value_normalized": 8.5, "raw_quote": "Multipoint pairing works smoothly between two devices, switching quickly when audio starts on the second source.", "source": "Wirecutter", "months_old": 2},
+        "value_for_money":       {"value_normalized": 7.5, "raw_quote": "At $399 the XM6 is not cheap, but the combination of best-in-class ANC, LDAC, and long battery life justifies the price for most buyers.", "source": "The Verge", "months_old": 2}
+      },
+      "last_verified": "2026-03-19"
+    },
+    {
+      "id": "sony-wh-1000xm5",
+      "name": "Sony WH-1000XM5",
+      "brand": "Sony",
+      "form_factor": "over_ear",
+      "wireless": true,
+      "price_usd": 279,
+      "weight_g": 250,
+      "skus": [
+        {"id": "sony-wh-1000xm5-black", "color": "black", "price_usd": 279},
+        {"id": "sony-wh-1000xm5-silver", "color": "silver", "price_usd": 279}
+      ],
+      "signals": {
+        "noise_cancellation":    {"value_normalized": 9.0, "raw_quote": "The XM5's eight-microphone system provides outstanding noise cancellation that remains competitive even against newer rivals.", "source": "RTINGS", "months_old": 14},
+        "sound_quality":         {"value_normalized": 8.2, "raw_quote": "Sony tuned the XM5 for an enjoyable, slightly warm sound that flatters most genres without sacrificing too much detail.", "source": "Wirecutter", "months_old": 14},
+        "bass_response":         {"value_normalized": 8.0, "raw_quote": "Bass is well-extended and impactful, with LDAC streaming revealing nuance that Bluetooth compression would otherwise mask.", "source": "SoundGuys", "months_old": 14},
+        "soundstage":            {"value_normalized": 7.5, "raw_quote": "The XM5 offers a reasonably wide soundstage for a closed-back wireless headphone, aided by Sony's spatial audio processing.", "source": "RTINGS", "months_old": 14},
+        "comfort_long_wear":     {"value_normalized": 8.0, "raw_quote": "Soft ear pads and a well-distributed clamping force keep the XM5 comfortable through multi-hour listening sessions.", "source": "The Verge", "months_old": 14},
+        "call_quality":          {"value_normalized": 7.8, "raw_quote": "Voice pickup is clear and wind noise rejection is solid, making the XM5 a capable daily-driver for calls.", "source": "SoundGuys", "months_old": 14},
+        "battery_life":          {"value_normalized": 9.0, "raw_quote": "Sony rates the XM5 at 30 hours with ANC, and a 3-minute quick charge delivers about 3 hours of playback.", "source": "RTINGS", "months_old": 14},
+        "codec_support":         {"value_normalized": 9.0, "raw_quote": "LDAC, AAC, and SBC are all supported; LDAC remains one of the highest-quality Bluetooth codecs available.", "source": "SoundGuys", "months_old": 14},
+        "multipoint_connection": {"value_normalized": 8.0, "raw_quote": "Multipoint works well across two simultaneous devices, though switching can occasionally lag by a second.", "source": "Wirecutter", "months_old": 14},
+        "value_for_money":       {"value_normalized": 8.5, "raw_quote": "Discounted to $279, the XM5 is one of the best-value premium ANC headphones on the market, offering flagship performance at a reduced price.", "source": "The Verge", "months_old": 14}
+      },
+      "last_verified": "2026-03-19"
+    },
+    {
+      "id": "bose-quietcomfort-ultra",
+      "name": "Bose QuietComfort Ultra",
+      "brand": "Bose",
+      "form_factor": "over_ear",
+      "wireless": true,
+      "price_usd": 429,
+      "weight_g": 254,
+      "skus": [
+        {"id": "bose-qc-ultra-black", "color": "black", "price_usd": 429},
+        {"id": "bose-qc-ultra-white", "color": "white", "price_usd": 429}
+      ],
+      "signals": {
+        "noise_cancellation":    {"value_normalized": 9.8, "raw_quote": "The QuietComfort Ultra sets the gold standard for active noise cancellation, nearly eliminating low-frequency drone and mid-range chatter alike.", "source": "RTINGS", "months_old": 10},
+        "sound_quality":         {"value_normalized": 8.3, "raw_quote": "Bose's Immersive Audio mode adds convincing spatial depth, and the base tuning is refined and detailed, if slightly polite in the bass.", "source": "The Verge", "months_old": 10},
+        "bass_response":         {"value_normalized": 7.5, "raw_quote": "Bass is present and well-controlled but stops short of the punchy low-end that bass-heads crave; accuracy is prioritized over impact.", "source": "SoundGuys", "months_old": 10},
+        "soundstage":            {"value_normalized": 8.5, "raw_quote": "Immersive Audio delivers one of the widest perceived soundstages of any wireless headphone, creating a convincing out-of-head experience.", "source": "Wirecutter", "months_old": 10},
+        "comfort_long_wear":     {"value_normalized": 9.5, "raw_quote": "The QuietComfort Ultra earns its name — feather-light clamping force and plush earcups make it almost imperceptible after hours of wear.", "source": "RTINGS", "months_old": 10},
+        "call_quality":          {"value_normalized": 8.0, "raw_quote": "Microphone performance is solid for calls, with good voice clarity and reliable wind noise suppression outdoors.", "source": "SoundGuys", "months_old": 10},
+        "battery_life":          {"value_normalized": 8.0, "raw_quote": "Bose rates the QC Ultra at 24 hours with ANC, which is competitive but trails Sony's 30-hour claim at this price point.", "source": "RTINGS", "months_old": 10},
+        "codec_support":         {"value_normalized": 7.0, "raw_quote": "AAC and SBC are supported but the absence of aptX or LDAC is a noticeable omission at this premium price tier.", "source": "SoundGuys", "months_old": 10},
+        "multipoint_connection": {"value_normalized": 8.5, "raw_quote": "Bose's multipoint implementation is among the most reliable, switching seamlessly between devices with minimal interruption.", "source": "Wirecutter", "months_old": 10},
+        "value_for_money":       {"value_normalized": 7.0, "raw_quote": "At $429 the QC Ultra is expensive, and the lack of high-res codecs hurts; you're paying primarily for best-in-class ANC and comfort.", "source": "The Verge", "months_old": 10}
+      },
+      "last_verified": "2026-03-19"
+    },
+    {
+      "id": "apple-airpods-max-2024",
+      "name": "Apple AirPods Max (2024)",
+      "brand": "Apple",
+      "form_factor": "over_ear",
+      "wireless": true,
+      "price_usd": 549,
+      "weight_g": 385,
+      "skus": [
+        {"id": "apple-airpods-max-2024-midnight", "color": "midnight", "price_usd": 549},
+        {"id": "apple-airpods-max-2024-starlight", "color": "starlight", "price_usd": 549},
+        {"id": "apple-airpods-max-2024-blue", "color": "blue", "price_usd": 549},
+        {"id": "apple-airpods-max-2024-purple", "color": "purple", "price_usd": 549},
+        {"id": "apple-airpods-max-2024-orange", "color": "orange", "price_usd": 549}
+      ],
+      "signals": {
+        "noise_cancellation":    {"value_normalized": 9.2, "raw_quote": "AirPods Max delivers exceptional active noise cancellation that competes with the best in class, especially effective at low frequencies.", "source": "RTINGS", "months_old": 6},
+        "sound_quality":         {"value_normalized": 8.5, "raw_quote": "The AirPods Max produces a lush, detailed sound with excellent imaging; Personalized Spatial Audio is genuinely impressive on Apple content.", "source": "The Verge", "months_old": 6},
+        "bass_response":         {"value_normalized": 8.0, "raw_quote": "Bass is authoritative and well-defined, with the custom Apple driver delivering controlled impact without bleeding into the midrange.", "source": "SoundGuys", "months_old": 6},
+        "soundstage":            {"value_normalized": 9.0, "raw_quote": "Personalized Spatial Audio with dynamic head tracking creates one of the most convincing immersive audio experiences in any headphone.", "source": "Wirecutter", "months_old": 6},
+        "comfort_long_wear":     {"value_normalized": 7.0, "raw_quote": "The mesh headband distributes weight well, but at 385g the AirPods Max is noticeably heavy during long sessions, especially for glasses wearers.", "source": "RTINGS", "months_old": 6},
+        "call_quality":          {"value_normalized": 8.5, "raw_quote": "Apple's beamforming microphone array excels at voice isolation; call recipients consistently rate AirPods Max voice quality among the best.", "source": "SoundGuys", "months_old": 6},
+        "battery_life":          {"value_normalized": 7.0, "raw_quote": "Apple's 30-hour battery rating with ANC holds up in testing, though the USB-C 2024 update didn't extend runtime over the original.", "source": "RTINGS", "months_old": 6},
+        "codec_support":         {"value_normalized": 6.5, "raw_quote": "AAC is the highest-quality codec supported; Android users in particular are penalized since they cannot access Apple's lossless pipeline.", "source": "SoundGuys", "months_old": 6},
+        "multipoint_connection": {"value_normalized": 9.0, "raw_quote": "iCloud-based device switching is instant and magical within the Apple ecosystem, though it offers nothing for non-Apple devices.", "source": "The Verge", "months_old": 6},
+        "value_for_money":       {"value_normalized": 4.0, "raw_quote": "At $549 the AirPods Max is a luxury product; the premium is harder to justify for anyone outside the Apple ecosystem.", "source": "Wirecutter", "months_old": 6}
+      },
+      "last_verified": "2026-03-19"
+    },
+    {
+      "id": "sennheiser-momentum-4-wireless",
+      "name": "Sennheiser Momentum 4 Wireless",
+      "brand": "Sennheiser",
+      "form_factor": "over_ear",
+      "wireless": true,
+      "price_usd": 349,
+      "weight_g": 293,
+      "skus": [
+        {"id": "sennheiser-momentum4-black", "color": "black", "price_usd": 349},
+        {"id": "sennheiser-momentum4-white", "color": "white", "price_usd": 349}
+      ],
+      "signals": {
+        "noise_cancellation":    {"value_normalized": 8.2, "raw_quote": "The Momentum 4's adaptive ANC is effective for its class, handling steady low-frequency noise well, though it trails Bose and Sony at the very top.", "source": "RTINGS", "months_old": 18},
+        "sound_quality":         {"value_normalized": 9.0, "raw_quote": "Sennheiser's audiophile tuning philosophy shines here — the Momentum 4 delivers a balanced, reference-adjacent signature with outstanding clarity and detail.", "source": "The Verge", "months_old": 18},
+        "bass_response":         {"value_normalized": 8.0, "raw_quote": "Bass is accurate and extended rather than hyped, satisfying listeners who want honesty over excitement; EQ via the app can add punch if desired.", "source": "SoundGuys", "months_old": 18},
+        "soundstage":            {"value_normalized": 8.5, "raw_quote": "The Momentum 4 creates one of the widest soundstages in a wireless closed-back headphone, with precise imaging that rewards attentive listening.", "source": "RTINGS", "months_old": 18},
+        "comfort_long_wear":     {"value_normalized": 8.5, "raw_quote": "Plush earcups and a lightweight build make the Momentum 4 comfortable for marathon listening sessions; the headband could use slightly more padding.", "source": "Wirecutter", "months_old": 18},
+        "call_quality":          {"value_normalized": 7.5, "raw_quote": "Call quality is adequate for a music-first headphone; voice capture is clear in quiet environments but struggles somewhat with background noise rejection.", "source": "SoundGuys", "months_old": 18},
+        "battery_life":          {"value_normalized": 10.0, "raw_quote": "A staggering 60 hours of battery life with ANC enabled is an industry record — you could go weeks without charging with typical daily use.", "source": "RTINGS", "months_old": 18},
+        "codec_support":         {"value_normalized": 8.5, "raw_quote": "aptX Adaptive support joins AAC and SBC, offering high-resolution wireless audio for compatible Android and Windows devices.", "source": "SoundGuys", "months_old": 18},
+        "multipoint_connection": {"value_normalized": 8.0, "raw_quote": "Multipoint pairing works reliably across two devices; the Sennheiser Smart Control app makes switching preferences easy to configure.", "source": "Wirecutter", "months_old": 18},
+        "value_for_money":       {"value_normalized": 8.0, "raw_quote": "The Momentum 4 regularly dips below MSRP and offers exceptional audio quality alongside the best battery life money can buy in this category.", "source": "The Verge", "months_old": 18}
+      },
+      "last_verified": "2026-03-19"
+    },
+    {
+      "id": "jabra-evolve2-75",
+      "name": "Jabra Evolve2 75",
+      "brand": "Jabra",
+      "form_factor": "over_ear",
+      "wireless": true,
+      "price_usd": 449,
+      "weight_g": 282,
+      "skus": [
+        {"id": "jabra-evolve2-75-black", "color": "black", "price_usd": 449},
+        {"id": "jabra-evolve2-75-beige", "color": "beige", "price_usd": 449}
+      ],
+      "signals": {
+        "noise_cancellation":    {"value_normalized": 8.5, "raw_quote": "The Evolve2 75's ANC is engineered for the open office, with an 8-microphone array that attenuates speech and keyboard noise exceptionally well.", "source": "RTINGS", "months_old": 20},
+        "sound_quality":         {"value_normalized": 6.5, "raw_quote": "Sound quality is tuned for voice clarity rather than musical enjoyment; music sounds flat and compressed compared to consumer-focused alternatives.", "source": "SoundGuys", "months_old": 20},
+        "bass_response":         {"value_normalized": 5.5, "raw_quote": "Bass is deliberately restrained to keep voice frequencies front and center; not a headphone for music lovers.", "source": "The Verge", "months_old": 20},
+        "soundstage":            {"value_normalized": 5.0, "raw_quote": "The soundstage is narrow and utilitarian — adequate for conference calls and video meetings, unremarkable for entertainment.", "source": "RTINGS", "months_old": 20},
+        "comfort_long_wear":     {"value_normalized": 8.5, "raw_quote": "Designed for all-day enterprise wear, the Evolve2 75 excels here with a comfortable leatherette headband and generous earcup padding.", "source": "Wirecutter", "months_old": 20},
+        "call_quality":          {"value_normalized": 9.5, "raw_quote": "This is where the Evolve2 75 earns its price: call quality is class-leading, with crystal-clear voice pickup and rock-solid noise suppression for remote work.", "source": "SoundGuys", "months_old": 20},
+        "battery_life":          {"value_normalized": 8.5, "raw_quote": "Jabra rates the Evolve2 75 at 36 hours, and real-world workday testing confirms it easily lasts through multi-day use before needing a charge.", "source": "RTINGS", "months_old": 20},
+        "codec_support":         {"value_normalized": 7.0, "raw_quote": "AAC and SBC support is standard; the emphasis on certified UC platforms (Teams, Zoom) is the real codec story here.", "source": "SoundGuys", "months_old": 20},
+        "multipoint_connection": {"value_normalized": 8.0, "raw_quote": "Multipoint across the USB dongle and Bluetooth simultaneously is a key enterprise feature that works reliably day to day.", "source": "Wirecutter", "months_old": 20},
+        "value_for_money":       {"value_normalized": 5.0, "raw_quote": "At $449 the Evolve2 75 is a hard sell for anyone not in a corporate environment; enterprise IT buyers will find it worthwhile, consumers won't.", "source": "The Verge", "months_old": 20}
+      },
+      "last_verified": "2026-03-19"
+    },
+    {
+      "id": "audio-technica-ath-m50xbt2",
+      "name": "Audio-Technica ATH-M50xBT2",
+      "brand": "Audio-Technica",
+      "form_factor": "over_ear",
+      "wireless": true,
+      "price_usd": 199,
+      "weight_g": 307,
+      "skus": [
+        {"id": "ath-m50xbt2-black", "color": "black", "price_usd": 199},
+        {"id": "ath-m50xbt2-white", "color": "white", "price_usd": 199}
+      ],
+      "signals": {
+        "noise_cancellation":    {"value_normalized": 6.5, "raw_quote": "ANC on the ATH-M50xBT2 reduces steady ambient noise adequately but can't compete with dedicated ANC leaders; it's more of a bonus feature.", "source": "RTINGS", "months_old": 16},
+        "sound_quality":         {"value_normalized": 8.0, "raw_quote": "The M50x lineage shines through: this is a studio-monitor-inspired tuning with accurate mids and good treble extension that music professionals will appreciate.", "source": "SoundGuys", "months_old": 16},
+        "bass_response":         {"value_normalized": 7.5, "raw_quote": "Bass is present and well-articulated without being overblown — the M50x house sound translates well to the wireless version.", "source": "The Verge", "months_old": 16},
+        "soundstage":            {"value_normalized": 7.0, "raw_quote": "Soundstage is relatively intimate as expected from the closed-back design, but instrument separation is excellent for the price.", "source": "RTINGS", "months_old": 16},
+        "comfort_long_wear":     {"value_normalized": 7.0, "raw_quote": "The M50xBT2 is comfortable enough for moderate sessions, but the firm earcup padding and higher clamping force can fatigue some listeners over many hours.", "source": "Wirecutter", "months_old": 16},
+        "call_quality":          {"value_normalized": 7.0, "raw_quote": "Call quality is competent; voice pickup is clear and the mic handles typical indoor environments well, though wind noise outdoors is a limitation.", "source": "SoundGuys", "months_old": 16},
+        "battery_life":          {"value_normalized": 8.0, "raw_quote": "Audio-Technica delivers approximately 50 hours of battery without ANC and around 35 hours with it enabled — impressive endurance for the price.", "source": "RTINGS", "months_old": 16},
+        "codec_support":         {"value_normalized": 8.0, "raw_quote": "Support for AAC, aptX, and aptX HD gives the M50xBT2 a codec advantage over many rivals in its price range.", "source": "SoundGuys", "months_old": 16},
+        "multipoint_connection": {"value_normalized": 7.0, "raw_quote": "Multipoint connection is present and functional, handling two devices reliably even if it lacks the polish of premium implementations.", "source": "Wirecutter", "months_old": 16},
+        "value_for_money":       {"value_normalized": 8.5, "raw_quote": "For $199, the ATH-M50xBT2 delivers studio-quality tuning with wireless flexibility and surprising battery life — a strong value proposition for audio-conscious buyers.", "source": "The Verge", "months_old": 16}
+      },
+      "last_verified": "2026-03-19"
+    },
+    {
+      "id": "beyerdynamic-dt-700-pro-x",
+      "name": "Beyerdynamic DT 700 Pro X",
+      "brand": "Beyerdynamic",
+      "form_factor": "over_ear",
+      "wireless": false,
+      "price_usd": 249,
+      "weight_g": 350,
+      "skus": [
+        {"id": "beyerdynamic-dt700-pro-x-black", "color": "black", "price_usd": 249}
+      ],
+      "signals": {
+        "noise_cancellation":    {"value_normalized": 0.0, "raw_quote": "The DT 700 Pro X is a wired closed-back headphone with no active noise cancellation; isolation is purely passive via the sealed ear cups.", "source": "RTINGS", "months_old": 22},
+        "sound_quality":         {"value_normalized": 9.5, "raw_quote": "Reference-grade sound quality with Beyerdynamic's STELLAR.45 driver delivers extraordinary detail, accuracy, and a natural tonal balance that sets a benchmark in this price range.", "source": "SoundGuys", "months_old": 22},
+        "bass_response":         {"value_normalized": 8.5, "raw_quote": "Bass extension is impressive and well-controlled, with enough weight to satisfy without the coloration that harms mix decisions in a studio context.", "source": "The Verge", "months_old": 22},
+        "soundstage":            {"value_normalized": 8.0, "raw_quote": "For a closed-back headphone the DT 700 Pro X has a surprisingly open and well-defined soundstage with precise stereo imaging.", "source": "RTINGS", "months_old": 22},
+        "comfort_long_wear":     {"value_normalized": 9.0, "raw_quote": "The velour earpads and self-adjusting headband make the DT 700 Pro X one of the most comfortable studio headphones for multi-hour monitoring sessions.", "source": "Wirecutter", "months_old": 22},
+        "call_quality":          {"value_normalized": 5.0, "raw_quote": "The DT 700 Pro X has no built-in microphone; call use requires a separate boom mic or adapter, making it impractical for video calls out of the box.", "source": "SoundGuys", "months_old": 22},
+        "battery_life":          {"value_normalized": 10.0, "raw_quote": "Being fully wired, the DT 700 Pro X requires no battery whatsoever — it will play as long as a source is connected.", "source": "RTINGS", "months_old": 22},
+        "codec_support":         {"value_normalized": 10.0, "raw_quote": "Wired analog connection bypasses all Bluetooth codec compression entirely, delivering bit-perfect audio from any source.", "source": "SoundGuys", "months_old": 22},
+        "multipoint_connection": {"value_normalized": 0.0, "raw_quote": "As a wired headphone the DT 700 Pro X does not support multipoint or any wireless connectivity.", "source": "RTINGS", "months_old": 22},
+        "value_for_money":       {"value_normalized": 9.0, "raw_quote": "At $249, the DT 700 Pro X offers reference studio sound that rivals headphones costing twice as much — exceptional value for the discerning listener.", "source": "The Verge", "months_old": 22}
+      },
+      "last_verified": "2026-03-19"
+    },
+    {
+      "id": "sony-wf-1000xm5",
+      "name": "Sony WF-1000XM5",
+      "brand": "Sony",
+      "form_factor": "in_ear",
+      "wireless": true,
+      "price_usd": 199,
+      "weight_g": 5,
+      "skus": [
+        {"id": "sony-wf-1000xm5-black", "color": "black", "price_usd": 199},
+        {"id": "sony-wf-1000xm5-silver", "color": "silver", "price_usd": 199}
+      ],
+      "signals": {
+        "noise_cancellation":    {"value_normalized": 9.3, "raw_quote": "Sony's WF-1000XM5 sets the benchmark for in-ear ANC, with Integrated Processor V2 enabling noise cancellation that punches well above its form factor.", "source": "RTINGS", "months_old": 12},
+        "sound_quality":         {"value_normalized": 8.5, "raw_quote": "The XM5 earbuds deliver exceptional sound for their size, with LDAC support providing near-lossless quality that reveals recording details other earbuds smear.", "source": "The Verge", "months_old": 12},
+        "bass_response":         {"value_normalized": 8.0, "raw_quote": "Bass is satisfying and well-textured, with the 8.4mm driver delivering surprising depth and control for such a compact earbud.", "source": "SoundGuys", "months_old": 12},
+        "soundstage":            {"value_normalized": 7.5, "raw_quote": "360 Reality Audio with head tracking adds a convincing spatial dimension; without it the soundstage is intimately in-head as expected for in-ears.", "source": "RTINGS", "months_old": 12},
+        "comfort_long_wear":     {"value_normalized": 8.0, "raw_quote": "The smaller, lighter WF-1000XM5 earbuds are a significant comfort improvement over their predecessors, with multiple ear-tip sizes ensuring a secure fit for most ears.", "source": "Wirecutter", "months_old": 12},
+        "call_quality":          {"value_normalized": 7.5, "raw_quote": "Call quality is good, with the multi-mic array suppressing ambient noise effectively; slight voice thinness is the only notable limitation.", "source": "SoundGuys", "months_old": 12},
+        "battery_life":          {"value_normalized": 7.5, "raw_quote": "Eight hours in the earbuds and 16 more in the case totals 24 hours — average for the premium tier but enough for most daily users.", "source": "RTINGS", "months_old": 12},
+        "codec_support":         {"value_normalized": 9.5, "raw_quote": "LDAC support is the headline: streaming near-lossless audio over Bluetooth is a genuine differentiator that audiophile-minded Android users will value heavily.", "source": "SoundGuys", "months_old": 12},
+        "multipoint_connection": {"value_normalized": 8.0, "raw_quote": "Multipoint works across two devices simultaneously and transitions smoothly when audio activity changes.", "source": "Wirecutter", "months_old": 12},
+        "value_for_money":       {"value_normalized": 8.0, "raw_quote": "The WF-1000XM5 at $199 is excellent value when ANC performance, LDAC, and sound quality are factored together — one of the strongest in-ear packages available.", "source": "The Verge", "months_old": 12}
+      },
+      "last_verified": "2026-03-19"
+    },
+    {
+      "id": "apple-airpods-pro-2",
+      "name": "Apple AirPods Pro 2",
+      "brand": "Apple",
+      "form_factor": "in_ear",
+      "wireless": true,
+      "price_usd": 249,
+      "weight_g": 6,
+      "skus": [
+        {"id": "apple-airpods-pro-2-white", "color": "white", "price_usd": 249}
+      ],
+      "signals": {
+        "noise_cancellation":    {"value_normalized": 9.0, "raw_quote": "AirPods Pro 2 continues to lead the in-ear ANC category, with Apple's H2 chip providing adaptive transparency and cancellation that adjusts in real time.", "source": "RTINGS", "months_old": 8},
+        "sound_quality":         {"value_normalized": 8.3, "raw_quote": "The AirPods Pro 2 sound excellent across genres, with a balanced tuning and the best Personalized Spatial Audio implementation in any earbud.", "source": "The Verge", "months_old": 8},
+        "bass_response":         {"value_normalized": 7.8, "raw_quote": "Bass is punchy and well-defined; the vented acoustic design prevents the bloated low-end that plagues some sealed earbuds.", "source": "SoundGuys", "months_old": 8},
+        "soundstage":            {"value_normalized": 8.5, "raw_quote": "Personalized Spatial Audio with dynamic head tracking is best-in-class for earbuds, creating a genuinely immersive listening experience on Apple content.", "source": "Wirecutter", "months_old": 8},
+        "comfort_long_wear":     {"value_normalized": 8.5, "raw_quote": "The AirPods Pro 2 fit securely and comfortably for extended wear thanks to the silicone tips and lightweight build; most users forget they're in after a while.", "source": "RTINGS", "months_old": 8},
+        "call_quality":          {"value_normalized": 8.5, "raw_quote": "Apple's microphone system and voice isolation algorithms produce remarkably clear call audio even in windy or noisy environments.", "source": "SoundGuys", "months_old": 8},
+        "battery_life":          {"value_normalized": 7.5, "raw_quote": "Six hours in the earbuds and 24 total with the MagSafe case is competitive; USB-C charging is a welcome 2023 upgrade.", "source": "RTINGS", "months_old": 8},
+        "codec_support":         {"value_normalized": 6.5, "raw_quote": "AAC is the ceiling for non-Apple-device users; within the Apple ecosystem lossless audio over Lightning/USB-C brings the ceiling up substantially.", "source": "SoundGuys", "months_old": 8},
+        "multipoint_connection": {"value_normalized": 9.0, "raw_quote": "iCloud-based device switching across iPhone, iPad, and Mac is instantaneous and effortless — no other earbuds match this within Apple's ecosystem.", "source": "The Verge", "months_old": 8},
+        "value_for_money":       {"value_normalized": 7.0, "raw_quote": "At $249 the AirPods Pro 2 command a premium, but the combination of best-in-class ANC, spatial audio, and ecosystem integration makes them easy to recommend to iPhone users.", "source": "Wirecutter", "months_old": 8}
+      },
+      "last_verified": "2026-03-19"
+    },
+    {
+      "id": "bose-quietcomfort-earbuds-ii",
+      "name": "Bose QuietComfort Earbuds II",
+      "brand": "Bose",
+      "form_factor": "in_ear",
+      "wireless": true,
+      "price_usd": 199,
+      "weight_g": 6,
+      "skus": [
+        {"id": "bose-qce-ii-black", "color": "black", "price_usd": 199},
+        {"id": "bose-qce-ii-white", "color": "white", "price_usd": 199}
+      ],
+      "signals": {
+        "noise_cancellation":    {"value_normalized": 9.6, "raw_quote": "The QuietComfort Earbuds II set the in-ear ANC record, with Personalized Quiet Mode delivering cancellation tailored to each user's ear shape — nothing else comes close.", "source": "RTINGS", "months_old": 15},
+        "sound_quality":         {"value_normalized": 8.0, "raw_quote": "Sound quality is pleasing and musical, with a warm, slightly elevated bass tuning that works well for pop and hip-hop without fatiguing over time.", "source": "The Verge", "months_old": 15},
+        "bass_response":         {"value_normalized": 8.0, "raw_quote": "Bass is well-extended and enjoyable; Bose has tuned the low end to satisfy mainstream listeners while keeping it from overwhelming the midrange.", "source": "SoundGuys", "months_old": 15},
+        "soundstage":            {"value_normalized": 7.5, "raw_quote": "Soundstage is respectable for an in-ear design; Bose's spatial audio processing adds some width but doesn't approach what over-ear headphones offer.", "source": "RTINGS", "months_old": 15},
+        "comfort_long_wear":     {"value_normalized": 8.0, "raw_quote": "The StayHear Max ear tips create a comfortable seal without excessive pressure; the stabilizer fin design helps during physical activity too.", "source": "Wirecutter", "months_old": 15},
+        "call_quality":          {"value_normalized": 8.0, "raw_quote": "Call quality is strong, with effective voice isolation and a clear, natural sound that call recipients appreciate in both quiet and noisy settings.", "source": "SoundGuys", "months_old": 15},
+        "battery_life":          {"value_normalized": 7.0, "raw_quote": "Six hours of earbud battery with Bose's ANC is competitive but not class-leading; the case adds another 18 hours for a total of 24.", "source": "RTINGS", "months_old": 15},
+        "codec_support":         {"value_normalized": 6.5, "raw_quote": "Only AAC and SBC are supported — a notable omission for an earbuds at this price, though Bose's audio tuning partially compensates.", "source": "SoundGuys", "months_old": 15},
+        "multipoint_connection": {"value_normalized": 8.0, "raw_quote": "Multipoint works reliably across two devices, and the Bose Music app makes pairing and management straightforward.", "source": "Wirecutter", "months_old": 15},
+        "value_for_money":       {"value_normalized": 7.5, "raw_quote": "The QC Earbuds II are often discounted below their original MSRP, making best-in-class in-ear ANC accessible at a more compelling price point.", "source": "The Verge", "months_old": 15}
+      },
+      "last_verified": "2026-03-19"
+    },
+    {
+      "id": "jabra-elite-10",
+      "name": "Jabra Elite 10",
+      "brand": "Jabra",
+      "form_factor": "in_ear",
+      "wireless": true,
+      "price_usd": 249,
+      "weight_g": 7,
+      "skus": [
+        {"id": "jabra-elite-10-black", "color": "black", "price_usd": 249},
+        {"id": "jabra-elite-10-beige", "color": "beige", "price_usd": 249},
+        {"id": "jabra-elite-10-titanium", "color": "titanium", "price_usd": 249}
+      ],
+      "signals": {
+        "noise_cancellation":    {"value_normalized": 8.5, "raw_quote": "ANC on the Elite 10 is strong and adaptive, with six microphones providing good ambient noise suppression that handles commuting and office environments well.", "source": "RTINGS", "months_old": 11},
+        "sound_quality":         {"value_normalized": 8.2, "raw_quote": "The 10mm speakers deliver a well-balanced, slightly warm sound that works across genres; Dolby Atmos Music support adds a spatial dimension on compatible content.", "source": "The Verge", "months_old": 11},
+        "bass_response":         {"value_normalized": 8.0, "raw_quote": "Bass is punchy and satisfying, with the semi-open acoustic design preventing the congestion that closed-back in-ear designs can suffer from.", "source": "SoundGuys", "months_old": 11},
+        "soundstage":            {"value_normalized": 8.0, "raw_quote": "The semi-open design gives the Elite 10 a more spacious soundstage than typical sealed earbuds, and Dolby Atmos support extends the effect further.", "source": "RTINGS", "months_old": 11},
+        "comfort_long_wear":     {"value_normalized": 9.0, "raw_quote": "The Elite 10 are among the most comfortable earbuds for all-day wear, with a semi-open design that reduces pressure buildup and ear fatigue.", "source": "Wirecutter", "months_old": 11},
+        "call_quality":          {"value_normalized": 9.3, "raw_quote": "Jabra's call quality heritage is evident: the Elite 10 delivers crystal-clear voice pickup and superior background noise rejection that makes every call effortless.", "source": "SoundGuys", "months_old": 11},
+        "battery_life":          {"value_normalized": 8.0, "raw_quote": "Eight hours in the earbuds with ANC and 27 total with the case is among the best in the premium in-ear category.", "source": "RTINGS", "months_old": 11},
+        "codec_support":         {"value_normalized": 8.0, "raw_quote": "AAC and LC3 are supported; LC3 (LE Audio) support positions the Elite 10 well for the next generation of Bluetooth audio devices.", "source": "SoundGuys", "months_old": 11},
+        "multipoint_connection": {"value_normalized": 8.5, "raw_quote": "Multipoint across two devices works reliably with fast switching, a hallmark Jabra feature that remains one of the most polished implementations available.", "source": "Wirecutter", "months_old": 11},
+        "value_for_money":       {"value_normalized": 7.5, "raw_quote": "At $249 the Elite 10 is priced alongside AirPods Pro 2; for non-Apple users it offers a comparable or superior package, especially for calls.", "source": "The Verge", "months_old": 11}
+      },
+      "last_verified": "2026-03-19"
+    },
+    {
+      "id": "samsung-galaxy-buds3-pro",
+      "name": "Samsung Galaxy Buds3 Pro",
+      "brand": "Samsung",
+      "form_factor": "in_ear",
+      "wireless": true,
+      "price_usd": 229,
+      "weight_g": 6,
+      "skus": [
+        {"id": "samsung-galaxy-buds3-pro-silver", "color": "silver", "price_usd": 229},
+        {"id": "samsung-galaxy-buds3-pro-white", "color": "white", "price_usd": 229}
+      ],
+      "signals": {
+        "noise_cancellation":    {"value_normalized": 8.8, "raw_quote": "The Galaxy Buds3 Pro deliver excellent ANC that adapts to the environment and ear canal shape, rivaling the top names in the in-ear category.", "source": "RTINGS", "months_old": 7},
+        "sound_quality":         {"value_normalized": 8.3, "raw_quote": "Samsung's 2-way speaker design and 24-bit sound processing deliver a detailed, dynamic sound that stands out among Android-oriented earbuds.", "source": "SoundGuys", "months_old": 7},
+        "bass_response":         {"value_normalized": 8.2, "raw_quote": "Bass is impactful and satisfying, with the dual-driver setup providing sub-bass extension that single-driver rivals can't match.", "source": "The Verge", "months_old": 7},
+        "soundstage":            {"value_normalized": 8.0, "raw_quote": "360 Audio with head tracking is competitive with Apple's implementation for Samsung Galaxy users, adding a convincing spatial dimension.", "source": "RTINGS", "months_old": 7},
+        "comfort_long_wear":     {"value_normalized": 8.0, "raw_quote": "The redesigned wing-tip stabilizer and softer ear tips improve long-wear comfort over previous Galaxy Buds generations significantly.", "source": "Wirecutter", "months_old": 7},
+        "call_quality":          {"value_normalized": 8.0, "raw_quote": "Call quality is strong, aided by AI-powered noise cancellation on the microphones; voice pickup is clean even in moderately noisy settings.", "source": "SoundGuys", "months_old": 7},
+        "battery_life":          {"value_normalized": 7.5, "raw_quote": "Six hours with ANC and 26 total with the case is competitive; wireless charging support is a convenient bonus.", "source": "RTINGS", "months_old": 7},
+        "codec_support":         {"value_normalized": 8.5, "raw_quote": "SSC HiFi (Samsung Scalable Codec Hi-Fi) offers near-lossless quality for Galaxy users; standard AAC ensures acceptable quality on other Android devices.", "source": "SoundGuys", "months_old": 7},
+        "multipoint_connection": {"value_normalized": 8.5, "raw_quote": "Samsung's Galaxy ecosystem integration means seamless auto-switching between Galaxy phones, tablets, and PCs; cross-platform multipoint also works well.", "source": "Wirecutter", "months_old": 7},
+        "value_for_money":       {"value_normalized": 7.8, "raw_quote": "The Galaxy Buds3 Pro at $229 offer a compelling package for Samsung and Android users, with ecosystem integration and audio quality that justify the price.", "source": "The Verge", "months_old": 7}
+      },
+      "last_verified": "2026-03-19"
+    },
+    {
+      "id": "nothing-ear-3",
+      "name": "Nothing Ear (3)",
+      "brand": "Nothing",
+      "form_factor": "in_ear",
+      "wireless": true,
+      "price_usd": 149,
+      "weight_g": 5,
+      "skus": [
+        {"id": "nothing-ear-3-white", "color": "white", "price_usd": 149},
+        {"id": "nothing-ear-3-black", "color": "black", "price_usd": 149}
+      ],
+      "signals": {
+        "noise_cancellation":    {"value_normalized": 7.8, "raw_quote": "Nothing's Ear (3) delivers ANC that punches well above its $149 price point, handling office drone and transit noise competently if not at the premium tier level.", "source": "RTINGS", "months_old": 5},
+        "sound_quality":         {"value_normalized": 8.0, "raw_quote": "The 11mm LCP drivers produce a vibrant, engaging sound with excellent detail retrieval that surprises at this price; the Hi-Res Audio certification is legitimate.", "source": "The Verge", "months_old": 5},
+        "bass_response":         {"value_normalized": 8.5, "raw_quote": "Bass is a clear highlight — punchy, textured, and fun without sacrificing accuracy; it's the kind of low-end response that costs twice as much to match elsewhere.", "source": "SoundGuys", "months_old": 5},
+        "soundstage":            {"value_normalized": 7.5, "raw_quote": "Soundstage is pleasantly open for an in-ear design, with good stereo separation that creates a convincing spatial impression on well-recorded material.", "source": "RTINGS", "months_old": 5},
+        "comfort_long_wear":     {"value_normalized": 8.0, "raw_quote": "The lightweight build and thoughtful ear tip design make the Ear (3) comfortable for extended wear; the distinctive transparent aesthetic is a bonus.", "source": "Wirecutter", "months_old": 5},
+        "call_quality":          {"value_normalized": 7.5, "raw_quote": "Call quality is good for the price; voice clarity is solid and the noise suppression handles typical indoor environments well.", "source": "SoundGuys", "months_old": 5},
+        "battery_life":          {"value_normalized": 8.5, "raw_quote": "Eight hours in the earbuds and 24 total with the case is excellent at this price point, with fast charging via USB-C a helpful practical feature.", "source": "RTINGS", "months_old": 5},
+        "codec_support":         {"value_normalized": 8.0, "raw_quote": "LHDC 5.0 and AAC support gives the Ear (3) a strong codec story, with near-lossless wireless audio available on compatible devices.", "source": "SoundGuys", "months_old": 5},
+        "multipoint_connection": {"value_normalized": 7.5, "raw_quote": "Multipoint works reliably across two devices; Nothing's companion app makes configuration intuitive and customization deep for the price.", "source": "Wirecutter", "months_old": 5},
+        "value_for_money":       {"value_normalized": 9.0, "raw_quote": "The Nothing Ear (3) at $149 is one of the best-value earbuds available, offering punchy sound, capable ANC, and a unique aesthetic that no competitor matches at this price.", "source": "The Verge", "months_old": 5}
+      },
+      "last_verified": "2026-03-19"
+    },
+    {
+      "id": "soundcore-liberty-4-nc",
+      "name": "Soundcore Liberty 4 NC",
+      "brand": "Anker",
+      "form_factor": "in_ear",
+      "wireless": true,
+      "price_usd": 79,
+      "weight_g": 5,
+      "skus": [
+        {"id": "soundcore-liberty-4-nc-black", "color": "black", "price_usd": 79},
+        {"id": "soundcore-liberty-4-nc-white", "color": "white", "price_usd": 79},
+        {"id": "soundcore-liberty-4-nc-blue", "color": "blue", "price_usd": 79}
+      ],
+      "signals": {
+        "noise_cancellation":    {"value_normalized": 8.0, "raw_quote": "For $79, the Liberty 4 NC's ANC is nothing short of astonishing — it competes seriously with earbuds that cost three times as much in steady-state noise reduction.", "source": "RTINGS", "months_old": 13},
+        "sound_quality":         {"value_normalized": 6.5, "raw_quote": "Sound quality is good for the price with a punchy V-shaped signature, though lacking the refinement and detail of premium competitors; perfectly enjoyable for casual listening.", "source": "SoundGuys", "months_old": 13},
+        "bass_response":         {"value_normalized": 7.5, "raw_quote": "Bass is boosted and fun, clearly tuned for mainstream appeal; audiophiles may find it excessive but casual listeners will enjoy the excitement.", "source": "The Verge", "months_old": 13},
+        "soundstage":            {"value_normalized": 6.0, "raw_quote": "Soundstage is average for an in-ear design at this price — serviceable rather than impressive, with basic stereo imaging.", "source": "RTINGS", "months_old": 13},
+        "comfort_long_wear":     {"value_normalized": 7.5, "raw_quote": "The Liberty 4 NC fits securely with multiple ear tip options; lightweight construction helps with extended wear even if materials feel budget-appropriate.", "source": "Wirecutter", "months_old": 13},
+        "call_quality":          {"value_normalized": 6.5, "raw_quote": "Call quality is acceptable for the price; voice pickup is clear in quiet settings but the noise suppression algorithm struggles in louder environments.", "source": "SoundGuys", "months_old": 13},
+        "battery_life":          {"value_normalized": 9.0, "raw_quote": "Ten hours per charge in the earbuds and 50 total with the case is remarkable at any price — the Liberty 4 NC's battery life shames earbuds costing four times as much.", "source": "RTINGS", "months_old": 13},
+        "codec_support":         {"value_normalized": 7.5, "raw_quote": "LDAC support at $79 is extraordinary — bringing near-lossless wireless audio to a budget earbuds is a genuine feat that Soundcore deserves recognition for.", "source": "SoundGuys", "months_old": 13},
+        "multipoint_connection": {"value_normalized": 7.0, "raw_quote": "Multipoint works across two devices; switching isn't always instant but it's reliable and the Soundcore app provides adequate customization.", "source": "Wirecutter", "months_old": 13},
+        "value_for_money":       {"value_normalized": 9.5, "raw_quote": "The Soundcore Liberty 4 NC at $79 is the best-value ANC earbud on the market — offering LDAC, strong ANC, and 50-hour total battery at a price that makes every competitor look expensive.", "source": "The Verge", "months_old": 13}
+      },
+      "last_verified": "2026-03-19"
+    }
+  ]
+}
