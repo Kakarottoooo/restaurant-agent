@@ -1,25 +1,37 @@
 # Folio.
 
-AI-powered restaurant recommendation app. Tell it what you're looking for in natural language — occasion, budget, vibe — and it returns curated picks with personalized "why it fits" explanations.
+AI-powered decision engine for dining, travel, and lifestyle. Tell it what you're planning in natural language — occasion, budget, vibe, dates — and it returns a curated plan with personalized options and direct booking links.
 
 ## How it works
 
-Three-layer AI pipeline on every search:
+Two modes depending on your query:
 
-1. **Intent parsing** (MiniMax) — extracts structured requirements from your message (cuisine, budget, atmosphere, occasion, location)
-2. **Parallel data gathering** — Google Places API for real restaurant data + Tavily web search for editorial context, run concurrently
-3. **Ranking & explanation** (MiniMax) — scores candidates against your requirements and generates personalized explanations, watch-outs, and "skip if" notes
+### Category cards (restaurant, hotel, flight, laptop)
+Three-layer AI pipeline:
+1. **Intent parsing** (MiniMax) — extracts structured requirements from your message
+2. **Parallel data gathering** — Google Places / SerpAPI for real data + Tavily editorial context, run concurrently
+3. **Ranking & explanation** (MiniMax) — scores candidates and generates personalized explanations, watch-outs, and "skip if" notes
+
+### Scenario plan (date_night, weekend_trip)
+Scenario decision engine (`lib/scenario2.ts`):
+1. **NLU analysis** (`lib/nlu.ts`) — multilingual query understanding; English fast-path skips the API (~300ms saved)
+2. **Scenario detection** — routes to `date_night` or `weekend_trip` planner
+3. **Plan generation** — produces a `DecisionPlan` with primary + ranked backup options; weekend_trip runs parallel hotel + flight searches
+4. **SSE streaming** — streams plan chunks to the client in real time
 
 ## Features
 
-- Natural language search with multi-turn refinement
+- Natural language search with automatic scenario detection (date night, weekend trip, category search)
+- Multilingual support — Chinese queries return Chinese results via MiniMax NLU
 - 27 US cities + GPS-based "Near Me" mode + custom landmark search
 - List view and full-screen interactive map view
 - Filter chips by price and cuisine
+- Scenario plan UI: `ScenarioBrief` + `PrimaryPlanCard` + `ActionRail` with booking links
 - Share results via URL
 - Save favorites (localStorage)
 - Dark mode (system preference)
 - PWA-installable with offline support
+- Internal analytics dashboard (`/internal/scenario-events`, Clerk-gated)
 
 ## Prerequisites
 
@@ -28,6 +40,8 @@ Three-layer AI pipeline on every search:
   - `MINIMAX_API_KEY` — MiniMax platform
   - `GOOGLE_PLACES_API_KEY` — Google Cloud Console (Places API + Geocoding API enabled)
   - `TAVILY_API_KEY` — Tavily
+  - `SERPAPI_API_KEY` — SerpAPI (hotel + flight search)
+  - `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` + `CLERK_SECRET_KEY` — Clerk (optional; enables internal analytics auth)
 
 ## Local setup
 
@@ -60,25 +74,44 @@ Open [http://localhost:3000](http://localhost:3000).
 
 ```
 app/
-  api/chat/route.ts     # API endpoint — rate limiting, Zod validation, agent call
+  api/
+    chat/route.ts                    # SSE endpoint — scenario vs category routing
+    telemetry/route.ts               # plan_approved, option_swap, action_rail_click events
+    internal/scenario-events/        # Analytics API (GET, Clerk-gated)
+  internal/scenario-events/          # Analytics UI (Clerk-gated)
   hooks/
-    useChat.ts          # AI pipeline state, sendMessage, filter chips
+    useChat.ts          # AI pipeline state, sendMessage, scenario/category SSE handling
     useLocation.ts      # City selection, GPS, near-location, SW registration
     useFavorites.ts     # Favorites with localStorage persistence
-  page.tsx              # Root UI (rendering only, ~300 lines)
+  contexts/
+    ChunkErrorRecovery.tsx    # SSE error recovery context
+    ServiceWorkerManager.tsx  # SW lifecycle management
+  page.tsx              # Root UI — renders category_cards or scenario_plan mode
   globals.css           # Design tokens, dark mode, animations
-  layout.tsx            # Fonts, metadata
+  layout.tsx            # Fonts, metadata, service worker registration
 
 lib/
   agent.ts              # 3-layer AI pipeline (parseIntent → gatherCandidates → rankAndExplain)
-  tools.ts              # Google Places, Tavily, Geocoding API wrappers
-  schemas.ts            # Zod schemas for request validation and AI response validation
-  types.ts              # TypeScript interfaces
+  scenario2.ts          # Scenario decision engine (detectScenario, runScenarioPlanner, runWeekendTripPlanner)
+  nlu.ts                # Multilingual query analysis (MiniMax + English fast-path)
+  minimax.ts            # Shared MiniMax chat helper with configurable timeout
+  scenarioEvents.ts     # Internal analytics query parsing + Clerk access guard
+  scenario.ts           # Scenario type definitions
+  tools.ts              # Google Places, SerpAPI, Tavily, Geocoding API wrappers
+  schemas.ts            # Zod schemas for request/response validation
+  types.ts              # TypeScript interfaces (DecisionPlan, ScenarioContext, etc.)
+  db.ts                 # Neon DB helpers (scenario_events table)
   cities.ts             # 27 US cities config
+  outputCopy.ts         # Output language copy helpers
 
 components/
-  RecommendationCard.tsx  # Restaurant card with image, explanations, reserve link
-  MapView.tsx             # Leaflet map with interactive markers and thumbnail strip
+  ScenarioBrief.tsx        # Query summary card for scenario_plan mode
+  PrimaryPlanCard.tsx      # Primary plan display with swap + approve actions
+  BackupPlanCard.tsx       # Backup option cards
+  ActionRail.tsx           # Booking links with telemetry on click
+  ScenarioEvidencePanel.tsx # Supporting evidence panel
+  RecommendationCard.tsx   # Category card (restaurant, hotel, flight, laptop)
+  MapView.tsx              # Leaflet map with interactive markers
 
 public/
   sw.js                 # Service worker (cache name versioned on build)
@@ -91,13 +124,13 @@ scripts/
 
 ## Deployment
 
-Deploy to Vercel — it's a standard Next.js app. Set the three environment variables in your project settings.
+Deploy to Vercel — it's a standard Next.js app. Set the environment variables in your project settings.
 
 **Note:** The rate limiter in `app/api/chat/route.ts` is in-memory (10 req/min per IP). For multi-replica deployments, replace it with `@upstash/ratelimit` backed by Redis.
 
 ## Known limitations
 
 - No user accounts — favorites are stored in localStorage only
-- English-language searches only
-- Restaurant data sourced from Google Places (US coverage best)
+- Restaurant and hotel data sourced from Google Places + SerpAPI (US coverage best)
 - Tavily search enrichment is additive and non-fatal; recommendations still work without it
+- `lib/agent.ts` (2467L) and `app/page.tsx` (2185L) are candidates for future extraction — see TODOS.md

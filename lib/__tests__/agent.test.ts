@@ -17,10 +17,18 @@ function makeMiniMaxResponse(content: string) {
 
 beforeEach(() => {
   mockFetch.mockReset();
+  // minimax.ts checks MINIMAX_API_KEY before calling fetch
+  process.env.MINIMAX_API_KEY = "test-key";
 });
 
 describe("parseIntent", () => {
+  // Note: parseIntent → detectCategory (MiniMax call #1 for unrecognized messages) →
+  //       parseRestaurantIntent (MiniMax call #2). "romantic Italian dinner" hits
+  //       restaurant keywords, skipping the detectCategory MiniMax call (1 total).
+  // Unrecognized messages like "gibberish" need 2 mocked responses.
+
   it("returns parsed object when MiniMax returns valid JSON", async () => {
+    // "romantic Italian dinner" matches restaurant keywords → no detectCategory MiniMax call
     mockFetch.mockResolvedValueOnce(
       makeMiniMaxResponse(
         '{"cuisine":"Italian","purpose":"date","budget_per_person":60}'
@@ -34,39 +42,45 @@ describe("parseIntent", () => {
     expect(result.budget_per_person).toBe(60);
   });
 
-  it("returns {} when MiniMax returns plain text with no JSON", async () => {
-    mockFetch.mockResolvedValueOnce(
-      makeMiniMaxResponse("I cannot parse that request.")
-    );
+  it("returns default restaurant intent when MiniMax returns plain text with no JSON", async () => {
+    // "gibberish" misses all keywords → detectCategory calls MiniMax (#1), then parseRestaurantIntent (#2)
+    // parseRestaurantIntent falls back to a default intent when it can't parse JSON
+    mockFetch
+      .mockResolvedValueOnce(makeMiniMaxResponse('"restaurant"'))         // detectCategory
+      .mockResolvedValueOnce(makeMiniMaxResponse("I cannot parse that.")); // parseRestaurantIntent
 
     const result = await parseIntent("gibberish", "Nashville, TN");
-    expect(result).toEqual({});
+    expect(result).toMatchObject({ category: "restaurant" });
   });
 
-  it("returns {} when AI returns malformed JSON", async () => {
-    mockFetch.mockResolvedValueOnce(
-      makeMiniMaxResponse("{cuisine: Italian, bad json}")
-    );
+  it("returns default restaurant intent when AI returns malformed JSON", async () => {
+    // "Italian food" misses keywords → detectCategory calls MiniMax (#1), then parseRestaurantIntent (#2)
+    // parseRestaurantIntent falls back to a default intent on JSON parse failure
+    mockFetch
+      .mockResolvedValueOnce(makeMiniMaxResponse('"restaurant"'))               // detectCategory
+      .mockResolvedValueOnce(makeMiniMaxResponse("{cuisine: Italian, bad json}")); // parseRestaurantIntent
 
     const result = await parseIntent("Italian food", "Nashville, TN");
-    expect(result).toEqual({});
+    expect(result).toMatchObject({ category: "restaurant" });
   });
 
-  it("propagates fetch network errors", async () => {
+  it("propagates fetch network errors from parseRestaurantIntent", async () => {
+    // "romantic dinner" hits restaurant keywords → only parseRestaurantIntent calls MiniMax
     mockFetch.mockRejectedValueOnce(new Error("Network error"));
 
-    await expect(parseIntent("anything", "Nashville, TN")).rejects.toThrow(
+    await expect(parseIntent("romantic dinner in Paris", "Nashville, TN")).rejects.toThrow(
       "Network error"
     );
   });
 
-  it("propagates MiniMax API errors (non-ok response)", async () => {
+  it("propagates MiniMax API errors (non-ok response) from parseRestaurantIntent", async () => {
+    // "romantic dinner" hits restaurant keywords → only parseRestaurantIntent calls MiniMax
     mockFetch.mockResolvedValueOnce({
       ok: false,
       text: async () => "Unauthorized",
     });
 
-    await expect(parseIntent("anything", "Nashville, TN")).rejects.toThrow(
+    await expect(parseIntent("romantic dinner in Paris", "Nashville, TN")).rejects.toThrow(
       "MiniMax API error"
     );
   });

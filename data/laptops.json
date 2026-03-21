@@ -6,6 +6,221 @@
     "gpu_benchmark_reference": "Intel Iris Xe = 3.5, Apple M3 GPU = 7.0, M3 Pro GPU = 8.0, RTX 4060 Laptop = 8.5, RTX 4070 Laptop = 9.0, RX 6700S = 8.2."
   },
   "devices": [
+  {
+    "id": "macbook-pro-m5-14",
+    "name": "MacBook Pro 14\" (M5)",
+    "brand": "Apple",
+    "os": "mac",
+    "price_usd": 1599,
+    "display_size": 14.2,
+    "weight_kg": 1.6,
+    "ram_gb": 16,
+    "storage_gb": 512,
+    "cpu": "Apple M5",
+    "gpu": "Apple M5 10-core GPU",
+    "skus": [
+      {"id": "mbp14-m5-16gb-512", "ram_gb": 16, "storage_gb": 512, "price_usd": 1599},
+      {"id": "mbp14-m5-24gb-1tb", "ram_gb": 24, "storage_gb": 1000, "price_usd": 1999},
+      {"id": "mbp14-m5-32gb-1tb", "ram_gb": 32, "storage_gb": 1000, "price_usd": 2199}
+    ],
+    "signals": {
+      "battery_life": {"value_raw": 24, "value_label": "up to 24h", "value_normalized": 10, "raw_quote": "Apple claims up to 24 hours of battery life — the longest ever on a MacBook Pro.", "source": "Apple", "months_old": 5, "note": "Apple claimed figure; awaiting independent verification"},
+      "display_quality": {"value_raw": "excellent", "value_label": "excellent XDR", "value_normalized": 9, "raw_quote": "Liquid Retina XDR display with up to 1,600 nits peak brightness, ProMotion 120Hz.", "source": "Apple", "months_old": 5},
+      "display_brightness": {"value_raw": 1000, "value_label": "1000 nits SDR / 1600 nits HDR", "value_normalized": 10, "source": "Apple", "months_old": 5},
+      "keyboard_feel": {"value_raw": "excellent", "value_label": "excellent", "value_normalized": 9, "raw_quote": "Same Magic Keyboard as M4 Pro generation — widely praised.", "source": "Wirecutter (M4 generation)", "months_old": 5},
+      "trackpad_feel": {"value_raw": "excellent", "value_label": "excellent", "value_normalized": 9, "source": "Wirecutter (M4 generation)", "months_old": 5},
+      "thermal_performance": {"value_raw": "no_throttle", "value_label": "active cooling, no throttle", "value_normalized": 9, "raw_quote": "Active fan cooling maintains sustained performance — unlike the fanless MacBook Air.", "source": "Apple", "months_old": 5, "note": "Awaiting independent sustained-load testing"},
+      "fan_noise": {"value_raw": 38, "value_label": "~38 dB estimated", "value_normalized": 7, "source": "Estimated based on M4 generation NotebookCheck data", "months_old": 5, "note": "No independent measurement yet for M5"},
+      "build_quality": {"value_raw": "premium", "value_label": "premium", "value_normalized": 9, "source": "Apple / prior generation reviews", "months_old": 5},
+      "port_selection": {"usb_c": 3, "usb_a": 0, "hdmi": true, "sd_card": true, "thunderbolt": true, "thunderbolt_version": 4, "value_normalized": 8},
+      "weight_portability": {"value_raw": 1.6, "value_label": "1.6 kg", "value_normalized": 8, "source": "Apple", "months_old": 5},
+      "value_for_money": {"value_raw": "good", "value_label": "good", "value_normalized": 7, "raw_quote": "Same price as M4 predecessor with meaningful CPU/GPU performance uplift and faster storage.", "source": "Tom's Guide", "months_old": 5},
+      "cpu_benchmark": 8.2,
+      "gpu_benchmark": 7.5,
+      "note": "Released October 2025. Independent reviews limited — signals will be updated as Wirecutter/NotebookCheck/RTINGS publish full evaluations."
+    },
+    "last_verified": "2026-03-19"
+  },
+  {
+    "id": "macbook-pro-m5pro-14",
+    "name": "MacBook Pro 14\" (M5 Pro)",
+    "brand": "Apple",
+    "os": "mac",
+    "price_usd": 2199,
+    "display_size": 14.2,
+    "weight_kg": 1.62,
+    "ram_gb": 24,
+    "storage_gb": 1000,
+    "cpu": "Apple M5 Pro",
+    "gpu": "Apple M5 Pro 20-core GPU",
+    "skus": [
+      {"id": "mbp14-m5pro-24gb-1tb", "ram_gb": 24, "storage_gb": 1000, "price_usd": 2199},
+      {"id": "mbp14-m5pro-24gb-2tb", "ram_gb": 24, "storage_gb": 2000, "price_usd": 2399},
+      {"id": "mbp14-m5pro-48gb-1tb", "ram_gb": 48, "storage_gb": 1000, "price_usd": 2599},
+      {"id": "mbp14-m5pro-48gb-2tb", "ram_gb": 48, "storage_gb": 2000, "price_usd": 2799}
+    ],
+    "signals": {
+      "battery_life": {"value_raw": 24, "value_label": "up to 24h", "value_normalized": 10, "raw_quote": "Apple claims up to 24 hours battery life. Tom's Guide real-world test recorded stellar battery performance blowing away M4 Pro.", "source": "Apple / Tom's Guide", "months_old": 1},
+      "display_quality": {"value_raw": "excellent", "value_label": "excellent XDR ProMotion", "value_normalized": 9, "source": "Apple", "months_old": 1},
+      "display_brightness": {"value_raw": 1000, "value_label": "1000 nits SDR / 1600 nits HDR", "value_normalized": 10, "source": "Apple", "months_old": 1},
+      "keyboard_feel": {"value_raw": "excellent", "value_label": "excellent", "value_normalized": 9, "source": "Prior generation Wirecutter data — same keyboard", "months_old": 1},
+      "trackpad_feel": {"value_raw": "excellent", "value_label": "excellent", "value_normalized": 9, "source": "Prior generation Wirecutter data", "months_old": 1},
+      "thermal_performance": {"value_raw": "no_throttle", "value_label": "no throttle under sustained load", "value_normalized": 10, "raw_quote": "Tom's Guide: stellar performance across sustained workloads with the M5 Pro — no signs of throttling during extended testing.", "source": "Tom's Guide", "months_old": 1},
+      "fan_noise": {"value_raw": 40, "value_label": "~40 dB under load (estimated)", "value_normalized": 5, "source": "Estimated based on M4 Pro NotebookCheck data", "months_old": 1, "note": "Awaiting independent acoustic measurement"},
+      "build_quality": {"value_raw": "premium", "value_label": "premium", "value_normalized": 9, "source": "Apple / prior generation reviews", "months_old": 1},
+      "port_selection": {"usb_c": 3, "usb_a": 0, "hdmi": true, "sd_card": true, "thunderbolt": true, "thunderbolt_version": 5, "value_normalized": 8, "note": "Thunderbolt 5 (120Gb/s) — upgrade over M4 Pro's Thunderbolt 4"},
+      "weight_portability": {"value_raw": 1.62, "value_label": "1.62 kg", "value_normalized": 8, "source": "Apple", "months_old": 1},
+      "value_for_money": {"value_raw": "fair", "value_label": "fair", "value_normalized": 5, "raw_quote": "Price increased $200 over M4 Pro — starts at $2,199 vs $1,999. Performance gains are real but the premium is notable.", "source": "Macworld", "months_old": 1},
+      "cpu_benchmark": 9.0,
+      "gpu_benchmark": 8.5,
+      "note": "Released March 11, 2026. Very new — full independent evaluations from Wirecutter and NotebookCheck pending. Signals will be updated within 4-6 weeks."
+    },
+    "last_verified": "2026-03-19"
+  },
+  {
+    "id": "macbook-pro-m5pro-16",
+    "name": "MacBook Pro 16\" (M5 Pro)",
+    "brand": "Apple",
+    "os": "mac",
+    "price_usd": 2699,
+    "display_size": 16.2,
+    "weight_kg": 2.14,
+    "ram_gb": 24,
+    "storage_gb": 1000,
+    "cpu": "Apple M5 Pro",
+    "gpu": "Apple M5 Pro 20-core GPU",
+    "skus": [
+      {"id": "mbp16-m5pro-24gb-1tb", "ram_gb": 24, "storage_gb": 1000, "price_usd": 2699},
+      {"id": "mbp16-m5pro-48gb-1tb", "ram_gb": 48, "storage_gb": 1000, "price_usd": 2999},
+      {"id": "mbp16-m5pro-48gb-2tb", "ram_gb": 48, "storage_gb": 2000, "price_usd": 3199},
+      {"id": "mbp16-m5max-36gb-2tb", "ram_gb": 36, "storage_gb": 2000, "price_usd": 3499, "notes": "M5 Max — for 3D, ML, and high-end video/creative workflows"},
+      {"id": "mbp16-m5max-48gb-2tb", "ram_gb": 48, "storage_gb": 2000, "price_usd": 3899}
+    ],
+    "signals": {
+      "battery_life": {"value_raw": 24, "value_label": "up to 24h", "value_normalized": 10, "raw_quote": "Apple claims up to 24 hours battery life on the 16-inch M5 Pro.", "source": "Apple", "months_old": 1},
+      "display_quality": {"value_raw": "excellent", "value_label": "excellent XDR 16-inch", "value_normalized": 9, "raw_quote": "The 16-inch XDR display offers expansive screen real estate with 1,000 nits sustained and 1,600 peak — a genuine productivity advantage.", "source": "Apple / Tom's Guide", "months_old": 1},
+      "display_brightness": {"value_raw": 1000, "value_label": "1000 nits SDR / 1600 nits HDR", "value_normalized": 10, "source": "Apple", "months_old": 1},
+      "keyboard_feel": {"value_raw": "excellent", "value_label": "excellent", "value_normalized": 9, "source": "Prior generation Wirecutter data — same keyboard", "months_old": 1},
+      "trackpad_feel": {"value_raw": "excellent", "value_label": "excellent", "value_normalized": 9, "source": "Prior generation Wirecutter data", "months_old": 1},
+      "thermal_performance": {"value_raw": "no_throttle", "value_label": "no throttle under load", "value_normalized": 10, "source": "Tom's Guide", "months_old": 1},
+      "fan_noise": {"value_raw": 42, "value_label": "~42 dB under load (estimated)", "value_normalized": 5, "source": "Estimated based on M4 Pro 16-inch NotebookCheck data", "months_old": 1, "note": "Awaiting independent acoustic measurement"},
+      "build_quality": {"value_raw": "premium", "value_label": "premium", "value_normalized": 9, "source": "Apple / prior generation reviews", "months_old": 1},
+      "port_selection": {"usb_c": 3, "usb_a": 0, "hdmi": true, "sd_card": true, "thunderbolt": true, "thunderbolt_version": 5, "value_normalized": 8},
+      "weight_portability": {"value_raw": 2.14, "value_label": "2.14 kg", "value_normalized": 4, "source": "Apple", "months_old": 1},
+      "value_for_money": {"value_raw": "fair", "value_label": "fair", "value_normalized": 5, "raw_quote": "Starting at $2,699 — $200 more than M4 Pro predecessor. For pro workloads the performance delta is worthwhile; for general use the 14-inch M5 Pro is better value.", "source": "Macworld", "months_old": 1},
+      "cpu_benchmark": 9.0,
+      "gpu_benchmark": 8.5,
+      "note": "Released March 11, 2026. Very new — full independent evaluations from Wirecutter and NotebookCheck pending. Signals will be updated within 4-6 weeks."
+    },
+    "last_verified": "2026-03-19"
+    },
+    {
+  "id": "macbook-pro-m5max-14",
+  "name": "MacBook Pro 14\" (M5 Max)",
+  "brand": "Apple",
+  "os": "mac",
+  "price_usd": 3599,
+  "display_size": 14.2,
+  "weight_kg": 1.62,
+  "ram_gb": 36,
+  "storage_gb": 2000,
+  "cpu": "Apple M5 Max",
+  "gpu": "Apple M5 Max 32-core GPU",
+  "skus": [
+    {"id": "mbp14-m5max-36gb-2tb-32gpu", "ram_gb": 36, "storage_gb": 2000, "price_usd": 3599, "notes": "32-core GPU base config"},
+    {"id": "mbp14-m5max-36gb-2tb-40gpu", "ram_gb": 36, "storage_gb": 2000, "price_usd": 3799, "notes": "40-core GPU"},
+    {"id": "mbp14-m5max-64gb-2tb-40gpu", "ram_gb": 64, "storage_gb": 2000, "price_usd": 4199},
+    {"id": "mbp14-m5max-128gb-4tb-40gpu", "ram_gb": 128, "storage_gb": 4000, "price_usd": 5100, "notes": "Top spec — for ML inference, large model training, high-end 3D"}
+  ],
+  "signals": {
+    "battery_life": {"value_raw": 24, "value_label": "up to 24h (Apple claim)", "value_normalized": 10, "raw_quote": "Apple claims up to 24 hours battery life. Based on M5 Pro/Max architecture improvements.", "source": "Apple", "months_old": 1, "note": "Independent battery rundown tests pending"},
+    "display_quality": {"value_raw": "excellent", "value_label": "excellent XDR ProMotion", "value_normalized": 9, "raw_quote": "The 14-inch M5 Max MacBook Pro is like holding onto a piece of the sun — the screen is gloriously bright with a smooth 120Hz refresh rate.", "source": "Gizmodo", "months_old": 1},
+    "display_brightness": {"value_raw": 1000, "value_label": "1000 nits SDR / 1600 nits HDR", "value_normalized": 10, "source": "Apple", "months_old": 1},
+    "keyboard_feel": {"value_raw": "excellent", "value_label": "excellent", "value_normalized": 9, "raw_quote": "The keyboard withstood furious typing like a champ.", "source": "Engadget", "months_old": 1},
+    "trackpad_feel": {"value_raw": "excellent", "value_label": "excellent", "value_normalized": 9, "raw_quote": "The MacBook Pro's glass touchpad is still one of the best I've ever seen in a laptop.", "source": "Engadget", "months_old": 1},
+    "thermal_performance": {"value_raw": "no_throttle", "value_label": "active cooling, no throttle", "value_normalized": 10, "raw_quote": "In HandBrake, the M5 Max MacBook Pro transcoded a 4K movie in just under a minute — twice as fast as a MacBook Air M4.", "source": "Gizmodo", "months_old": 1},
+    "fan_noise": {"value_raw": 42, "value_label": "~42 dB under load (estimated)", "value_normalized": 5, "source": "Estimated based on M4 Max NotebookCheck data", "months_old": 1, "note": "Awaiting independent acoustic measurement for M5 Max"},
+    "build_quality": {"value_raw": "premium", "value_label": "premium unibody", "value_normalized": 9, "raw_quote": "Apple's unibody metal frame design still feels rock solid — most premium Windows PC makers are still trying to copy it.", "source": "Engadget", "months_old": 1},
+    "port_selection": {"usb_c": 3, "usb_a": 0, "hdmi": true, "sd_card": true, "thunderbolt": true, "thunderbolt_version": 5, "value_normalized": 8, "note": "Three Thunderbolt 5 (120Gb/s), HDMI, SD card, MagSafe 3"},
+    "weight_portability": {"value_raw": 1.62, "value_label": "1.62 kg", "value_normalized": 8, "source": "Apple", "months_old": 1},
+    "value_for_money": {"value_raw": "poor", "value_label": "poor — niche use case only", "value_normalized": 2, "raw_quote": "The 14-inch model starts at $3,600. Those two specs alone (40-core GPU + 128GB RAM) would make this laptop cost $5,100.", "source": "Gizmodo", "months_old": 1},
+    "cpu_benchmark": 9.2,
+    "gpu_benchmark": 9.5,
+    "note": "Released March 11, 2026. Overkill for most users — target audience is 3D/VFX artists, ML researchers, and on-device LLM developers. M5 Pro is better value for video editors and developers."
+  },
+  "sku_performance_signals": [
+    {
+      "applies_to_ram_min": 64,
+      "signal_type": "use_case_ml_inference",
+      "use_case": "data_science",
+      "value_label": "exceptional",
+      "recommendation": "only config that can run 70B+ parameter models locally",
+      "raw_quote": "The M5 Max chip is a speed freak for vibe coding and on-device AI applications — 4x faster AI performance vs previous generation.",
+      "source": "Gizmodo",
+      "confidence": 0.88
+    }
+  ],
+  "last_verified": "2026-03-19"
+  },
+  {
+    "id": "macbook-pro-m5max-16",
+    "name": "MacBook Pro 16\" (M5 Max)",
+    "brand": "Apple",
+    "os": "mac",
+    "price_usd": 3499,
+    "display_size": 16.2,
+    "weight_kg": 2.14,
+    "ram_gb": 36,
+    "storage_gb": 2000,
+    "cpu": "Apple M5 Max",
+    "gpu": "Apple M5 Max 32-core GPU",
+    "skus": [
+      {"id": "mbp16-m5max-36gb-2tb-32gpu", "ram_gb": 36, "storage_gb": 2000, "price_usd": 3499, "notes": "Entry M5 Max — 32-core GPU"},
+      {"id": "mbp16-m5max-36gb-2tb-40gpu", "ram_gb": 36, "storage_gb": 2000, "price_usd": 3699, "notes": "40-core GPU"},
+      {"id": "mbp16-m5max-48gb-2tb-40gpu", "ram_gb": 48, "storage_gb": 2000, "price_usd": 3899},
+      {"id": "mbp16-m5max-64gb-2tb-40gpu", "ram_gb": 64, "storage_gb": 2000, "price_usd": 4299},
+      {"id": "mbp16-m5max-128gb-8tb-40gpu", "ram_gb": 128, "storage_gb": 8000, "price_usd": 6149, "notes": "Max config — for ML training, large model inference, extreme 3D"}
+    ],
+    "signals": {
+      "battery_life": {"value_raw": 30.8, "value_label": "30h+ (real-world)", "value_normalized": 10, "raw_quote": "It's hard to improve much on the 30 hours and 16 minutes of battery life we saw on last year's 16-inch MacBook Pro, but the M5 Max model managed to beat that by 30 minutes.", "source": "Engadget", "months_old": 1},
+      "display_quality": {"value_raw": "excellent", "value_label": "excellent XDR 16-inch", "value_normalized": 9, "raw_quote": "Its 16-inch Liquid Retina XDR screen looks incredible, thanks to its bright Mini LED backlighting.", "source": "Engadget", "months_old": 1},
+      "display_brightness": {"value_raw": 1000, "value_label": "1000 nits SDR / 1600 nits HDR", "value_normalized": 10, "source": "Apple", "months_old": 1},
+      "keyboard_feel": {"value_raw": "excellent", "value_label": "excellent", "value_normalized": 9, "raw_quote": "The keyboard withstood furious typing like a champ. Sure, it could have a bit more depth, but it's excellent.", "source": "Engadget", "months_old": 1},
+      "trackpad_feel": {"value_raw": "excellent", "value_label": "excellent", "value_normalized": 9, "raw_quote": "The MacBook Pro's glass touchpad is still one of the best I've ever seen in a laptop.", "source": "Engadget", "months_old": 1},
+      "thermal_performance": {"value_raw": "no_throttle", "value_label": "no throttle under sustained load", "value_normalized": 10, "raw_quote": "Memory bandwidth reaching speeds of up to 614 GB/s on the M5 Max — sustained workloads handled without throttle.", "source": "Tom's Guide / Apple", "months_old": 1},
+      "fan_noise": {"value_raw": 44, "value_label": "~44 dB under heavy load (estimated)", "value_normalized": 2, "source": "Estimated based on M4 Max 16-inch NotebookCheck data", "months_old": 1, "note": "Fan audible under sustained GPU load — inherent to the 16-inch chassis. Awaiting independent measurement."},
+      "build_quality": {"value_raw": "premium", "value_label": "premium unibody", "value_normalized": 9, "raw_quote": "Apple's unibody metal frame design still feels rock solid — most premium Windows PC makers are still trying to copy it.", "source": "Engadget", "months_old": 1},
+      "port_selection": {"usb_c": 3, "usb_a": 0, "hdmi": true, "sd_card": true, "thunderbolt": true, "thunderbolt_version": 5, "value_normalized": 8},
+      "weight_portability": {"value_raw": 2.14, "value_label": "2.14 kg", "value_normalized": 4, "source": "Apple", "months_old": 1},
+      "value_for_money": {"value_raw": "poor", "value_label": "poor — niche use case only", "value_normalized": 2, "raw_quote": "You can save over $1,000 by opting for the M5 Pro chip instead. For creative professionals who actually need the power of the M5 Max chip, it's not that unusual.", "source": "Engadget", "months_old": 1},
+      "cpu_benchmark": 9.2,
+      "gpu_benchmark": 9.5,
+      "note": "Released March 11, 2026. Best MacBook ever made for raw performance, but overkill for most users. The 16-inch screen size and 30+ hour real-world battery make it uniquely suited for 3D/VFX, ML, and heavy video workflows. Wirecutter/NotebookCheck full evaluations pending."
+    },
+    "sku_performance_signals": [
+      {
+        "applies_to_ram_min": 64,
+        "signal_type": "use_case_ml_inference",
+        "use_case": "data_science",
+        "value_label": "exceptional",
+        "recommendation": "64GB+ enables running 70B parameter models locally at usable speeds",
+        "raw_quote": "With M5 Max, MacBook Pro delivers up to 4x AI performance compared to the previous generation — developers can run on-device LLMs without cloud dependencies.",
+        "source": "Apple / Gizmodo",
+        "confidence": 0.85
+      },
+      {
+        "applies_to_ram_min": 36,
+        "signal_type": "use_case_video_editing",
+        "use_case": "video_editing",
+        "value_label": "exceptional",
+        "recommendation": "36GB sufficient for 4K/6K multicam; 64GB+ for 8K or heavy effects",
+        "raw_quote": "In HandBrake, the M5 Max MacBook Pro transcoded a 4K movie in just under a minute, twice as fast as a MacBook Air with an M4 chip.",
+        "source": "Gizmodo",
+        "confidence": 0.92
+      }
+    ],
+    "last_verified": "2026-03-19"
+    },
     {
       "id": "macbook-air-m3-13",
       "name": "MacBook Air 13\" (M3)",

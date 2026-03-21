@@ -2,6 +2,8 @@ import { sql } from "@vercel/postgres";
 
 export { sql };
 
+let scenarioEventsTableReady: Promise<void> | null = null;
+
 /**
  * Initialize the database tables if they don't exist.
  * Call once on first deploy or via a setup script.
@@ -38,4 +40,31 @@ export async function initDb() {
       created_at      TIMESTAMPTZ DEFAULT NOW()
     )
   `;
+
+  await ensureScenarioEventsTable();
+}
+
+export async function ensureScenarioEventsTable() {
+  if (!scenarioEventsTableReady) {
+    scenarioEventsTableReady = (async () => {
+      await sql`
+        CREATE TABLE IF NOT EXISTS scenario_events (
+          id            SERIAL PRIMARY KEY,
+          user_id       TEXT,
+          session_id    TEXT NOT NULL,
+          scenario      TEXT NOT NULL,
+          plan_id       TEXT NOT NULL,
+          event_type    TEXT NOT NULL,
+          option_id     TEXT,
+          action_id     TEXT,
+          request_id    TEXT,
+          query_text    TEXT,
+          metadata_json JSONB,
+          created_at    TIMESTAMPTZ DEFAULT NOW()
+        )
+      `;
+    })();
+  }
+
+  await scenarioEventsTableReady;
 }

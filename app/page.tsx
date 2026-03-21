@@ -9,18 +9,24 @@ import CreditCardCard from "@/components/CreditCardCard";
 import LaptopCard from "@/components/LaptopCard";
 import SmartphoneCard from "@/components/SmartphoneCard";
 import HeadphoneCard from "@/components/HeadphoneCard";
+import ScenarioBrief from "@/components/ScenarioBrief";
+import PrimaryPlanCard from "@/components/PrimaryPlanCard";
+import BackupPlanCard from "@/components/BackupPlanCard";
+import ActionRail from "@/components/ActionRail";
+import ScenarioEvidencePanel from "@/components/ScenarioEvidencePanel";
 import DateRangePicker from "@/components/DateRangePicker";
 import { CITIES_SORTED } from "@/lib/cities";
 import { useChat, LOADING_STEPS } from "@/app/hooks/useChat";
 import { useSubscriptions } from "@/app/hooks/useSubscriptions";
 import { WATCH_CATEGORY_META } from "@/lib/watchTypes";
+import { buildPlanFeedbackCopy, getScenarioUiCopy } from "@/lib/outputCopy";
 import type { MapPin } from "@/components/MapView";
 import { useLocation } from "@/app/hooks/useLocation";
 import { useFavorites } from "@/app/hooks/useFavorites";
 import { usePreferences, formatProfileForPrompt } from "@/app/hooks/usePreferences";
 import { useVoiceInput } from "@/app/hooks/useVoiceInput";
 import { useAuth } from "@/app/hooks/useAuth";
-import { RecommendationCard as CardType } from "@/lib/types";
+import { PlanAction, PlanLinkAction, RecommendationCard as CardType } from "@/lib/types";
 
 // Leaflet is not SSR-compatible
 const MapView = dynamic(() => import("@/components/MapView"), { ssr: false });
@@ -86,12 +92,15 @@ export default function Home() {
   });
   const { favorites, toggleFavorite } = useFavorites(learnFromFavorite);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const chatInputRef = useRef("");
+  const isComposingRef = useRef(false);
   const [prefModalOpen, setPrefModalOpen] = useState(false);
 
   // Phase 5.3: Auth
   const auth = useAuth();
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const [upgradePromptShown, setUpgradePromptShown] = useState(false);
+  const [planFeedbackMessage, setPlanFeedbackMessage] = useState<string | null>(null);
 
   // Phase 5.2: Voice input
   const { isListening, isSupported: voiceSupported, startListening, stopListening } = useVoiceInput(
@@ -135,11 +144,30 @@ export default function Home() {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [chat.messages, chat.visibleCards]);
 
+  useEffect(() => {
+    setPlanFeedbackMessage(null);
+  }, [chat.decisionPlan?.id]);
+
+  useEffect(() => {
+    chatInputRef.current = chat.input;
+  }, [chat.input]);
+
   const hasMessages = chat.messages.length > 0;
   const lastUserQuery =
     [...chat.messages].reverse().find((m) => m.role === "user")?.content ?? "";
-  const hasResults = chat.allCards.length > 0 || chat.allHotelCards.length > 0 || chat.allFlightCards.length > 0 || chat.allCreditCardCards.length > 0 || chat.allLaptopCards.length > 0 || chat.allSmartphoneCards.length > 0 || chat.allHeadphoneCards.length > 0;
-  const isMapMode = chat.viewMode === "map" && hasResults;
+  const hasCategoryResults =
+    chat.allCards.length > 0 ||
+    chat.allHotelCards.length > 0 ||
+    chat.allFlightCards.length > 0 ||
+    chat.allCreditCardCards.length > 0 ||
+    chat.allLaptopCards.length > 0 ||
+    chat.allSmartphoneCards.length > 0 ||
+    chat.allHeadphoneCards.length > 0;
+  const isMapMode =
+    chat.resultMode === "category_cards" &&
+    chat.viewMode === "map" &&
+    hasCategoryResults;
+  const scenarioCopy = getScenarioUiCopy(chat.decisionPlan?.output_language);
 
   // Unified map pins for restaurants and hotels (flights use arc lines, not pins)
   const mapPins: MapPin[] = chat.resultCategory === "hotel"
@@ -203,6 +231,19 @@ export default function Home() {
     });
   }
 
+  function updateChatInput(value: string) {
+    chatInputRef.current = value;
+    chat.setInput(value);
+  }
+
+  function sendCurrentInput() {
+    const text = chatInputRef.current.trim();
+    if (!text || chat.loading || isListening) return;
+    learnFromSearch(text);
+    chat.sendMessage(text);
+    chatInputRef.current = "";
+  }
+
   function isComparing(card: CardType) {
     return compareSelection.some((c) => c?.restaurant.id === card.restaurant.id);
   }
@@ -227,12 +268,97 @@ export default function Home() {
     }
   }
 
+  function handlePlanAction(action: PlanAction) {
+    if (action.type === "share_plan") {
+      chat.trackDecisionPlanEvent({
+        type: "action_clicked",
+        action_id: action.id,
+        option_id: chat.decisionPlan?.primary_plan.id,
+        query: lastUserQuery,
+      });
+      handleShare();
+      setPlanFeedbackMessage(
+        buildPlanFeedbackCopy(chat.decisionPlan?.output_language, "shared")
+      );
+      return;
+    }
+
+    if (action.type === "swap_backup" && action.option_id) {
+      chat.trackDecisionPlanEvent({
+        type: "backup_promoted",
+        option_id: action.option_id,
+        action_id: action.id,
+        query: lastUserQuery,
+      });
+      chat.swapDecisionPlanOption(action.option_id);
+      setPlanFeedbackMessage(
+        buildPlanFeedbackCopy(chat.decisionPlan?.output_language, "promoted")
+      );
+      return;
+    }
+
+    if (action.type === "approve_plan") {
+      chat.trackDecisionPlanEvent({
+        type: "plan_approved",
+        action_id: action.id,
+        option_id: chat.decisionPlan?.primary_plan.id,
+        query: lastUserQuery,
+      });
+      setPlanFeedbackMessage(
+        buildPlanFeedbackCopy(chat.decisionPlan?.output_language, "approved")
+      );
+      return;
+    }
+
+    if (action.type === "request_changes") {
+      chat.trackDecisionPlanEvent({
+        type: "feedback_negative",
+        action_id: action.id,
+        option_id: chat.decisionPlan?.primary_plan.id,
+        query: lastUserQuery,
+      });
+      setPlanFeedbackMessage(
+        buildPlanFeedbackCopy(chat.decisionPlan?.output_language, "needs_changes")
+      );
+      return;
+    }
+
+    if (action.type === "refine" && action.prompt) {
+      chat.trackDecisionPlanEvent({
+        type: "action_clicked",
+        action_id: action.id,
+        option_id: chat.decisionPlan?.primary_plan.id,
+        query: lastUserQuery,
+        metadata: { prompt: action.prompt },
+      });
+      setPlanFeedbackMessage(
+        buildPlanFeedbackCopy(
+          chat.decisionPlan?.output_language,
+          "refining",
+          action.label
+        )
+      );
+      learnFromSearch(action.prompt);
+      chat.sendMessage(action.prompt);
+    }
+  }
+
+  function handlePlanLinkClick(action: PlanLinkAction, optionId: string) {
+    chat.trackDecisionPlanEvent({
+      type: "action_clicked",
+      action_id: action.id,
+      option_id: optionId,
+      query: lastUserQuery,
+      metadata: { label: action.label, url: action.url },
+    });
+  }
+
   // Phase 4.3: request_id is available in complete event; track it
   // (We track it via suggestedRefinements being set when complete arrives)
   // We pass requestId=undefined for now (it's in the SSE data but not surfaced here)
 
   // Shared filter/view bar rendered in both list and map contexts
-  const filterViewBar = hasResults && (
+  const filterViewBar = chat.resultMode === "category_cards" && hasCategoryResults && (
     <div className="flex flex-col gap-2">
       <div className="flex items-center justify-between">
         {/* View toggle */}
@@ -1508,8 +1634,137 @@ export default function Home() {
                 {/* Filter / View Bar */}
                 {filterViewBar}
 
+                {/* Scenario Plan Results */}
+                {chat.resultMode === "scenario_plan" && chat.decisionPlan && (
+                  <div className="flex flex-col gap-4">
+                    <ScenarioBrief plan={chat.decisionPlan} />
+                    {planFeedbackMessage && (
+                      <div
+                        style={{
+                          borderRadius: "14px",
+                          backgroundColor: "rgba(212,163,75,0.12)",
+                          border: "0.5px solid rgba(212,163,75,0.25)",
+                          padding: "12px 14px",
+                          fontFamily: "var(--font-dm-sans)",
+                          fontSize: "13px",
+                          color: "var(--text-primary)",
+                        }}
+                      >
+                        {planFeedbackMessage}
+                      </div>
+                    )}
+                    <PrimaryPlanCard
+                      option={chat.decisionPlan.primary_plan}
+                      language={chat.decisionPlan.output_language}
+                      onLinkClick={(action) =>
+                        handlePlanLinkClick(action, chat.decisionPlan!.primary_plan.id)
+                      }
+                    />
+
+                    {chat.decisionPlan.risks.length > 0 && (
+                      <div
+                        style={{
+                          backgroundColor: "#FDF6EC",
+                          borderRadius: "18px",
+                          border: "0.5px solid rgba(232,160,32,0.35)",
+                          padding: "16px",
+                        }}
+                      >
+                        <p
+                          style={{
+                            fontFamily: "var(--font-dm-sans)",
+                            fontSize: "11px",
+                            textTransform: "uppercase",
+                            letterSpacing: "0.06em",
+                            color: "#8B5E14",
+                            marginBottom: "10px",
+                          }}
+                        >
+                          {scenarioCopy.planRisks}
+                        </p>
+                        <div className="flex flex-col gap-2">
+                          {chat.decisionPlan.risks.map((risk, index) => (
+                            <p
+                              key={`${chat.decisionPlan?.id}-risk-${index}`}
+                              style={{
+                                fontFamily: "var(--font-dm-sans)",
+                                fontSize: "13px",
+                                lineHeight: 1.6,
+                                color: "#6B4A1A",
+                              }}
+                            >
+                              • {risk}
+                            </p>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    <ActionRail
+                      actions={chat.decisionPlan.next_actions}
+                      language={chat.decisionPlan.output_language}
+                      onAction={handlePlanAction}
+                    />
+
+                    {chat.decisionPlan.backup_plans.length > 0 && (
+                      <div className="flex flex-col gap-3">
+                        <div>
+                          <p
+                            style={{
+                              fontFamily: "var(--font-dm-sans)",
+                              fontSize: "11px",
+                              textTransform: "uppercase",
+                              letterSpacing: "0.06em",
+                              color: "var(--text-secondary)",
+                              marginBottom: "6px",
+                            }}
+                          >
+                            {scenarioCopy.backupOptions}
+                          </p>
+                          <h4
+                            style={{
+                              fontFamily: "var(--font-playfair)",
+                              fontSize: "24px",
+                              color: "var(--text-primary)",
+                            }}
+                          >
+                            {scenarioCopy.keepOnDeck}
+                          </h4>
+                        </div>
+                        <div className="grid gap-3 md:grid-cols-2">
+                          {chat.decisionPlan.backup_plans.map((plan) => (
+                            <BackupPlanCard
+                              key={plan.id}
+                              option={plan}
+                              onPromote={() => {
+                                chat.trackDecisionPlanEvent({
+                                  type: "backup_promoted",
+                                  option_id: plan.id,
+                                  query: lastUserQuery,
+                                });
+                                setPlanFeedbackMessage(
+                                  buildPlanFeedbackCopy(
+                                    chat.decisionPlan?.output_language,
+                                    "promoted",
+                                    plan.title
+                                  )
+                                );
+                                chat.swapDecisionPlanOption(plan.id);
+                              }}
+                              language={chat.decisionPlan!.output_language}
+                              onLinkClick={(action) => handlePlanLinkClick(action, plan.id)}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    <ScenarioEvidencePanel plan={chat.decisionPlan} />
+                  </div>
+                )}
+
                 {/* List View */}
-                {chat.displayCards.length > 0 && (
+                {chat.resultMode === "category_cards" && chat.displayCards.length > 0 && (
                   <div className="flex flex-col gap-3">
                     {chat.displayCards.map((card, i) => (
                       <RecommendationCard
@@ -1731,7 +1986,8 @@ export default function Home() {
                 )}
 
                 {/* Degraded empty-filter state */}
-                {chat.visibleCards.length > 0 &&
+                {chat.resultMode === "category_cards" &&
+                  chat.visibleCards.length > 0 &&
                   chat.displayCards.length === 0 && (
                     <div
                       className="rounded-2xl p-6 text-center"
@@ -1804,11 +2060,22 @@ export default function Home() {
           <input
             type="text"
             value={isListening ? "" : chat.input}
-            onChange={(e) => chat.setInput(e.target.value)}
+            onChange={(e) => updateChatInput(e.target.value)}
+            onCompositionStart={() => {
+              isComposingRef.current = true;
+            }}
+            onCompositionEnd={(e) => {
+              isComposingRef.current = false;
+              updateChatInput(e.currentTarget.value);
+            }}
             onKeyDown={(e) => {
               if (e.key === "Enter") {
-                learnFromSearch(chat.input);
-                chat.sendMessage(chat.input);
+                if (isComposingRef.current || e.nativeEvent.isComposing) {
+                  return;
+                }
+                chatInputRef.current = e.currentTarget.value;
+                e.preventDefault();
+                sendCurrentInput();
               }
             }}
             placeholder={
@@ -1874,10 +2141,7 @@ export default function Home() {
             </button>
           )}
           <button
-            onClick={() => {
-              learnFromSearch(chat.input);
-              chat.sendMessage(chat.input);
-            }}
+            onClick={sendCurrentInput}
             disabled={chat.loading || !chat.input.trim()}
             aria-label="Send"
             style={{
