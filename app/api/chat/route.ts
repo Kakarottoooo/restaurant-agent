@@ -134,7 +134,11 @@ export async function POST(req: NextRequest) {
           missing_flight_fields: result.missing_flight_fields,
           no_direct_available: result.no_direct_available,
           suggested_refinements: result.suggested_refinements,
+          scenarioIntent: result.scenarioIntent,
+          decisionPlan: result.decisionPlan,
+          result_mode: result.result_mode,
           category: result.category,
+          output_language: result.output_language,
           request_id,
         });
       } catch (error) {

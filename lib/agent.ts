@@ -1,8 +1,8 @@
 // import Anthropic from "@anthropic-ai/sdk";
 // const client = new Anthropic();
 
-import { googlePlacesSearch, tavilySearch, geocodeLocation, fetchReviewSignals, searchHotels, searchFlights, resolveMultiAirport } from "./tools";
-import { UserRequirements, Restaurant, RecommendationCard, SessionPreferences, ScoringDimensions, HotelIntent, RestaurantIntent, FlightIntent, CreditCardIntent, LaptopIntent, LaptopUseCase, ParsedIntent, HotelRecommendationCard, FlightRecommendationCard, CreditCardRecommendationCard, LaptopRecommendationCard, SpendingProfile, CategoryType, Flight, SubscriptionIntent, SmartphoneIntent, SmartphoneUseCase, SmartphoneRecommendationCard, HeadphoneIntent, HeadphoneUseCase, HeadphoneRecommendationCard } from "./types";
+import { googlePlacesSearch, tavilySearch, geocodeLocation, fetchReviewSignals, searchHotels, searchFlights, resolveMultiAirport, normalizeDate } from "./tools";
+import { UserRequirements, Restaurant, RecommendationCard, SessionPreferences, ScoringDimensions, HotelIntent, RestaurantIntent, FlightIntent, CreditCardIntent, LaptopIntent, LaptopUseCase, ParsedIntent, HotelRecommendationCard, FlightRecommendationCard, CreditCardRecommendationCard, LaptopRecommendationCard, SpendingProfile, CategoryType, Flight, SubscriptionIntent, SmartphoneIntent, SmartphoneUseCase, SmartphoneRecommendationCard, HeadphoneIntent, HeadphoneUseCase, HeadphoneRecommendationCard, ScenarioIntent, DecisionPlan, ResultMode, WeekendTripIntent, DateNightIntent, MultilingualQueryContext } from "./types";
 import type { WatchCategory } from "./watchTypes";
 import { CITIES, DEFAULT_CITY } from "./cities";
 import { UserRequirementsSchema, RankedItemArraySchema } from "./schemas";
@@ -10,40 +10,9 @@ import { recommendCreditCards } from "./creditCardEngine";
 import { recommendLaptops, classifyMentionedModels } from "./laptopEngine";
 import { recommendSmartphones, classifyMentionedSmartphones } from "./smartphoneEngine";
 import { recommendHeadphones, classifyMentionedHeadphones } from "./headphoneEngine";
-
-const MINIMAX_API_URL = "https://api.minimaxi.chat/v1/chat/completions";
-const MINIMAX_MODEL = "MiniMax-Text-01";
-
-async function minimaxChat(params: {
-  system?: string;
-  messages: Array<{ role: "user" | "assistant"; content: string }>;
-  max_tokens?: number;
-}): Promise<string> {
-  const messages = params.system
-    ? [{ role: "system" as const, content: params.system }, ...params.messages]
-    : params.messages;
-
-  const res = await fetch(MINIMAX_API_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${process.env.MINIMAX_API_KEY}`,
-    },
-    body: JSON.stringify({
-      model: MINIMAX_MODEL,
-      messages,
-      max_tokens: params.max_tokens ?? 1024,
-    }),
-  });
-
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`MiniMax API error: ${err}`);
-  }
-
-  const data = await res.json();
-  return data.choices?.[0]?.message?.content ?? "";
-}
+import { detectScenarioFromMessage, parseScenarioIntent, runScenarioPlanner, runWeekendTripPlanner } from "./scenario2";
+import { minimaxChat } from "./minimax";
+import { analyzeMultilingualQuery, resolveLocationHint } from "./nlu";
 
 // ─── Phase 3.2: Weighted Scoring ─────────────────────────────────────────────
 
@@ -134,7 +103,14 @@ export const HOTEL_DEFAULT_WEIGHTS = {
   preference_match: 0.05,
 };
 
-async function detectCategory(message: string): Promise<CategoryType> {
+async function detectCategory(
+  message: string,
+  queryContext?: MultilingualQueryContext
+): Promise<CategoryType> {
+  if (queryContext?.category_hint && queryContext.category_hint !== "unknown") {
+    return queryContext.category_hint;
+  }
+
   const lower = message.toLowerCase();
   const creditCardKeywords = [
     "credit card", "credit cards", "cash back", "cashback", "rewards card",
@@ -172,6 +148,11 @@ async function detectCategory(message: string): Promise<CategoryType> {
     "check in", "check-in", "check out", "check-out", "nights", "night stay",
     "stay at", "book a room", "accommodation", "suite", "booking",
     "酒店", "旅馆", "住", "入住", "退房", "晚", "客房",
+  ];
+  const restaurantKeywords = [
+    "restaurant", "restaurants", "dinner", "lunch", "brunch", "breakfast",
+    "book a table", "table for", "reservation", "eat out", "dining",
+    "steakhouse", "sushi", "omakase", "tasting menu", "western food",
   ];
   const laptopKeywords = [
     "laptop", "notebooks", "notebook computer", "macbook", "thinkpad", "chromebook",
@@ -228,12 +209,22 @@ async function detectCategory(message: string): Promise<CategoryType> {
     "耳机", "无线耳机", "降噪耳机", "入耳式", "头戴式",
   ];
 
+  const hasStrongHotelKeyword =
+    (hotelKeywords.some((kw) => lower.includes(kw)) &&
+      /\bhotel\b|\bmotel\b|\binn\b|\bresort\b|\blodge\b|\bhostel\b|\bairbnb\b|\bcheck in\b|\bcheck-in\b|\bcheck out\b|\bcheck-out\b|\bbook a room\b|\baccommodation\b|\bsuite\b|\broom\b/.test(lower)) ||
+    /住宿|酒店|旅馆|宾馆|民宿|入住|退房|客房|房间|大床房|双床房|住几晚/.test(message);
+  const hasRestaurantKeyword =
+    restaurantKeywords.some((kw) => lower.includes(kw)) ||
+    /餐厅|饭店|吃饭|晚餐|午餐|早餐|约会|西餐|日料|火锅|订位|订座|聚餐/.test(message);
+
   if (headphoneKeywords.some((kw) => lower.includes(kw))) return "headphone";
   if (smartphoneKeywords.some((kw) => lower.includes(kw))) return "smartphone";
   // Laptop check before flight/hotel to avoid collision
   if (laptopKeywords.some((kw) => lower.includes(kw))) return "laptop";
   if (flightKeywords.some((kw) => lower.includes(kw))) return "flight";
-  if (hotelKeywords.some((kw) => lower.includes(kw))) return "hotel";
+  if (hasRestaurantKeyword && !hasStrongHotelKeyword) return "restaurant";
+  if (hasStrongHotelKeyword && !hasRestaurantKeyword) return "hotel";
+  if (hasRestaurantKeyword) return "restaurant";
 
   // No keyword matched — ask LLM to classify rather than blindly defaulting to restaurant
   try {
@@ -264,8 +255,7 @@ Reply with only the single word. No explanation.`,
 async function parseHotelIntent(
   userMessage: string,
   cityFullName: string,
-  sessionPreferences?: SessionPreferences,
-  profileContext?: string
+  queryContext?: MultilingualQueryContext
 ): Promise<HotelIntent> {
   const text = await minimaxChat({
     messages: [
@@ -276,6 +266,13 @@ async function parseHotelIntent(
 User request: "${userMessage}"
 Default city (use ONLY if user did not mention any location): ${cityFullName}
 Today's date: ${new Date().toISOString().split("T")[0]}
+Canonical NLU hints: ${JSON.stringify({
+  normalized_query: queryContext?.normalized_query,
+  location_hint: queryContext?.location_hint,
+  category_hint: queryContext?.category_hint,
+  date_text_hint: queryContext?.date_text_hint,
+  time_hint: queryContext?.time_hint,
+})}
 
 IMPORTANT: For "location", look for any city, region, or place name in the user request (including typos like "las vagas"="Las Vegas", "new yok"="New York"). Only fall back to "${cityFullName}" if the user truly mentioned no location.
 
@@ -304,7 +301,12 @@ For relative dates: "tonight" = today, "tomorrow" = tomorrow, "next Friday" = ne
   });
 
   const jsonMatch = text.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) return { category: "hotel", location: cityFullName };
+  if (!jsonMatch) {
+    return {
+      category: "hotel",
+      location: resolveLocationHint(undefined, queryContext, userMessage, cityFullName),
+    };
+  }
   try {
     const parsed = JSON.parse(jsonMatch[0]);
     // If nights given but no check_out, compute it
@@ -313,9 +315,159 @@ For relative dates: "tonight" = today, "tomorrow" = tomorrow, "next Friday" = ne
       d.setDate(d.getDate() + parsed.nights);
       parsed.check_out = d.toISOString().split("T")[0];
     }
+    parsed.location = resolveLocationHint(parsed.location, queryContext, userMessage, cityFullName);
     return { category: "hotel", ...parsed };
   } catch {
-    return { category: "hotel", location: cityFullName };
+    return {
+      category: "hotel",
+      location: resolveLocationHint(undefined, queryContext, userMessage, cityFullName),
+    };
+  }
+}
+
+async function parseWeekendTripIntent(
+  userMessage: string,
+  cityFullName: string,
+  queryContext?: MultilingualQueryContext
+): Promise<WeekendTripIntent> {
+  const today = new Date().toISOString().split("T")[0];
+  const text = await minimaxChat({
+    messages: [
+      {
+        role: "user",
+        content: `Extract a weekend trip planning intent from this request. Return ONLY valid JSON.
+
+Today: ${today}
+Default departure city (use if user does not specify): ${cityFullName}
+User request: "${userMessage}"
+Canonical NLU hints: ${JSON.stringify({
+  normalized_query: queryContext?.normalized_query,
+  scenario_hint: queryContext?.scenario_hint,
+  location_hint: queryContext?.location_hint,
+  date_text_hint: queryContext?.date_text_hint,
+  time_hint: queryContext?.time_hint,
+})}
+
+Return JSON:
+{
+  "category": "trip",
+  "scenario": "weekend_trip",
+  "departure_city": string or null,
+  "destination_city": string or null,
+  "start_date": "YYYY-MM-DD" or null,
+  "end_date": "YYYY-MM-DD" or null,
+  "nights": number or null,
+  "travelers": number or null,
+  "budget_total": number or null,
+  "trip_pace": "easy" | "balanced" | "packed",
+  "hotel_style": "value" | "comfortable" | "boutique" | "luxury" | "any",
+  "hotel_star_rating": number or null,
+  "hotel_neighborhood": string or null,
+  "cabin_class": "economy" | "business" | "first",
+  "prefer_direct": true | false | null,
+  "planning_assumptions": string[],
+  "missing_fields": string[]
+}
+
+Rules:
+- If the user says "this weekend" or "next weekend", convert it into concrete Friday-Sunday dates.
+- If the user says "next month" and wants a weekend trip, choose the first Friday-Sunday weekend of next month and add that to planning_assumptions.
+- If the user gives a start date but no end date, default to a 2-night weekend and add an assumption.
+- If the user gives no traveler count, default to 2 for "we/us", otherwise 1, and add an assumption.
+- If the user gives no departure city, use the default departure city and add an assumption.
+- If a destination still cannot be inferred, include "destination" in missing_fields.
+- If dates still cannot be inferred, include "travel dates" in missing_fields.
+- Keep planning_assumptions short and explicit.
+- Keep trip_pace conservative: "easy" for phrases like "relaxing", "easy", "not too much hassle", "don't want to optimize"; "packed" for dense or ambitious language; otherwise "balanced".`,
+      },
+    ],
+    max_tokens: 1200,
+  });
+
+  const fallback: WeekendTripIntent = {
+    category: "trip",
+    scenario: "weekend_trip",
+    scenario_goal: `Plan a weekend trip from ${cityFullName} with one default package and backups the user can approve quickly.`,
+    departure_city: cityFullName,
+    destination_city: undefined,
+    start_date: undefined,
+    end_date: undefined,
+    nights: 2,
+    travelers: 1,
+    budget_total: undefined,
+    trip_pace: "balanced",
+    hotel_style: "comfortable",
+    hotel_star_rating: undefined,
+    hotel_neighborhood: undefined,
+    cabin_class: "economy",
+    prefer_direct: null,
+    planning_assumptions: [`Using ${cityFullName} as the departure city.`],
+    missing_fields: ["destination", "travel dates"],
+    needs_clarification: true,
+  };
+
+  const jsonMatch = text.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) return fallback;
+
+  try {
+    const parsed = JSON.parse(jsonMatch[0]) as Partial<WeekendTripIntent>;
+    const startDate = normalizeDate(parsed.start_date ?? null) ?? undefined;
+    const endDate = normalizeDate(parsed.end_date ?? null) ?? undefined;
+    const nights =
+      parsed.nights ??
+      (startDate && endDate
+        ? Math.max(
+            1,
+            Math.round(
+              (new Date(`${endDate}T00:00:00`).getTime() -
+                new Date(`${startDate}T00:00:00`).getTime()) /
+                (1000 * 60 * 60 * 24)
+            )
+          )
+        : 2);
+    const missing_fields = Array.isArray(parsed.missing_fields)
+      ? parsed.missing_fields.filter((field): field is string => typeof field === "string")
+      : [];
+    return {
+      category: "trip",
+      scenario: "weekend_trip",
+      scenario_goal: `Plan a weekend trip to ${parsed.destination_city ?? "the destination"} with flight, hotel, and budget tradeoffs compressed into a few approval-ready packages.`,
+      departure_city: parsed.departure_city ?? cityFullName,
+      destination_city: parsed.destination_city ?? undefined,
+      start_date: startDate,
+      end_date: endDate,
+      nights,
+      travelers: parsed.travelers ?? 1,
+      budget_total: parsed.budget_total ?? undefined,
+      trip_pace:
+        parsed.trip_pace === "easy" || parsed.trip_pace === "packed"
+          ? parsed.trip_pace
+          : "balanced",
+      hotel_style:
+        parsed.hotel_style === "value" ||
+        parsed.hotel_style === "comfortable" ||
+        parsed.hotel_style === "boutique" ||
+        parsed.hotel_style === "luxury"
+          ? parsed.hotel_style
+          : "any",
+      hotel_star_rating: parsed.hotel_star_rating ?? undefined,
+      hotel_neighborhood: parsed.hotel_neighborhood ?? undefined,
+      cabin_class:
+        parsed.cabin_class === "business" || parsed.cabin_class === "first"
+          ? parsed.cabin_class
+          : "economy",
+      prefer_direct:
+        typeof parsed.prefer_direct === "boolean" ? parsed.prefer_direct : null,
+      planning_assumptions: Array.isArray(parsed.planning_assumptions)
+        ? parsed.planning_assumptions.filter(
+            (item): item is string => typeof item === "string" && item.trim().length > 0
+          )
+        : [],
+      missing_fields,
+      needs_clarification: missing_fields.length > 0,
+    };
+  } catch {
+    return fallback;
   }
 }
 
@@ -324,6 +476,7 @@ For relative dates: "tonight" = today, "tomorrow" = tomorrow, "next Friday" = ne
 async function parseRestaurantIntent(
   userMessage: string,
   cityFullName: string,
+  queryContext?: MultilingualQueryContext,
   sessionPreferences?: SessionPreferences,
   profileContext?: string
 ): Promise<RestaurantIntent> {
@@ -339,6 +492,17 @@ async function parseRestaurantIntent(
 
 User request: "${userMessage}"
 Default city (use ONLY if user did not mention any location): ${cityFullName}
+Canonical NLU hints: ${JSON.stringify({
+  normalized_query: queryContext?.normalized_query,
+  intent_summary: queryContext?.intent_summary,
+  location_hint: queryContext?.location_hint,
+  cuisine_hint: queryContext?.cuisine_hint,
+  purpose_hint: queryContext?.purpose_hint,
+  party_size_hint: queryContext?.party_size_hint,
+  budget_per_person_hint: queryContext?.budget_per_person_hint,
+  budget_total_hint: queryContext?.budget_total_hint,
+  constraints_hint: queryContext?.constraints_hint,
+})}
 ${prefContext ? `\n${prefContext}` : ""}
 ${profileContext ? `\nUser profile: ${profileContext}` : ""}
 
@@ -364,18 +528,65 @@ Return JSON with these fields (omit fields that aren't mentioned):
   });
 
   const jsonMatch = text.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) return { category: "restaurant" } as RestaurantIntent;
+  if (!jsonMatch) {
+    return {
+      category: "restaurant",
+      location: resolveLocationHint(undefined, queryContext, userMessage, cityFullName),
+      cuisine: queryContext?.cuisine_hint,
+      purpose: queryContext?.purpose_hint,
+      party_size: queryContext?.party_size_hint,
+      budget_per_person: queryContext?.budget_per_person_hint,
+      budget_total: queryContext?.budget_total_hint,
+      constraints: queryContext?.constraints_hint,
+    } as RestaurantIntent;
+  }
   try {
     const parsed = UserRequirementsSchema.safeParse(JSON.parse(jsonMatch[0]));
-    return parsed.success ? ({ category: "restaurant", ...parsed.data } as RestaurantIntent) : { category: "restaurant" };
+    if (!parsed.success) {
+      return {
+        category: "restaurant",
+        location: resolveLocationHint(undefined, queryContext, userMessage, cityFullName),
+        cuisine: queryContext?.cuisine_hint,
+        purpose: queryContext?.purpose_hint,
+        party_size: queryContext?.party_size_hint,
+        budget_per_person: queryContext?.budget_per_person_hint,
+        budget_total: queryContext?.budget_total_hint,
+        constraints: queryContext?.constraints_hint,
+      } as RestaurantIntent;
+    }
+
+    return {
+      category: "restaurant",
+      ...parsed.data,
+      cuisine: parsed.data.cuisine ?? queryContext?.cuisine_hint,
+      purpose: parsed.data.purpose ?? queryContext?.purpose_hint,
+      party_size: parsed.data.party_size ?? queryContext?.party_size_hint,
+      budget_per_person: parsed.data.budget_per_person ?? queryContext?.budget_per_person_hint,
+      budget_total: parsed.data.budget_total ?? queryContext?.budget_total_hint,
+      constraints:
+        parsed.data.constraints && parsed.data.constraints.length > 0
+          ? parsed.data.constraints
+          : queryContext?.constraints_hint,
+      location: resolveLocationHint(parsed.data.location, queryContext, userMessage, cityFullName),
+    } as RestaurantIntent;
   } catch {
-    return { category: "restaurant" } as RestaurantIntent;
+    return {
+      category: "restaurant",
+      location: resolveLocationHint(undefined, queryContext, userMessage, cityFullName),
+      cuisine: queryContext?.cuisine_hint,
+      purpose: queryContext?.purpose_hint,
+      party_size: queryContext?.party_size_hint,
+      budget_per_person: queryContext?.budget_per_person_hint,
+      budget_total: queryContext?.budget_total_hint,
+      constraints: queryContext?.constraints_hint,
+    } as RestaurantIntent;
   }
 }
 
 async function parseFlightIntent(
   userMessage: string,
-  cityFullName: string
+  cityFullName: string,
+  queryContext?: MultilingualQueryContext
 ): Promise<FlightIntent> {
   const text = await minimaxChat({
     messages: [
@@ -386,6 +597,12 @@ async function parseFlightIntent(
 User request: "${userMessage}"
 Default city (use ONLY if user did not mention departure): ${cityFullName}
 Today's date: ${new Date().toISOString().split("T")[0]}
+Canonical NLU hints: ${JSON.stringify({
+  normalized_query: queryContext?.normalized_query,
+  location_hint: queryContext?.location_hint,
+  date_text_hint: queryContext?.date_text_hint,
+  time_hint: queryContext?.time_hint,
+})}
 
 Return JSON with these fields (omit fields not mentioned):
 {
@@ -413,7 +630,14 @@ Default cabin_class to "economy" if not specified.`,
   if (!jsonMatch) return { category: "flight" };
   try {
     const parsed = JSON.parse(jsonMatch[0]);
-    return { category: "flight", ...parsed };
+    return {
+      category: "flight",
+      ...parsed,
+      departure_city:
+        parsed.departure_city ??
+        queryContext?.location_hint ??
+        parsed.departure_city,
+    };
   } catch {
     return { category: "flight" };
   }
@@ -946,11 +1170,12 @@ async function runHeadphonePipeline(
 export async function parseIntent(
   userMessage: string,
   cityFullName: string,
+  queryContext?: MultilingualQueryContext,
   sessionPreferences?: SessionPreferences,
   profileContext?: string,
   conversationHistory?: Array<{ role: "user" | "assistant"; content: string }>
 ): Promise<ParsedIntent> {
-  const category = await detectCategory(userMessage);
+  const category = await detectCategory(userMessage, queryContext);
   if (category === "subscription") {
     return parseSubscriptionIntent(userMessage, conversationHistory ?? []);
   }
@@ -967,12 +1192,18 @@ export async function parseIntent(
     return parseHeadphoneIntent(userMessage, conversationHistory ?? []);
   }
   if (category === "flight") {
-    return parseFlightIntent(userMessage, cityFullName);
+    return parseFlightIntent(userMessage, cityFullName, queryContext);
   }
   if (category === "hotel") {
-    return parseHotelIntent(userMessage, cityFullName, sessionPreferences, profileContext);
+    return parseHotelIntent(userMessage, cityFullName, queryContext);
   }
-  return parseRestaurantIntent(userMessage, cityFullName, sessionPreferences, profileContext);
+  return parseRestaurantIntent(
+    userMessage,
+    cityFullName,
+    queryContext,
+    sessionPreferences,
+    profileContext
+  );
 }
 
 // ─── Layer 2+3: Search & Collect (parallel) ──────────────────────────────────
@@ -987,11 +1218,23 @@ async function gatherCandidates(
   cityId: string,
   gpsCoords: { lat: number; lng: number } | null = null,
   uiNearLocation?: string
-): Promise<{ restaurants: Restaurant[]; semanticSignals: string; tavilyQuery: string }> {
+): Promise<{
+  restaurants: Restaurant[];
+  semanticSignals: string;
+  tavilyQuery: string;
+  searchCityLabel: string;
+}> {
   const city = CITIES[cityId] ?? CITIES[DEFAULT_CITY];
+  const searchCityLabel = requirements.location?.trim() || city.fullName;
 
   // UI near_location takes priority over parsed near_location from message
   const effectiveNearLocation = uiNearLocation ?? requirements.near_location;
+
+  let parsedLocationCoords: { lat: number; lng: number } | undefined;
+  if (!gpsCoords && requirements.location) {
+    const geocoded = await geocodeLocation(requirements.location);
+    if (geocoded) parsedLocationCoords = geocoded;
+  }
 
   // Geocode near_location if provided
   let nearLocationCoords: { lat: number; lng: number } | undefined;
@@ -1000,15 +1243,15 @@ async function gatherCandidates(
     if (geocoded) nearLocationCoords = geocoded;
   }
 
-  const cityCenter = nearLocationCoords ?? gpsCoords ?? city.center;
+  const cityCenter = nearLocationCoords ?? gpsCoords ?? parsedLocationCoords ?? city.center;
 
   const location = gpsCoords
     ? "Nearby"
     : effectiveNearLocation
     ? effectiveNearLocation
     : requirements.neighborhood
-    ? `${requirements.neighborhood}, ${city.fullName}`
-    : city.fullName;
+    ? `${requirements.neighborhood}, ${searchCityLabel}`
+    : searchCityLabel;
 
   // Map budget to price filter
   let priceFilter: string | undefined;
@@ -1042,7 +1285,7 @@ async function gatherCandidates(
 
   const tavilyQuery = [
     requirements.cuisine,
-    `restaurant ${city.fullName}`,
+    `restaurant ${searchCityLabel}`,
     requirements.purpose === "date" ? "romantic date night" : "",
     requirements.atmosphere?.join(" "),
     requirements.noise_level === "quiet" ? "quiet atmosphere" : "",
@@ -1091,10 +1334,140 @@ async function gatherCandidates(
     .sort((a, b) => b.rating * Math.log(b.review_count + 1) - a.rating * Math.log(a.review_count + 1))
     .slice(0, 15);
 
-  return { restaurants: preFiltered, semanticSignals, tavilyQuery };
+  return { restaurants: preFiltered, semanticSignals, tavilyQuery, searchCityLabel };
 }
 
 // ─── Layer 4+5+6: Rank, Score, Explain ───────────────────────────────────────
+
+function buildFallbackSuggestedRefinements(requirements: UserRequirements): string[] {
+  const suggestions = [
+    requirements.noise_level === "quiet" ? null : "更安静一点",
+    requirements.budget_per_person && requirements.budget_per_person <= 40 ? null : "再便宜一点",
+    requirements.purpose === "date" ? "更适合约会" : "更适合聊天",
+    requirements.neighborhood || requirements.near_location ? null : "换个更方便的区域",
+    requirements.cuisine ? null : "偏西餐一点",
+  ].filter((item): item is string => Boolean(item));
+
+  return Array.from(new Set(suggestions)).slice(0, 4);
+}
+
+function buildFallbackRestaurantCards(
+  requirements: UserRequirements,
+  restaurants: Restaurant[],
+  effectiveWeights: typeof DEFAULT_WEIGHTS
+): { cards: RecommendationCard[]; suggested_refinements: string[] } {
+  const priceMidpoint: Record<string, number> = {
+    $: 20,
+    $$: 45,
+    $$$: 85,
+    $$$$: 140,
+  };
+
+  const estimatedTotal = (price: string | undefined, partySize?: number) => {
+    const diners = Math.max(2, partySize ?? 2);
+    const midpoint = priceMidpoint[price ?? "$$"] ?? priceMidpoint.$$;
+    const low = Math.max(20, Math.round(midpoint * diners * 0.8));
+    const high = Math.max(low + 20, Math.round(midpoint * diners * 1.2));
+    return `$${low}-${high} for ${diners} people`;
+  };
+
+  const budgetScore = (price: string | undefined) => {
+    const target = requirements.budget_per_person;
+    if (!target) return 7;
+    const midpoint = priceMidpoint[price ?? "$$"] ?? priceMidpoint.$$;
+    const diffRatio = Math.abs(midpoint - target) / Math.max(target, 1);
+    return Math.max(2, Math.min(10, Math.round((10 - diffRatio * 8) * 10) / 10));
+  };
+
+  const cards = restaurants
+    .slice(0, 8)
+    .map((restaurant, index) => {
+      const reviewSignals = restaurant.review_signals;
+      const sceneMatch =
+        requirements.purpose === "date"
+          ? Math.min(
+              10,
+              Math.max(
+                reviewSignals?.date_suitability ?? 6,
+                /french|italian|steak|wine|bistro/i.test(restaurant.cuisine) ? 8 : 6
+              )
+            )
+          : 7;
+      const reviewQuality = Math.min(
+        10,
+        Math.round(
+          (restaurant.rating * 1.6 + Math.min(2.5, Math.log10(Math.max(restaurant.review_count, 10)))) * 10
+        ) / 10
+      );
+      const locationConvenience = restaurant.distance
+        ? Math.max(4, Math.min(10, Math.round((10 - restaurant.distance / 1.5) * 10) / 10))
+        : 7;
+      const preferenceMatch =
+        requirements.noise_level === "quiet"
+          ? reviewSignals?.noise_level === "quiet"
+            ? 9
+            : reviewSignals?.noise_level === "loud"
+            ? 3
+            : 6
+          : 7;
+      const redFlagPenalty = Math.min(2, (reviewSignals?.red_flags.length ?? 0) * 0.75);
+
+      const scoring = {
+        budget_match: budgetScore(restaurant.price),
+        scene_match: sceneMatch,
+        review_quality: reviewQuality,
+        location_convenience: locationConvenience,
+        preference_match: preferenceMatch,
+        red_flag_penalty: redFlagPenalty,
+        weighted_total: 0,
+      } satisfies ScoringDimensions;
+
+      const score = computeWeightedScore(scoring, effectiveWeights);
+      scoring.weighted_total = score;
+
+      const whyParts = [
+        `${restaurant.rating.toFixed(1)} rating from ${restaurant.review_count} reviews`,
+        requirements.purpose === "date"
+          ? reviewSignals?.date_suitability
+            ? `date-night fit looks strong from review signals`
+            : `works as a solid date-night default`
+          : null,
+        reviewSignals?.noise_level === "quiet" ? "reviews suggest an easier-to-talk-over room" : null,
+        requirements.cuisine ? `still aligned with your ${requirements.cuisine} ask` : null,
+      ].filter((item): item is string => Boolean(item));
+
+      const redFlag = reviewSignals?.red_flags[0];
+      const notGreatIf =
+        requirements.budget_per_person && budgetScore(restaurant.price) <= 4
+          ? "You want to stay tightly under budget."
+          : reviewSignals?.noise_level === "loud"
+          ? "You want a quieter meal."
+          : "You want something more specialized than a safe all-around pick.";
+
+      return {
+        restaurant,
+        rank: index + 1,
+        score,
+        scoring,
+        why_recommended: whyParts.join("; "),
+        best_for:
+          reviewSignals?.best_for[0] ??
+          (requirements.purpose === "date" ? "Date night with low decision risk" : "Reliable general pick"),
+        watch_out: redFlag ?? "Double-check reservation availability at your target time.",
+        not_great_if: notGreatIf,
+        estimated_total: estimatedTotal(restaurant.price, requirements.party_size),
+        suggested_refinements: buildFallbackSuggestedRefinements(requirements),
+      } satisfies RecommendationCard;
+    })
+    .sort((a, b) => b.score - a.score)
+    .map((card, index) => ({ ...card, rank: index + 1 }))
+    .slice(0, 5);
+
+  return {
+    cards,
+    suggested_refinements: cards[0]?.suggested_refinements ?? buildFallbackSuggestedRefinements(requirements),
+  };
+}
 
 async function rankAndExplain(
   requirements: UserRequirements,
@@ -1184,24 +1557,28 @@ Return ONLY the JSON array, no other text.`,
     max_tokens: 4096,
   });
 
+  const effectiveWeights = customWeights
+    ? { ...DEFAULT_WEIGHTS, ...customWeights }
+    : DEFAULT_WEIGHTS;
+  const fallbackResult = buildFallbackRestaurantCards(
+    requirements,
+    restaurants,
+    effectiveWeights
+  );
+
   const jsonMatch = text.match(/\[[\s\S]*\]/);
-  if (!jsonMatch) return { cards: [], suggested_refinements: [] };
+  if (!jsonMatch) return fallbackResult;
   let raw: unknown;
   try {
     raw = JSON.parse(jsonMatch[0]);
   } catch {
-    return { cards: [], suggested_refinements: [] };
+    return fallbackResult;
   }
   const parsed = RankedItemArraySchema.safeParse(raw);
-  if (!parsed.success) return { cards: [], suggested_refinements: [] };
+  if (!parsed.success) return fallbackResult;
 
   // Extract suggested_refinements from first item (they should all be the same)
   const suggested_refinements: string[] = parsed.data[0]?.suggested_refinements ?? [];
-
-  // Merge custom weights with defaults
-  const effectiveWeights = customWeights
-    ? { ...DEFAULT_WEIGHTS, ...customWeights }
-    : DEFAULT_WEIGHTS;
 
   // Phase 3.2: compute weighted_total and re-sort by it
   type MappedItem = {
@@ -1241,7 +1618,7 @@ Return ONLY the JSON array, no other text.`,
     })
     .map((item, i) => ({ ...item, rank: i + 1 }));
 
-  return { cards, suggested_refinements };
+  return cards.length > 0 ? { cards, suggested_refinements } : fallbackResult;
 }
 
 // ─── Phase 7.2: Hotel Pipeline ───────────────────────────────────────────────
@@ -1321,6 +1698,7 @@ Return ONLY the JSON array.`,
       },
     ],
     max_tokens: 4096,
+    timeout_ms: 60000,
   });
 
   const jsonMatch = text.match(/\[[\s\S]*\]/);
@@ -1486,6 +1864,241 @@ async function runFlightPipeline(
   return { flightRecommendations: cards, missing_fields: [], no_direct_available };
 }
 
+function buildWeekendTripFlightIntent(
+  scenarioIntent: WeekendTripIntent
+): FlightIntent {
+  const travelers = scenarioIntent.travelers ?? 1;
+  const preferDirect =
+    scenarioIntent.prefer_direct ??
+    (scenarioIntent.trip_pace === "easy" ? true : null);
+
+  return {
+    category: "flight",
+    departure_city: scenarioIntent.departure_city,
+    arrival_city: scenarioIntent.destination_city,
+    date: scenarioIntent.start_date,
+    return_date: scenarioIntent.end_date,
+    is_round_trip: true,
+    passengers: travelers,
+    cabin_class: scenarioIntent.cabin_class ?? "economy",
+    prefer_direct: preferDirect ?? undefined,
+    max_stops: preferDirect ? 0 : scenarioIntent.trip_pace === "easy" ? 1 : null,
+    budget_total: scenarioIntent.budget_total,
+    purpose: "weekend_trip",
+  };
+}
+
+function buildWeekendTripHotelIntent(
+  scenarioIntent: WeekendTripIntent
+): HotelIntent {
+  const location = scenarioIntent.hotel_neighborhood
+    ? `${scenarioIntent.hotel_neighborhood}, ${scenarioIntent.destination_city ?? ""}`.trim()
+    : scenarioIntent.destination_city;
+
+  return {
+    category: "hotel",
+    location,
+    check_in: scenarioIntent.start_date,
+    check_out: scenarioIntent.end_date,
+    nights: scenarioIntent.nights,
+    guests: scenarioIntent.travelers ?? 1,
+    star_rating: scenarioIntent.hotel_star_rating,
+    neighborhood: scenarioIntent.hotel_neighborhood,
+    budget_total: scenarioIntent.budget_total,
+    purpose: "weekend_trip",
+    priorities: [scenarioIntent.trip_pace, scenarioIntent.hotel_style].filter(Boolean),
+  };
+}
+
+function buildWeekendTripCardIntent(
+  scenarioIntent: WeekendTripIntent
+): CreditCardIntent {
+  const budget = scenarioIntent.budget_total ?? 900;
+  const hotelShare = Math.round(budget * 0.45);
+  const flightShare = Math.round(budget * 0.35);
+  const diningShare = Math.round(budget * 0.12);
+  const otherShare = Math.max(0, budget - hotelShare - flightShare - diningShare);
+
+  return {
+    category: "credit_card",
+    spending_profile: {
+      dining: diningShare,
+      groceries: 0,
+      travel: hotelShare + flightShare,
+      gas: 0,
+      online_shopping: 0,
+      streaming: 0,
+      entertainment: 0,
+      pharmacy: 0,
+      rent: 0,
+      other: otherShare,
+    },
+    existing_cards: [],
+    has_existing_cards: false,
+    reward_preference: "travel",
+    prefer_no_annual_fee: budget < 750 ? "soft" : false,
+    prefer_flat_rate: false,
+    needs_spending_info: false,
+  };
+}
+
+function buildDateNightFallbackIntent(
+  userMessage: string,
+  intent: RestaurantIntent,
+  queryContext?: MultilingualQueryContext
+): DateNightIntent | null {
+  const lower = userMessage.toLowerCase();
+  const hasEnglishDateSignal =
+    /date night|first date|romantic|anniversary|proposal|girlfriend|boyfriend|wife|husband|partner|romance|dating/.test(
+      lower
+    );
+  const hasChineseDateSignal =
+    /\u7ea6\u4f1a|\u7b2c\u4e00\u6b21\u7ea6\u4f1a|\u7b2c\u4e00\u6b21\u89c1\u9762|\u6d6a\u6f2b|\u7eaa\u5ff5\u65e5|\u8868\u767d|\u5973\u670b\u53cb|\u7537\u670b\u53cb|\u8001\u5a46|\u8001\u516c/.test(
+      userMessage
+    );
+
+  if (
+    queryContext?.scenario_hint !== "date_night" &&
+    intent.purpose !== "date" &&
+    queryContext?.purpose_hint !== "date" &&
+    !hasEnglishDateSignal &&
+    !hasChineseDateSignal
+  ) {
+    return null;
+  }
+
+  const stage =
+    /first date/.test(lower) ||
+    /\u7b2c\u4e00\u6b21\u7ea6\u4f1a|\u7b2c\u4e00\u6b21\u89c1\u9762/.test(userMessage)
+      ? "first_date"
+      : /anniversary|birthday dinner|proposal/.test(lower) ||
+        /\u7eaa\u5ff5\u65e5|\u751f\u65e5\u665a\u9910|\u8868\u767d/.test(userMessage)
+      ? "anniversary"
+      : /surprise/.test(lower) || /\u60ca\u559c/.test(userMessage)
+      ? "surprise"
+      : /wife|husband|partner|boyfriend|girlfriend|fiance|fiancee/.test(lower) ||
+        /\u8001\u5a46|\u8001\u516c|\u5bf9\u8c61|\u5973\u670b\u53cb|\u7537\u670b\u53cb/.test(userMessage)
+      ? "steady_relationship"
+      : "casual_date";
+
+  const followUpPreference =
+    /dessert|ice cream/.test(lower)
+      ? "dessert"
+      : /cocktail|bar|wine|drinks/.test(lower)
+      ? "cocktail"
+      : /walk|stroll/.test(lower) || /\u6563\u6b65/.test(userMessage)
+      ? "walk"
+      : /just dinner|only dinner/.test(lower) ||
+        /\u53ea\u5403\u996d|\u53ea\u5403\u665a\u9910/.test(userMessage)
+      ? "none"
+      : "open";
+
+  const decisionStyle =
+    /safe|steady|don't want to mess up|reliable/.test(lower) ||
+    /\u7a33\u4e00\u70b9|\u7a33\u59a5|\u522b\u51fa\u9519|\u9760\u8c31/.test(userMessage)
+      ? "safe"
+      : /impress|special|fancy|wow/.test(lower) ||
+        /\u9ad8\u7ea7|\u7279\u522b|\u60ca\u8273|\u6709\u6c1b\u56f4/.test(userMessage)
+      ? "impressive"
+      : /playful|fun|lively/.test(lower) ||
+        /\u597d\u73a9|\u6d3b\u6cfc|\u70ed\u95f9/.test(userMessage)
+      ? "playful"
+      : /relaxed|easy|casual/.test(lower) ||
+        /\u8f7b\u677e|\u968f\u610f|\u4e0d\u8981\u592a\u6b63\u5f0f/.test(userMessage)
+      ? "relaxed"
+      : "romantic";
+
+  const withMinutes = lower.match(/\b\d{1,2}:\d{2}\s*(am|pm)?\b/);
+  const hourOnly = lower.match(/\b\d{1,2}\s*(am|pm)\b/);
+  const timeHint =
+    queryContext?.time_hint ??
+    withMinutes?.[0] ??
+    hourOnly?.[0] ??
+    (/early dinner/.test(lower)
+      ? "7:00 pm"
+      : /late dinner/.test(lower)
+      ? "8:30 pm"
+      : /dinner/.test(lower) || /\u665a\u4e0a|\u665a\u996d|\u665a\u9910/.test(userMessage)
+      ? "7:30 pm"
+      : /\u4e2d\u5348|\u5348\u996d|\u5348\u9910/.test(userMessage)
+      ? "12:30 pm"
+      : /\u65e9\u9910|\u65e9\u996d/.test(userMessage)
+      ? "9:00 am"
+      : undefined);
+
+  const englishWeekday = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
+    .find((day) => lower.includes(day));
+  const chineseWeekdayMap: Array<{ english: string; aliases: string[] }> = [
+    { english: "monday", aliases: ["\u5468\u4e00", "\u661f\u671f\u4e00", "\u793c\u62dc\u4e00"] },
+    { english: "tuesday", aliases: ["\u5468\u4e8c", "\u661f\u671f\u4e8c", "\u793c\u62dc\u4e8c"] },
+    { english: "wednesday", aliases: ["\u5468\u4e09", "\u661f\u671f\u4e09", "\u793c\u62dc\u4e09"] },
+    { english: "thursday", aliases: ["\u5468\u56db", "\u661f\u671f\u56db", "\u793c\u62dc\u56db"] },
+    { english: "friday", aliases: ["\u5468\u4e94", "\u661f\u671f\u4e94", "\u793c\u62dc\u4e94"] },
+    { english: "saturday", aliases: ["\u5468\u516d", "\u661f\u671f\u516d", "\u793c\u62dc\u516d"] },
+    { english: "sunday", aliases: ["\u5468\u65e5", "\u5468\u5929", "\u661f\u671f\u65e5", "\u661f\u671f\u5929", "\u793c\u62dc\u65e5", "\u793c\u62dc\u5929"] },
+  ];
+  const chineseWeekday = chineseWeekdayMap.find(({ aliases }) =>
+    aliases.some((alias) => userMessage.includes(alias))
+  );
+  const detectedDateText =
+    queryContext?.date_text_hint ??
+    lower.match(/\b\d{4}-\d{2}-\d{2}\b/)?.[0] ??
+    (/\u4eca\u665a/.test(userMessage)
+      ? "tonight"
+      : /\u660e\u5929/.test(userMessage)
+      ? "tomorrow"
+      : /\u4eca\u5929/.test(userMessage)
+      ? "today"
+      : englishWeekday
+      ? lower.includes(`next ${englishWeekday}`)
+        ? `next ${englishWeekday}`
+        : lower.includes(`this ${englishWeekday}`)
+        ? `this ${englishWeekday}`
+        : englishWeekday
+      : chineseWeekday
+      ? (() => {
+          const alias = chineseWeekday.aliases.find((item) => userMessage.includes(item));
+          if (!alias) return chineseWeekday.english;
+          const weekdaySuffix = alias.slice(-1);
+          return userMessage.includes(`\u4e0b${alias}`) ||
+            userMessage.includes(`\u4e0b\u5468${weekdaySuffix}`) ||
+            userMessage.includes(`\u4e0b\u661f\u671f${weekdaySuffix}`) ||
+            userMessage.includes(`\u4e0b\u793c\u62dc${weekdaySuffix}`)
+            ? `next ${chineseWeekday.english}`
+            : chineseWeekday.english;
+        })()
+      : undefined);
+
+  const scenarioLocation =
+    intent.neighborhood ??
+    intent.near_location ??
+    queryContext?.location_hint ??
+    intent.location ??
+    "the right area";
+  const budgetLabel =
+    intent.budget_total != null
+      ? `around $${intent.budget_total} total`
+      : intent.budget_per_person != null
+      ? `around $${intent.budget_per_person}/person`
+      : "within a comfortable dinner budget";
+
+  return {
+    ...intent,
+    category: "restaurant",
+    scenario: "date_night",
+    scenario_goal: `Find a dinner plan for a date night in ${scenarioLocation} ${budgetLabel}, with enough confidence that the user can approve a single option quickly.`,
+    stage,
+    follow_up_preference: followUpPreference,
+    decision_style: decisionStyle,
+    time_hint: timeHint,
+    detected_date_text: detectedDateText,
+    wants_quiet_buffer:
+      intent.noise_level === "quiet" ||
+      /quiet|calm|not too loud|low noise|easy conversation/i.test(userMessage) ||
+      /\u5b89\u9759|\u4e0d\u8981\u592a\u5435|\u522b\u592a\u5435/.test(userMessage),
+  };
+}
+
 // ─── Main Agent Function ──────────────────────────────────────────────────────
 
 export async function runAgent(
@@ -1499,7 +2112,16 @@ export async function runAgent(
   streamCallbacks?: StreamCallbacks,
   customWeights?: Partial<typeof DEFAULT_WEIGHTS>
 ): Promise<{
-  requirements: UserRequirements | HotelIntent | FlightIntent | CreditCardIntent | LaptopIntent | SmartphoneIntent | HeadphoneIntent | SubscriptionIntent;
+  requirements:
+    | UserRequirements
+    | HotelIntent
+    | FlightIntent
+    | CreditCardIntent
+    | LaptopIntent
+    | SmartphoneIntent
+    | HeadphoneIntent
+    | SubscriptionIntent
+    | ScenarioIntent;
   recommendations: RecommendationCard[];
   hotelRecommendations: HotelRecommendationCard[];
   flightRecommendations: FlightRecommendationCard[];
@@ -1514,15 +2136,147 @@ export async function runAgent(
   missing_flight_fields: string[];
   no_direct_available: boolean;
   suggested_refinements: string[];
+  scenarioIntent: ScenarioIntent | null;
+  decisionPlan: DecisionPlan | null;
+  result_mode: ResultMode;
   category: CategoryType;
+  output_language: "en" | "zh";
 }> {
   const city = CITIES[cityId] ?? CITIES[DEFAULT_CITY];
   const cityFullName = gpsCoords ? "your current location" : city.fullName;
+  const queryContext = await analyzeMultilingualQuery(userMessage, cityFullName);
+
+  function buildBaseResult(
+    requirements:
+      | UserRequirements
+      | HotelIntent
+      | FlightIntent
+      | CreditCardIntent
+      | LaptopIntent
+      | SmartphoneIntent
+      | HeadphoneIntent
+      | SubscriptionIntent
+      | ScenarioIntent,
+    category: CategoryType,
+    overrides: Partial<{
+      recommendations: RecommendationCard[];
+      hotelRecommendations: HotelRecommendationCard[];
+      flightRecommendations: FlightRecommendationCard[];
+      creditCardRecommendations: CreditCardRecommendationCard[];
+      laptopRecommendations: LaptopRecommendationCard[];
+      laptop_db_gap_warning: string | null;
+      smartphoneRecommendations: SmartphoneRecommendationCard[];
+      headphoneRecommendations: HeadphoneRecommendationCard[];
+      device_db_gap_warning: string | null;
+      subscriptionIntent: SubscriptionIntent | null;
+      missing_credit_card_fields: string[];
+      missing_flight_fields: string[];
+      no_direct_available: boolean;
+      suggested_refinements: string[];
+      scenarioIntent: ScenarioIntent | null;
+      decisionPlan: DecisionPlan | null;
+      result_mode: ResultMode;
+      output_language: "en" | "zh";
+    }> = {}
+  ) {
+    return {
+      requirements,
+      recommendations: [],
+      hotelRecommendations: [],
+      flightRecommendations: [],
+      creditCardRecommendations: [],
+      laptopRecommendations: [],
+      laptop_db_gap_warning: null,
+      smartphoneRecommendations: [],
+      headphoneRecommendations: [],
+      device_db_gap_warning: null,
+      subscriptionIntent: null,
+      missing_credit_card_fields: [],
+      missing_flight_fields: [],
+      no_direct_available: false,
+      suggested_refinements: [],
+      scenarioIntent: null,
+      decisionPlan: null,
+      result_mode: "category_cards" as ResultMode,
+      category,
+      output_language: queryContext.output_language,
+      ...overrides,
+    };
+  }
+
+  const detectedScenario =
+    queryContext.scenario_hint ?? detectScenarioFromMessage(userMessage);
+  if (detectedScenario === "weekend_trip") {
+    const scenarioIntent = await parseWeekendTripIntent(
+      userMessage,
+      cityFullName,
+      queryContext
+    );
+    if (scenarioIntent.needs_clarification) {
+      return buildBaseResult(scenarioIntent, "trip", {
+        scenarioIntent,
+        result_mode: "followup_refinement",
+      });
+    }
+
+    const flightIntent = buildWeekendTripFlightIntent(scenarioIntent);
+    const hotelIntent = buildWeekendTripHotelIntent(scenarioIntent);
+    const creditCardIntent = buildWeekendTripCardIntent(scenarioIntent);
+
+    const [
+      { flightRecommendations, no_direct_available },
+      { hotelRecommendations },
+      { creditCardRecommendations },
+    ] = await Promise.all([
+      runFlightPipeline(flightIntent),
+      runHotelPipeline(hotelIntent, conversationHistory, scenarioIntent.destination_city ?? cityFullName),
+      runCreditCardPipeline(creditCardIntent),
+    ]);
+
+    if (flightRecommendations.length === 0 || hotelRecommendations.length === 0) {
+      const refinedIntent: WeekendTripIntent = {
+        ...scenarioIntent,
+        needs_clarification: true,
+        missing_fields: ["different dates or destination"],
+        planning_assumptions: [
+          ...scenarioIntent.planning_assumptions,
+          "No matching live flight or hotel inventory came back for the current package assumptions.",
+        ],
+      };
+      return buildBaseResult(refinedIntent, "trip", {
+        scenarioIntent: refinedIntent,
+        result_mode: "followup_refinement",
+        creditCardRecommendations,
+        flightRecommendations,
+        hotelRecommendations,
+      });
+    }
+
+    const decisionPlan = runWeekendTripPlanner({
+      scenarioIntent,
+      flightRecommendations,
+      hotelRecommendations,
+      creditCardRecommendations,
+      userMessage,
+      outputLanguage: queryContext.output_language,
+    });
+
+    return buildBaseResult(scenarioIntent, "trip", {
+      scenarioIntent,
+      decisionPlan,
+      flightRecommendations,
+      hotelRecommendations,
+      creditCardRecommendations,
+      no_direct_available,
+      result_mode: decisionPlan ? "scenario_plan" : "followup_refinement",
+    });
+  }
 
   // Layer 1: Parse intent (with session preferences + profile context)
   const intent = await parseIntent(
     userMessage,
     cityFullName,
+    queryContext,
     sessionPreferences,
     profileContext,
     conversationHistory
@@ -1530,219 +2284,74 @@ export async function runAgent(
 
   // Route to subscription intent — no server-side pipeline, client handles storage
   if (intent.category === "subscription") {
-    return {
-      requirements: intent,
-      recommendations: [],
-      hotelRecommendations: [],
-      flightRecommendations: [],
-      creditCardRecommendations: [],
-      laptopRecommendations: [],
-      laptop_db_gap_warning: null,
-      smartphoneRecommendations: [],
-      headphoneRecommendations: [],
-      device_db_gap_warning: null,
+    return buildBaseResult(intent, "subscription", {
       subscriptionIntent: intent,
-      missing_credit_card_fields: [],
-      missing_flight_fields: [],
-      no_direct_available: false,
-      suggested_refinements: [],
-      category: "subscription",
-    };
+    });
   }
 
   // Route to credit card pipeline if needed
   if (intent.category === "credit_card") {
     if (intent.needs_spending_info) {
-      return {
-        requirements: intent,
-        recommendations: [],
-        hotelRecommendations: [],
-        flightRecommendations: [],
-        creditCardRecommendations: [],
-        laptopRecommendations: [],
-        laptop_db_gap_warning: null,
-        smartphoneRecommendations: [],
-        headphoneRecommendations: [],
-        device_db_gap_warning: null,
-        subscriptionIntent: null,
+      return buildBaseResult(intent, "credit_card", {
         missing_credit_card_fields: ["monthly spending by category", "cash back or travel rewards preference", "any cards you already hold"],
-        missing_flight_fields: [],
-        no_direct_available: false,
-        suggested_refinements: [],
-        category: "credit_card",
-      };
+      });
     }
     const { creditCardRecommendations } = await runCreditCardPipeline(intent);
-    return {
-      requirements: intent,
-      recommendations: [],
-      hotelRecommendations: [],
-      flightRecommendations: [],
+    return buildBaseResult(intent, "credit_card", {
       creditCardRecommendations,
-      laptopRecommendations: [],
-      laptop_db_gap_warning: null,
-      smartphoneRecommendations: [],
-      headphoneRecommendations: [],
-      device_db_gap_warning: null,
-      subscriptionIntent: null,
-      missing_credit_card_fields: [],
-      missing_flight_fields: [],
-      no_direct_available: false,
-      suggested_refinements: [],
-      category: "credit_card",
-    };
+    });
   }
 
   // Route to laptop pipeline if needed
   if (intent.category === "laptop") {
     if (intent.needs_use_case_info) {
-      return {
-        requirements: intent,
-        recommendations: [],
-        hotelRecommendations: [],
-        flightRecommendations: [],
-        creditCardRecommendations: [],
-        laptopRecommendations: [],
-        laptop_db_gap_warning: null,
-        smartphoneRecommendations: [],
-        headphoneRecommendations: [],
-        device_db_gap_warning: null,
-        subscriptionIntent: null,
-        missing_credit_card_fields: [],
+      return buildBaseResult(intent, "laptop", {
         missing_flight_fields: ["use_case"],
-        no_direct_available: false,
-        suggested_refinements: [],
-        category: "laptop",
-      };
+      });
     }
     const { laptopRecommendations, laptop_db_gap_warning } = await runLaptopPipeline(intent);
-    return {
-      requirements: intent,
-      recommendations: [],
-      hotelRecommendations: [],
-      flightRecommendations: [],
-      creditCardRecommendations: [],
+    return buildBaseResult(intent, "laptop", {
       laptopRecommendations,
       laptop_db_gap_warning,
-      smartphoneRecommendations: [],
-      headphoneRecommendations: [],
-      device_db_gap_warning: null,
-      subscriptionIntent: null,
-      missing_credit_card_fields: [],
-      missing_flight_fields: [],
-      no_direct_available: false,
-      suggested_refinements: [],
-      category: "laptop",
-    };
+    });
   }
 
   // Route to smartphone pipeline if needed
   if (intent.category === "smartphone") {
     if ((intent as SmartphoneIntent).needs_use_case_info) {
-      return {
-        requirements: intent,
-        recommendations: [],
-        hotelRecommendations: [],
-        flightRecommendations: [],
-        creditCardRecommendations: [],
-        laptopRecommendations: [],
-        laptop_db_gap_warning: null,
-        smartphoneRecommendations: [],
-        headphoneRecommendations: [],
-        device_db_gap_warning: null,
-        subscriptionIntent: null,
-        missing_credit_card_fields: [],
+      return buildBaseResult(intent, "smartphone", {
         missing_flight_fields: ["use_case"],
-        no_direct_available: false,
-        suggested_refinements: [],
-        category: "smartphone",
-      };
+      });
     }
     const { smartphoneRecommendations, db_gap_warning } = await runSmartphonePipeline(intent as SmartphoneIntent);
-    return {
-      requirements: intent,
-      recommendations: [],
-      hotelRecommendations: [],
-      flightRecommendations: [],
-      creditCardRecommendations: [],
-      laptopRecommendations: [],
-      laptop_db_gap_warning: null,
+    return buildBaseResult(intent, "smartphone", {
       smartphoneRecommendations,
-      headphoneRecommendations: [],
       device_db_gap_warning: db_gap_warning,
-      subscriptionIntent: null,
-      missing_credit_card_fields: [],
-      missing_flight_fields: [],
-      no_direct_available: false,
-      suggested_refinements: [],
-      category: "smartphone",
-    };
+    });
   }
 
   // Route to headphone pipeline if needed
   if (intent.category === "headphone") {
     if ((intent as HeadphoneIntent).needs_use_case_info) {
-      return {
-        requirements: intent,
-        recommendations: [],
-        hotelRecommendations: [],
-        flightRecommendations: [],
-        creditCardRecommendations: [],
-        laptopRecommendations: [],
-        laptop_db_gap_warning: null,
-        smartphoneRecommendations: [],
-        headphoneRecommendations: [],
-        device_db_gap_warning: null,
-        subscriptionIntent: null,
-        missing_credit_card_fields: [],
+      return buildBaseResult(intent, "headphone", {
         missing_flight_fields: ["use_case"],
-        no_direct_available: false,
-        suggested_refinements: [],
-        category: "headphone",
-      };
+      });
     }
     const { headphoneRecommendations, db_gap_warning } = await runHeadphonePipeline(intent as HeadphoneIntent);
-    return {
-      requirements: intent,
-      recommendations: [],
-      hotelRecommendations: [],
-      flightRecommendations: [],
-      creditCardRecommendations: [],
-      laptopRecommendations: [],
-      laptop_db_gap_warning: null,
-      smartphoneRecommendations: [],
+    return buildBaseResult(intent, "headphone", {
       headphoneRecommendations,
       device_db_gap_warning: db_gap_warning,
-      subscriptionIntent: null,
-      missing_credit_card_fields: [],
-      missing_flight_fields: [],
-      no_direct_available: false,
-      suggested_refinements: [],
-      category: "headphone",
-    };
+    });
   }
 
   // Route to flight pipeline if needed
   if (intent.category === "flight") {
     const { flightRecommendations, missing_fields, no_direct_available } = await runFlightPipeline(intent);
-    return {
-      requirements: intent,
-      recommendations: [],
-      hotelRecommendations: [],
+    return buildBaseResult(intent, "flight", {
       flightRecommendations,
-      creditCardRecommendations: [],
-      laptopRecommendations: [],
-      laptop_db_gap_warning: null,
-      smartphoneRecommendations: [],
-      headphoneRecommendations: [],
-      device_db_gap_warning: null,
-      subscriptionIntent: null,
-      missing_credit_card_fields: [],
       missing_flight_fields: missing_fields,
       no_direct_available,
-      suggested_refinements: [],
-      category: "flight",
-    };
+    });
   }
 
   // Route to hotel pipeline if needed
@@ -1752,36 +2361,37 @@ export async function runAgent(
       conversationHistory,
       cityFullName,
     );
-    return {
-      requirements: intent,
-      recommendations: [],
+    return buildBaseResult(intent, "hotel", {
       hotelRecommendations,
-      flightRecommendations: [],
-      creditCardRecommendations: [],
-      laptopRecommendations: [],
-      laptop_db_gap_warning: null,
-      smartphoneRecommendations: [],
-      headphoneRecommendations: [],
-      device_db_gap_warning: null,
-      subscriptionIntent: null,
-      missing_credit_card_fields: [],
-      missing_flight_fields: [],
-      no_direct_available: false,
       suggested_refinements,
-      category: "hotel",
-    };
+    });
   }
 
   // Otherwise continue with restaurant pipeline
   const requirements: UserRequirements = intent;
+  // parseScenarioIntent uses regex + intent signals to detect date_night.
+  // buildDateNightFallbackIntent only activates when there are explicit date signals
+  // (purpose=date, scenario_hint=date_night, or English/Chinese date keywords) — it
+  // returns null for plain restaurant queries, so scenarioIntent is null in that case.
+  const parsedScenario = parseScenarioIntent(userMessage, intent);
+  const scenarioIntent =
+    parsedScenario ??
+    buildDateNightFallbackIntent(userMessage, intent, queryContext);
+  if (!parsedScenario && scenarioIntent !== null) {
+    console.log("[agent] date_night scenario activated via fallback intent builder", {
+      purpose: intent.purpose,
+      scenario_hint: queryContext?.scenario_hint,
+    });
+  }
 
   // Layer 2+3: Gather candidates (parallel search)
-  const { restaurants, semanticSignals, tavilyQuery } = await gatherCandidates(
+  const { restaurants, semanticSignals, tavilyQuery, searchCityLabel } = await gatherCandidates(
     requirements,
     cityId,
     gpsCoords,
     nearLocation
   );
+  const restaurantCityLabel = searchCityLabel || requirements.location || cityFullName;
 
   // Phase 4.1: Send partial results after candidate gathering
   if (streamCallbacks?.onPartial) {
@@ -1807,7 +2417,7 @@ export async function runAgent(
   const reviewSignalsMap = await fetchReviewSignals(
     restaurants.slice(0, 12),
     tavilyQuery,
-    cityFullName
+    restaurantCityLabel
   ).catch(() => new Map());
 
   // Inject review signals into restaurant objects
@@ -1822,7 +2432,7 @@ export async function runAgent(
     candidatesWithSignals,
     semanticSignals,
     conversationHistory,
-    cityFullName,
+    restaurantCityLabel,
     sessionPreferences,
     profileContext,
     customWeights
@@ -1832,9 +2442,26 @@ export async function runAgent(
   const withOpenTable = cards.map((card) => ({
     ...card,
     opentable_url: card.restaurant?.name
-      ? `https://www.opentable.com/s?term=${encodeURIComponent(card.restaurant.name + " " + city.fullName)}&covers=${requirements.party_size ?? 2}`
+      ? `https://www.opentable.com/s?term=${encodeURIComponent(card.restaurant.name + " " + restaurantCityLabel)}&covers=${requirements.party_size ?? 2}`
       : undefined,
   }));
 
-  return { requirements, recommendations: withOpenTable, hotelRecommendations: [], flightRecommendations: [], creditCardRecommendations: [], laptopRecommendations: [], laptop_db_gap_warning: null, smartphoneRecommendations: [], headphoneRecommendations: [], device_db_gap_warning: null, subscriptionIntent: null, missing_credit_card_fields: [], missing_flight_fields: [], no_direct_available: false, suggested_refinements, category: "restaurant" };
+  const decisionPlan =
+    scenarioIntent?.scenario === "date_night"
+    ? runScenarioPlanner({
+        scenarioIntent,
+        recommendations: withOpenTable,
+        userMessage,
+        cityLabel: restaurantCityLabel,
+        outputLanguage: queryContext.output_language,
+      })
+    : null;
+
+  return buildBaseResult(requirements, "restaurant", {
+    recommendations: withOpenTable,
+    suggested_refinements,
+    scenarioIntent,
+    decisionPlan,
+    result_mode: decisionPlan ? "scenario_plan" : "category_cards",
+  });
 }
