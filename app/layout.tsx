@@ -3,6 +3,8 @@ import { Playfair_Display, DM_Sans } from "next/font/google";
 import { ClerkProvider } from "@clerk/nextjs";
 import { AuthStateProvider } from "./contexts/AuthContext";
 import { ClerkSync } from "./contexts/ClerkSync";
+import { ChunkErrorRecovery } from "./contexts/ChunkErrorRecovery";
+import { ServiceWorkerManager } from "./contexts/ServiceWorkerManager";
 import "./globals.css";
 
 const playfair = Playfair_Display({
@@ -40,6 +42,8 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
       </head>
       <body className={`${playfair.variable} ${dmSans.variable} antialiased`}>
+        <ChunkErrorRecovery />
+        <ServiceWorkerManager />
         {/* ClerkSync bridges Clerk state to AuthContext (only rendered when Clerk is configured) */}
         {clerkEnabled && <ClerkSync />}
         {children}
