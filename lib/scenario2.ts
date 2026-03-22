@@ -33,6 +33,7 @@ import {
 import {
   buildBookingComUrl,
   buildGoogleFlightsUrl,
+  buildOpenTableUrl,
 } from "./agent/planners/booking-links";
 
 const DATE_NIGHT_REGEX =
@@ -696,6 +697,17 @@ function buildDateNightOption(
       url: buildGoogleMapsUrl(card),
     },
   ];
+  // When there's no direct OpenTable booking link, add a pre-filled availability search
+  if (!card.opentable_url) {
+    secondaryActions.push({
+      id: "check-availability",
+      label: pickLanguageCopy(language, "Check availability on OpenTable", "在OpenTable查询可用性"),
+      url: buildOpenTableUrl({
+        restaurantName: card.restaurant.name,
+        covers: intent.party_size ?? 2,
+      }),
+    });
+  }
   const calendarUrl = buildGoogleCalendarUrl(card, intent, timingNote, userMessage, language);
   if (calendarUrl) {
     secondaryActions.push({

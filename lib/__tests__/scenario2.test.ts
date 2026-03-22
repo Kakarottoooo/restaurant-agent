@@ -1363,3 +1363,68 @@ describe("trip_card_callout on DecisionPlan (3b-5)", () => {
     expect(typeof result?.trip_card_callout).toBe("string");
   });
 });
+
+// ─── 3c-2: Restaurant availability deep links ─────────────────────────────────
+
+describe("restaurant availability deep links (3c-2)", () => {
+  const baseIntent = (): DateNightIntent => ({
+    category: "restaurant",
+    scenario: "date_night",
+    scenario_goal: "romantic dinner for two",
+    stage: "steady_relationship",
+    follow_up_preference: "none",
+    decision_style: "romantic",
+    wants_quiet_buffer: false,
+    party_size: 2,
+  });
+
+  it("adds check-availability secondary action when opentable_url is absent", () => {
+    const card = makeCard({ restaurant: makeRestaurant({ name: "La Maison" }) });
+    const result = runScenarioPlanner({
+      scenarioIntent: baseIntent(),
+      recommendations: [card],
+      userMessage: "romantic dinner",
+      cityLabel: "San Francisco",
+      outputLanguage: "en",
+    });
+    const availAction = result?.primary_plan.secondary_actions?.find(
+      (a) => a.id === "check-availability"
+    );
+    expect(availAction).toBeDefined();
+    expect(availAction?.url).toContain("opentable.com");
+    expect(availAction?.url).toContain("La+Maison");
+  });
+
+  it("pre-fills covers from intent.party_size in the OpenTable URL", () => {
+    const intent: DateNightIntent = { ...baseIntent(), party_size: 4 };
+    const result = runScenarioPlanner({
+      scenarioIntent: intent,
+      recommendations: [makeCard({ restaurant: makeRestaurant({ name: "Chez Paul" }) })],
+      userMessage: "dinner for 4",
+      cityLabel: "Chicago",
+      outputLanguage: "en",
+    });
+    const availAction = result?.primary_plan.secondary_actions?.find(
+      (a) => a.id === "check-availability"
+    );
+    expect(availAction?.url).toContain("covers=4");
+  });
+
+  it("does NOT add check-availability when opentable_url is already present (avoid duplication)", () => {
+    const card = makeCard({
+      restaurant: makeRestaurant({ name: "Grand Bistro" }),
+      opentable_url: "https://www.opentable.com/r/grand-bistro",
+    });
+    const result = runScenarioPlanner({
+      scenarioIntent: baseIntent(),
+      recommendations: [card],
+      userMessage: "romantic dinner",
+      cityLabel: "NYC",
+      outputLanguage: "en",
+    });
+    const availAction = result?.primary_plan.secondary_actions?.find(
+      (a) => a.id === "check-availability"
+    );
+    expect(availAction).toBeUndefined();
+  });
+});

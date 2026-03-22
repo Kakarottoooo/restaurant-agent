@@ -94,6 +94,7 @@ Current `open_link` actions in `lib/types.ts` have a `url: string` field. The pl
 **Cons:** OpenTable/Resy don't have free availability APIs — may require browser automation or third-party services.
 **Context:** Start with a simpler version: add an `availability_check_url` to the restaurant plan that deep-links directly to OpenTable/Resy search for that restaurant at that date/time. If the restaurant has a direct booking URL (from Google Places data), pre-fill it. Full availability polling is a phase 3d item.
 **Depends on:** 3b-1 (pre-filled deep links).
+**Completed (partial):** v0.2.15.0 (2026-03-22) — simpler version shipped: "Check availability on OpenTable" secondary action added to all date_night plan options when no direct `opentable_url` is known. Pre-fills restaurant name + covers from intent.party_size. Full real-time availability polling deferred to phase 3d.
 
 ---
 

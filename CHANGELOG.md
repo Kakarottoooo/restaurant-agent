@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.2.15.0] - 2026-03-22
+
+### Added
+- **Restaurant availability deep links** (3c-2): date_night plans now include a "Check availability on OpenTable" secondary action on each option when no direct `opentable_url` is known. The link is a pre-filled OpenTable search for the restaurant by name with the party size from the intent (`covers=N`). When `opentable_url` is already present as the primary "Reserve" action, the secondary is omitted to avoid duplication.
+- **3 new tests** in `scenario2.test.ts`: availability action present when no opentable_url, covers pre-filled from party_size, action absent when opentable_url already exists.
+
 ## [0.2.14.0] - 2026-03-22
 
 ### Added
