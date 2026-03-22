@@ -771,9 +771,10 @@ describe("detectScenarioFromMessage — big_purchase", () => {
 // ─── parseBigPurchaseIntent ───────────────────────────────────────────────────
 
 const baseQueryContext = (): MultilingualQueryContext => ({
-  detected_language: "en",
+  input_language: "en",
   output_language: "en",
-  constraints_hint: [],
+  normalized_query: "",
+  intent_summary: "",
 });
 
 describe("parseBigPurchaseIntent", () => {
@@ -832,9 +833,14 @@ const makeLaptopCard = (overrides: Partial<LaptopRecommendationCard["device"]> =
     skus: [{ ram_gb: 16, storage_gb: 512, price_usd: 1999 }],
     ...overrides,
   } as LaptopRecommendationCard["device"],
+  rank: 1,
   why_recommended: "Great for development with excellent performance.",
   watch_out: ["Battery degrades over time"],
   final_score: 9.1,
+  use_case_scores: {},
+  signal_breakdown: [],
+  recommended_sku: null,
+  data_staleness_warning: false,
 });
 
 const baseBigPurchaseIntent = () =>
