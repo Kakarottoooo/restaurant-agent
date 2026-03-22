@@ -15,14 +15,14 @@ Three-layer AI pipeline:
 ### Scenario plan (date_night, weekend_trip, city_trip, big_purchase)
 Scenario decision engine (`lib/scenario2.ts`):
 1. **NLU analysis** (`lib/nlu.ts`) — multilingual query understanding; English fast-path skips the API (~300ms saved)
-2. **Scenario detection** — routes to `date_night`, `weekend_trip`, `city_trip`, or `big_purchase` planner
+2. **Scenario detection** — routes to `date_night`, `weekend_trip`, `city_trip`, `big_purchase`, or `concert_event` planner
 3. **Plan generation** — produces a `DecisionPlan` with primary + ranked backup options + a plan-level `tradeoff_summary` (1–2 sentences explaining why the primary is the default and what each backup trades off); weekend_trip runs parallel hotel + flight searches; city_trip runs parallel hotel + restaurant + bar searches and produces 3 tiered packages (Upscale / Trendy / Local vibe); big_purchase routes to the appropriate device pipeline (laptop/headphone/smartphone) and returns 1 clear pick + up to 2 backup alternatives with price-delta tradeoff labels
 4. **Modular planner engine** (`lib/agent/planner-engine/`) — generic tiered-package engine shared by all trip scenarios; new scenarios only need an `EngineConfig` factory
 5. **SSE streaming** — streams plan chunks to the client in real time
 
 ## Features
 
-- Natural language search with automatic scenario detection (date night, weekend trip, city trip, big purchase, category search)
+- Natural language search with automatic scenario detection (date night, weekend trip, city trip, big purchase, concert/event, category search)
 - Multilingual support — Chinese queries return Chinese results via MiniMax NLU
 - 27 US cities + GPS-based "Near Me" mode + custom landmark search
 - List view and full-screen interactive map view
@@ -39,6 +39,7 @@ Scenario decision engine (`lib/scenario2.ts`):
 - **Decision language** — high-confidence plans display "✓ Selected for you" with a green badge; backup options collapse by default so users approve rather than compare
 - **User accounts + cross-device preference sync** — Clerk sign-in merges session preferences into the user account; learned constraints follow you across devices
 - **Push notifications** — "Watch prices" requests browser permission and delivers a Web Push notification when the price drops, even when the app is closed
+- **Concert & event ticket OS** — "find me a Taylor Swift concert in NYC" returns up to 3 events from Ticketmaster with direct buy-ticket links, venue info, price ranges, and Google Maps links; supports concerts, festivals, theater, sports, and comedy
 - Save favorites (localStorage)
 - Dark mode (system preference)
 - PWA-installable with offline support
@@ -56,6 +57,7 @@ Scenario decision engine (`lib/scenario2.ts`):
   - `POSTGRES_URL` (or `DATABASE_URL`) — Neon PostgreSQL (required for share page, plan outcomes, and learning loop)
   - `CRON_SECRET` — shared secret for cron routes (`/api/cron/feedback-prompts`, `/api/cron/price-check`); set in Vercel Cron config
   - `NEXT_PUBLIC_VAPID_PUBLIC_KEY` + `VAPID_PRIVATE_KEY` — Web Push VAPID key pair (optional; enables push notifications for price drops)
+  - `TICKETMASTER_API_KEY` + `TICKETMASTER_SECRET` — Ticketmaster Discovery API (optional; required for `concert_event` scenario)
 
 ## Local setup
 
@@ -125,9 +127,9 @@ app/
 lib/
   agent.ts              # Thin orchestrator — routes to sub-modules, runs restaurant pipeline inline
   agent/
-    parse/              # Intent parsers per category (restaurant, hotel, flight, credit-card, city-trip, …)
+    parse/              # Intent parsers per category (restaurant, hotel, flight, credit-card, city-trip, concert-event, …)
     pipelines/          # Category pipelines (hotel, flight, credit-card, laptop, smartphone, headphone)
-    planners/           # Scenario planners (weekend-trip, date-night, city-trip, big-purchase) + shared utils
+    planners/           # Scenario planners (weekend-trip, date-night, city-trip, big-purchase, concert-event) + shared utils
     planner-engine/     # Generic modular planner engine (selectors, plan-option-builder, types)
     scenario-configs/   # EngineConfig factories per scenario (city-trip, …)
     composer/           # Scoring + refinement helpers
@@ -141,6 +143,7 @@ lib/
   types.ts              # TypeScript interfaces (DecisionPlan, ScenarioContext, etc.)
   db.ts                 # Neon DB helpers (8 tables: scenario_events, decision_plans, plan_outcomes, feedback_prompts, plan_votes, price_watches, user_preferences, user_notifications)
   push.ts               # Web Push helper — wraps web-push with VAPID setup, expired-subscription handling
+  ticketmaster.ts       # Ticketmaster Discovery API client — event search, venue/price/genre parsing
   cities.ts             # 27 US cities config
   outputCopy.ts         # Output language copy helpers
 
