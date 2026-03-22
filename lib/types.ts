@@ -194,6 +194,7 @@ export interface PlanAction {
   id: string;
   type:
     | "share_plan"
+    | "export_brief"
     | "refine"
     | "swap_backup"
     | "approve_plan"

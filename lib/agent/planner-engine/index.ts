@@ -18,6 +18,12 @@ function inferConfidence(score: number, backupCount: number): "high" | "medium" 
 function buildDefaultActions(lang: OutputLanguage): PlanAction[] {
   return [
     {
+      id: "export-brief",
+      type: "export_brief",
+      label: pickLanguageCopy(lang, "Export trip brief", "导出行程摘要"),
+      description: pickLanguageCopy(lang, "Download a markdown summary of this trip package.", "下载这套旅行方案的 Markdown 摘要。"),
+    },
+    {
       id: "approve-plan",
       type: "approve_plan",
       label: pickLanguageCopy(lang, "Lock in this plan", "确认这套方案"),

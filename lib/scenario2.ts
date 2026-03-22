@@ -746,6 +746,12 @@ function buildWeekendTripActions(
   return [
     ...openLinkActions,
     {
+      id: "export-brief",
+      type: "export_brief",
+      label: pickLanguageCopy(language, "Export trip brief", "导出行程摘要"),
+      description: pickLanguageCopy(language, "Download a markdown summary of this trip package.", "下载这套旅行方案的 Markdown 摘要。"),
+    },
+    {
       id: "share-plan",
       type: "share_plan",
       label: pickLanguageCopy(language, "Share trip brief", "分享行程摘要"),

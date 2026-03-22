@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.2.10.0] - 2026-03-22
+
+### Added
+- **Trip brief export** (`export_brief` action + `GET /api/plan/[id]/brief`): saves the plan then serves a clean `.md` download containing the primary plan details, estimated total, location, when, highlights, key risks, backup options, and optional card callout — renders in any markdown viewer and is mobile-readable
+- **`buildPlanBrief`** (`lib/agent/planners/plan-brief.ts`): pure function that assembles the markdown from any `DecisionPlan` (date_night, weekend_trip, city_trip, big_purchase) — no external API calls
+- **`export_brief` action type** added to `PlanAction` type union; added as first action in `buildWeekendTripActions` (weekend_trip) and `buildDefaultActions` (city_trip modular planner)
+- **`export_brief` handler** in `page.tsx`: saves the plan then opens the brief URL in a new tab
+- **18 new tests**: 13 unit tests for `buildPlanBrief` (all scenarios, optional fields) + 5 route tests for `GET /api/plan/[id]/brief` (400/404/200, content-type, content-disposition, body)
+
 ## [0.2.9.0] - 2026-03-22
 
 ### Added

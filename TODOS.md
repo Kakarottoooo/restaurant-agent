@@ -92,6 +92,7 @@ Current `open_link` actions in `lib/types.ts` have a `url: string` field. The pl
 **Cons:** Formatting needs to be clean and mobile-readable.
 **Context:** New route `GET /api/plan/[id]/brief` returns a markdown string assembled from `DecisionPlan` fields. ActionRail new action type: `export_brief` — opens the brief in a new tab or triggers download. Can also be sent via share URL.
 **Depends on:** 3a-3 (weekend trip packages provide the richest brief content).
+**Completed:** v0.2.10.0 (2026-03-22)
 
 ---
 

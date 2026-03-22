@@ -297,6 +297,26 @@ export default function Home() {
       return;
     }
 
+    if (action.type === "export_brief") {
+      if (!chat.decisionPlan) throw new Error("No plan to export");
+
+      // Save the plan so the brief route can read it from DB
+      const res = await fetch("/api/plan/save", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          plan: chat.decisionPlan,
+          session_id: chat.getSessionId(),
+          query_text: lastUserQuery,
+          parent_plan_id: refinedFromPlanIdRef.current ?? undefined,
+        }),
+      });
+      if (!res.ok) throw new Error(`Save failed: ${res.status}`);
+
+      window.open(`/api/plan/${chat.decisionPlan.id}/brief`, "_blank");
+      return;
+    }
+
     if (action.type === "swap_backup" && action.option_id) {
       chat.trackDecisionPlanEvent({
         type: "backup_promoted",
