@@ -233,10 +233,23 @@ export function useChat({
           }
         : undefined;
 
+      const abortController = new AbortController();
+      const STREAM_STALL_MS = 50_000; // cancel if no data for 50s
+      let stallTimer: ReturnType<typeof setTimeout> | null = null;
+
+      const resetStallTimer = () => {
+        if (stallTimer) clearTimeout(stallTimer);
+        stallTimer = setTimeout(() => {
+          abortController.abort();
+        }, STREAM_STALL_MS);
+      };
+
       try {
+        resetStallTimer();
         const res = await fetch("/api/chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
+          signal: abortController.signal,
           body: JSON.stringify({
             message: text,
             history,
@@ -269,6 +282,7 @@ export function useChat({
 
         while (true) {
           const { done, value } = await reader.read();
+          if (!done) resetStallTimer();
           if (done) break;
 
           buffer += decoder.decode(value, { stream: true });
@@ -680,15 +694,20 @@ export function useChat({
           }
         }
       } catch (err) {
-        const message =
-          err instanceof Error
-            ? err.message
-            : buildGenericErrorCopy("en");
+        const isStall =
+          err instanceof Error &&
+          (err.name === "AbortError" || err.message.includes("abort"));
+        const message = isStall
+          ? "The search took too long and was cancelled. Please try again."
+          : err instanceof Error
+          ? err.message
+          : buildGenericErrorCopy("en");
         setMessages((prev) => [
           ...prev,
           { role: "assistant", content: message },
         ]);
       } finally {
+        if (stallTimer) clearTimeout(stallTimer);
         clearTimeout(t1);
         clearTimeout(t2);
         clearTimeout(t3);

@@ -58,7 +58,21 @@ export default function ActionRail({
         {copy.nextActions}
       </p>
 
-      <div className="flex flex-wrap gap-2">
+      {/* Scrollable pill row — single row on mobile, wraps on wider viewports */}
+      <div style={{ position: "relative" }}>
+        <div
+          style={{
+            display: "flex",
+            flexWrap: "nowrap",
+            gap: "8px",
+            overflowX: "auto",
+            WebkitOverflowScrolling: "touch",
+            scrollbarWidth: "none",
+            msOverflowStyle: "none",
+            paddingRight: "24px", // leave room for fade gradient
+          }}
+          className="hide-scrollbar"
+        >
         {(() => {
           const firstOpenLinkIdx = actions.findIndex((a) => a.type === "open_link");
           return actions.map((action, index) => {
@@ -123,6 +137,20 @@ export default function ActionRail({
             );
           });
         })()}
+        </div>
+        {/* Right-edge fade gradient — hints at scrollable overflow */}
+        <div
+          aria-hidden="true"
+          style={{
+            position: "absolute",
+            top: 0,
+            right: 0,
+            width: "32px",
+            height: "100%",
+            pointerEvents: "none",
+            background: "linear-gradient(to right, transparent, var(--card))",
+          }}
+        />
       </div>
     </div>
   );
