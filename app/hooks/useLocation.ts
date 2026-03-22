@@ -19,9 +19,6 @@ export function useLocation() {
   const locationSuppressBlur = useRef(false);
 
   useEffect(() => {
-    if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.register("/sw.js").catch(() => {});
-    }
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setSupportsGps("geolocation" in navigator);
   }, []);
