@@ -249,6 +249,13 @@ export interface DecisionPlan {
   evidence_items: DecisionEvidenceItem[];
 }
 
+export type PlanOutcomeType =
+  | "went"
+  | "skipped"
+  | "rated_positive"
+  | "rated_negative"
+  | "partner_approved";
+
 // ─── Phase 7: Multi-category types ───────────────────────────────────────────
 
 export type CategoryType = "restaurant" | "hotel" | "flight" | "credit_card" | "laptop" | "smartphone" | "headphone" | "subscription" | "trip" | "unknown";

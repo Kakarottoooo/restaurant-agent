@@ -1,12 +1,13 @@
 "use client";
 
+import { useState } from "react";
 import { OutputLanguage, PlanAction } from "@/lib/types";
 import { getScenarioUiCopy } from "@/lib/outputCopy";
 
 interface ActionRailProps {
   actions: PlanAction[];
   language?: OutputLanguage;
-  onAction: (action: PlanAction) => void;
+  onAction: (action: PlanAction) => void | Promise<void>;
 }
 
 export default function ActionRail({
@@ -14,8 +15,26 @@ export default function ActionRail({
   language,
   onAction,
 }: ActionRailProps) {
+  const [loadingId, setLoadingId] = useState<string | null>(null);
+  const [errorId, setErrorId] = useState<string | null>(null);
+
   if (actions.length === 0) return null;
   const copy = getScenarioUiCopy(language);
+
+  async function handleClick(action: PlanAction) {
+    if (loadingId) return; // prevent concurrent actions
+    setLoadingId(action.id);
+    setErrorId(null);
+    try {
+      await onAction(action);
+    } catch {
+      setErrorId(action.id);
+      // Clear error after 3 seconds
+      setTimeout(() => setErrorId((prev) => (prev === action.id ? null : prev)), 3000);
+    } finally {
+      setLoadingId(null);
+    }
+  }
 
   return (
     <div
@@ -40,29 +59,39 @@ export default function ActionRail({
       </p>
 
       <div className="flex flex-wrap gap-2">
-        {actions.map((action) => (
-          <button
-            key={action.id}
-            onClick={() => onAction(action)}
-            title={action.description}
-            style={{
-              borderRadius: "999px",
-              padding: "10px 14px",
-              border:
-                action.type === "share_plan"
-                  ? "none"
-                  : "0.5px solid var(--gold)",
-              backgroundColor:
-                action.type === "share_plan" ? "var(--gold)" : "transparent",
-              color: action.type === "share_plan" ? "#fff" : "var(--gold)",
-              fontFamily: "var(--font-dm-sans)",
-              fontSize: "13px",
-              cursor: "pointer",
-            }}
-          >
-            {action.label}
-          </button>
-        ))}
+        {actions.map((action) => {
+          const isLoading = loadingId === action.id;
+          const isError = errorId === action.id;
+          const isShare = action.type === "share_plan";
+          const isDisabled = !!loadingId;
+
+          return (
+            <button
+              key={action.id}
+              onClick={() => handleClick(action)}
+              disabled={isDisabled}
+              title={isError ? "Failed — try again" : action.description}
+              style={{
+                borderRadius: "999px",
+                padding: "10px 14px",
+                border: isShare ? "none" : "0.5px solid var(--gold)",
+                backgroundColor: isError
+                  ? "#ef4444"
+                  : isShare
+                    ? "var(--gold)"
+                    : "transparent",
+                color: isShare || isError ? "#fff" : "var(--gold)",
+                fontFamily: "var(--font-dm-sans)",
+                fontSize: "13px",
+                cursor: isDisabled ? "not-allowed" : "pointer",
+                opacity: isDisabled && !isLoading ? 0.5 : 1,
+                transition: "background-color 0.2s, opacity 0.2s",
+              }}
+            >
+              {isLoading ? "…" : isError ? "Failed — tap to retry" : action.label}
+            </button>
+          );
+        })}
       </div>
     </div>
   );

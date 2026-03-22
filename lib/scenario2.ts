@@ -1,3 +1,4 @@
+import { sql } from "./db";
 import {
   CityTripIntent,
   CreditCardRecommendationCard,
@@ -1493,4 +1494,85 @@ export function runCityTripPlanner(params: {
   const config = buildCityTripEngineConfig(intent, lang);
 
   return runModularPlanner({ results: moduleResults, config, outputLanguage: lang });
+}
+
+/**
+ * Returns per-venue score adjustments derived from historical outcomes.
+ *
+ * STUB: always returns {} until ENABLE_SCORE_ADJUSTMENTS env var is set.
+ * Enable after ≥30 days AND ≥100 rows in plan_outcomes — see TODOS.md for
+ * the learning loop activation task.
+ *
+ *   venue_id → adjustment (positive boosts, negative penalizes)
+ *   e.g. { "place_abc123": 0.8, "place_xyz": -0.3 }
+ */
+export async function getScoreAdjustments(
+  scenario: ScenarioType,
+  _city: string
+): Promise<Record<string, number>> {
+  if (!process.env.ENABLE_SCORE_ADJUSTMENTS) return {};
+
+  try {
+    // For each outcome, find the matching PlanOption in the plan_json (primary or backup)
+    // and extract its evidence_card_id — the stable external venue ID (hotel.id, restaurant.id, etc).
+    // Score each outcome with a signed weight, decayed by recency (30-day half-life).
+    // Venues with ≥3 outcomes get an adjustment in [-1, 1]:
+    //   +1 = all positive, -1 = all negative, 0 = balanced.
+    const rows = await sql<{ venue_id: string; adjustment: number }>`
+      WITH option_venues AS (
+        SELECT
+          po.outcome_type,
+          po.created_at,
+          CASE
+            WHEN dp.plan_json->'primary_plan'->>'id' = po.option_id
+              THEN dp.plan_json->'primary_plan'->>'evidence_card_id'
+            ELSE (
+              SELECT bu->>'evidence_card_id'
+              FROM jsonb_array_elements(dp.plan_json->'backup_plans') AS bu
+              WHERE bu->>'id' = po.option_id
+              LIMIT 1
+            )
+          END AS venue_id
+        FROM plan_outcomes po
+        JOIN decision_plans dp ON dp.id = po.plan_id
+        WHERE dp.scenario = ${scenario}
+          AND po.option_id IS NOT NULL
+          AND po.outcome_type IN ('went', 'partner_approved', 'rated_positive', 'skipped', 'rated_negative')
+      ),
+      venue_stats AS (
+        SELECT
+          venue_id,
+          SUM(
+            CASE WHEN outcome_type IN ('went', 'partner_approved', 'rated_positive') THEN 1.0 ELSE 0.0 END
+            * EXP(-EXTRACT(EPOCH FROM NOW() - created_at) / (30.0 * 86400))
+          ) AS weighted_pos,
+          SUM(
+            CASE WHEN outcome_type IN ('skipped', 'rated_negative') THEN 1.0 ELSE 0.0 END
+            * EXP(-EXTRACT(EPOCH FROM NOW() - created_at) / (30.0 * 86400))
+          ) AS weighted_neg,
+          COUNT(*) AS total
+        FROM option_venues
+        WHERE venue_id IS NOT NULL
+        GROUP BY venue_id
+        HAVING COUNT(*) >= 3
+      )
+      SELECT
+        venue_id,
+        CASE
+          WHEN weighted_pos + weighted_neg = 0 THEN 0.0
+          ELSE (weighted_pos - weighted_neg) / (weighted_pos + weighted_neg)
+        END AS adjustment
+      FROM venue_stats
+    `;
+
+    const result: Record<string, number> = {};
+    for (const row of rows.rows) {
+      if (row.venue_id && row.adjustment !== null) {
+        result[row.venue_id] = row.adjustment;
+      }
+    }
+    return result;
+  } catch {
+    return {};
+  }
 }

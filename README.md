@@ -28,7 +28,7 @@ Scenario decision engine (`lib/scenario2.ts`):
 - List view and full-screen interactive map view
 - Filter chips by price and cuisine
 - Scenario plan UI: `ScenarioPlanView` (consolidates `ScenarioBrief` + `PrimaryPlanCard` + `BackupPlanCard` + `ActionRail` + evidence panel) with booking links
-- Share results via URL
+- Share plans via a persistent URL (`/plan/[id]`) — partner sees a read-only view and can click "This works for me" to confirm (records `partner_approved` outcome for the learning loop)
 - Save favorites (localStorage)
 - Dark mode (system preference)
 - PWA-installable with offline support
@@ -43,6 +43,7 @@ Scenario decision engine (`lib/scenario2.ts`):
   - `TAVILY_API_KEY` — Tavily
   - `SERPAPI_API_KEY` — SerpAPI (hotel + flight search)
   - `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` + `CLERK_SECRET_KEY` — Clerk (optional; enables internal analytics auth)
+  - `POSTGRES_URL` (or `DATABASE_URL`) — Neon PostgreSQL (required for share page, plan outcomes, and learning loop)
 
 ## Local setup
 
@@ -79,7 +80,12 @@ app/
     chat/route.ts                    # SSE endpoint — scenario vs category routing
     telemetry/route.ts               # plan_approved, option_swap, action_rail_click events
     internal/scenario-events/        # Analytics API (GET, Clerk-gated)
+    plan/
+      save/route.ts                  # POST — persist DecisionPlan to decision_plans table
+      [id]/route.ts                  # GET — fetch plan by ID (cached 24h)
+      [id]/outcome/route.ts          # POST/GET — record outcome (went, partner_approved, etc.)
   internal/scenario-events/          # Analytics UI (Clerk-gated)
+  plan/[id]/                         # Shared plan view (read-only, partner approval button)
   hooks/
     useChat.ts          # AI pipeline state, sendMessage, scenario/category SSE handling
     useLocation.ts      # City selection, GPS, near-location, SW registration
@@ -108,7 +114,7 @@ lib/
   tools.ts              # Google Places, SerpAPI, Tavily, Geocoding API wrappers
   schemas.ts            # Zod schemas for request/response validation
   types.ts              # TypeScript interfaces (DecisionPlan, ScenarioContext, etc.)
-  db.ts                 # Neon DB helpers (scenario_events table)
+  db.ts                 # Neon DB helpers (scenario_events, decision_plans, plan_outcomes tables)
   cities.ts             # 27 US cities config
   outputCopy.ts         # Output language copy helpers
 
@@ -117,7 +123,7 @@ components/
   ScenarioBrief.tsx        # Query summary card for scenario_plan mode
   PrimaryPlanCard.tsx      # Primary plan display with swap + approve actions
   BackupPlanCard.tsx       # Backup option cards
-  ActionRail.tsx           # Booking links with telemetry on click
+  ActionRail.tsx           # Plan action buttons (share, refine, swap backup, approve)
   ScenarioEvidencePanel.tsx # Supporting evidence panel
   RecommendationCard.tsx   # Category card (restaurant, hotel, flight, laptop)
   MapView.tsx              # Leaflet map with interactive markers
