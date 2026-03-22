@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.2.7.0] - 2026-03-22
+
+### Added
+- **Pre-filled booking deep links** (`lib/agent/planners/booking-links.ts`): new URL builders for Google Hotels, Booking.com, Google Flights, and OpenTable — all landing on filtered results pages with dates, guests, and city pre-filled. Weekend trip planner now generates a Booking.com hotel URL and Google Flights deep link (`#flt=JFK.ORD.YYYY-MM-DD`) from parsed intent data; falls back to existing `booking_link` when intent lacks dates
+- **Check-in gap feasibility** (`buildWeekendTripTimingNote`, `buildWeekendTripRisks`): `arrival_time` is now parsed (HH:MM) and compared against the standard 15:00 hotel check-in time — timing notes now read "5h before check-in" or "room should be ready on landing"; risk flags added for early arrival (>3h gap), tight window (<2h gap), and late-night (≥22:00) arrivals
+- **29 new tests**: 14 unit tests for `booking-links.ts` URL builders + 15 integration tests covering check-in gap timing notes, risk flags, and pre-filled URL generation in `runWeekendTripPlanner`
+
 ## [0.2.6.0] - 2026-03-22
 
 ### Added

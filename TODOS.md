@@ -38,6 +38,7 @@
 **Cons:** Combinatorial assembly is complex — need a pairing algorithm (best flight × best hotel by each optimization target). Total cost calculation requires summing flight + hotel + fees.
 **Context:** `lib/agent/planners/weekend-trip.ts` currently runs parallel `runFlightPipeline()` + `runHotelPipeline()` and returns results independently. Add a `assembleWeekendPackages()` function that takes top-3 flights × top-3 hotels and assembles 3 packages: (1) lowest total price, (2) best flight + hotel combo score, (3) most flexible/refundable. Each package gets: `flight_summary`, `hotel_summary`, `total_estimated_cost`, `best_card_for_this_trip` (cross-ref credit card rewards), `check_in_gap_hours` (time between flight landing and hotel check-in). New type: `WeekendTripPackage`. `DecisionPlan.primary` becomes the safest package, `backups` are the other two.
 **Depends on:** 3a-1.
+**Completed (partial):** v0.2.7.0 (2026-03-22) — package assembly was already complete from v0.2.1.0. This version adds real `check_in_gap_hours` computation: `buildWeekendTripTimingNote()` now parses `arrival_time` (HH:MM), computes gap vs standard 15:00 check-in, and generates contextual notes (early/late-night/clean-handoff). `buildWeekendTripRisks()` adds warnings for early arrival (>3h gap), tight window (<2h gap), and late-night (≥22:00) scenarios.
 
 ---
 
@@ -56,6 +57,7 @@
 - OpenTable: `https://www.opentable.com/s/?dateTime={date}T{time}&covers={guests}&metroId={city_id}`
 Current `open_link` actions in `lib/types.ts` have a `url: string` field. The planners already set static URLs. Update each planner to construct dynamic pre-filled URLs using the parsed intent fields (dates, guests, city, etc.) that are already in scope during plan generation.
 **Depends on:** None. Planners already have all required fields in scope.
+**Completed:** v0.2.7.0 (2026-03-22) — `lib/agent/planners/booking-links.ts` added with `buildGoogleHotelsUrl`, `buildBookingComUrl`, `buildGoogleFlightsUrl`, `buildOpenTableUrl`. Weekend trip planner now builds Booking.com pre-filled hotel URL and Google Flights deep link (#flt=...) when intent has `start_date` + city/route. Falls back to existing `booking_link` when intent lacks dates.
 
 ---
 

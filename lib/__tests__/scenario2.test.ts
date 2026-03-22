@@ -1000,3 +1000,129 @@ describe("tradeoff_summary", () => {
     expect(result?.tradeoff_summary!.length).toBeGreaterThan(0);
   });
 });
+
+// ─── 3a-3: Check-in gap feasibility ──────────────────────────────────────────
+
+describe("weekend trip check-in gap (3a-3)", () => {
+  function planWithArrival(arrivalTime: string) {
+    return runWeekendTripPlanner({
+      scenarioIntent: makeBaseWeekendTripIntent(),
+      flightRecommendations: [
+        makeFlightCard({ flight: makeFlight({ arrival_time: arrivalTime }) }),
+      ],
+      hotelRecommendations: [makeHotelCard()],
+      creditCardRecommendations: [],
+      outputLanguage: "en",
+    });
+  }
+
+  it("timing_note mentions early arrival when flight lands 5h before check-in", () => {
+    // 10:00 arrival → 5h before standard 15:00 check-in
+    const plan = planWithArrival("10:00");
+    const note = plan?.primary_plan.timing_note ?? "";
+    expect(note).toContain("10:00");
+    expect(note).toContain("before check-in");
+  });
+
+  it("timing_note mentions late-night when flight arrives after 22:00", () => {
+    const plan = planWithArrival("23:30");
+    const note = plan?.primary_plan.timing_note ?? "";
+    expect(note).toContain("23:30");
+    expect(note.toLowerCase()).toMatch(/late.?night/);
+  });
+
+  it("timing_note mentions room ready when flight arrives after check-in time", () => {
+    // 17:00 arrival → after 15:00 check-in, room should be ready
+    const plan = planWithArrival("17:00");
+    const note = plan?.primary_plan.timing_note ?? "";
+    expect(note).toContain("17:00");
+    expect(note).toContain("room should be ready");
+  });
+
+  it("risks includes early arrival warning when landing 5h before check-in", () => {
+    const plan = planWithArrival("10:00");
+    const risks = plan?.primary_plan.risks ?? [];
+    expect(risks.some((r) => r.toLowerCase().includes("early arrival"))).toBe(true);
+  });
+
+  it("risks includes late-night warning when landing after 22:00", () => {
+    const plan = planWithArrival("23:00");
+    const risks = plan?.primary_plan.risks ?? [];
+    expect(risks.some((r) => r.toLowerCase().includes("late"))).toBe(true);
+  });
+
+  it("risks does NOT include timing warning for clean 15:30 arrival", () => {
+    // Arriving 30min after check-in → no timing risk
+    const plan = planWithArrival("15:30");
+    const risks = plan?.primary_plan.risks ?? [];
+    const hasTimingRisk = risks.some(
+      (r) =>
+        r.toLowerCase().includes("early arrival") ||
+        r.toLowerCase().includes("tight check-in") ||
+        r.toLowerCase().includes("late-night")
+    );
+    expect(hasTimingRisk).toBe(false);
+  });
+});
+
+// ─── 3b-1: Pre-filled booking deep links ─────────────────────────────────────
+
+describe("weekend trip pre-filled booking URLs (3b-1)", () => {
+  it("primary_action.url uses Booking.com with dates when intent has start_date", () => {
+    const result = runWeekendTripPlanner({
+      scenarioIntent: {
+        ...makeBaseWeekendTripIntent(),
+        destination_city: "Chicago",
+        start_date: "2026-04-11",
+        end_date: "2026-04-13",
+      },
+      flightRecommendations: [makeFlightCard()],
+      hotelRecommendations: [makeHotelCard()],
+      creditCardRecommendations: [],
+      outputLanguage: "en",
+    });
+    const url = result?.primary_plan.primary_action?.url ?? "";
+    expect(url).toContain("booking.com");
+    expect(url).toContain("Chicago");
+    expect(url).toContain("2026");
+  });
+
+  it("primary_action.url falls back to hotel booking_link when no intent dates", () => {
+    const intent = makeBaseWeekendTripIntent();
+    // No start_date / destination_city in base intent... override to ensure no dates
+    const result = runWeekendTripPlanner({
+      scenarioIntent: { ...intent, destination_city: undefined, start_date: undefined },
+      flightRecommendations: [makeFlightCard()],
+      hotelRecommendations: [makeHotelCard()],
+      creditCardRecommendations: [],
+      outputLanguage: "en",
+    });
+    const url = result?.primary_plan.primary_action?.url ?? "";
+    expect(url).toContain("booking.example.com");
+  });
+
+  it("open-flight secondary action uses Google Flights deep link when intent has route+date", () => {
+    const result = runWeekendTripPlanner({
+      scenarioIntent: {
+        ...makeBaseWeekendTripIntent(),
+        departure_city: "New York",
+        destination_city: "Chicago",
+        start_date: "2026-04-11",
+        end_date: "2026-04-13",
+      },
+      flightRecommendations: [
+        makeFlightCard({
+          flight: makeFlight({ departure_airport: "JFK", arrival_airport: "ORD" }),
+        }),
+      ],
+      hotelRecommendations: [makeHotelCard()],
+      creditCardRecommendations: [],
+      outputLanguage: "en",
+    });
+    const flightAction = result?.primary_plan.secondary_actions?.find(
+      (a) => a.id === "open-flight"
+    );
+    expect(flightAction?.url).toContain("google.com/flights");
+    expect(flightAction?.url).toContain("2026-04-11");
+  });
+});
