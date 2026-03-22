@@ -124,13 +124,19 @@ export interface LearnedWeights {
 }
 
 export interface AgentResponse {
-  requirements: UserRequirements;
+  requirements: UserRequirements | ParsedIntent | ScenarioIntent;
   recommendations: RecommendationCard[];
   hotelRecommendations?: HotelRecommendationCard[];
   flightRecommendations?: FlightRecommendationCard[];
   creditCardRecommendations?: CreditCardRecommendationCard[];
   laptopRecommendations?: LaptopRecommendationCard[];
+  smartphoneRecommendations?: SmartphoneRecommendationCard[];
+  headphoneRecommendations?: HeadphoneRecommendationCard[];
+  decisionPlan?: DecisionPlan | null;
+  scenarioIntent?: ScenarioIntent | null;
+  result_mode?: ResultMode;
   category?: CategoryType;
+  output_language?: OutputLanguage;
 }
 
 export interface Message {
@@ -143,12 +149,116 @@ export interface Message {
   laptopCards?: LaptopRecommendationCard[];
   smartphoneCards?: SmartphoneRecommendationCard[];
   headphoneCards?: HeadphoneRecommendationCard[];
+  decisionPlan?: DecisionPlan;
+  result_mode?: ResultMode;
+  scenario?: ScenarioType;
   category?: CategoryType;
+  output_language?: OutputLanguage;
 }
+
+export type ResultMode =
+  | "category_cards"
+  | "scenario_plan"
+  | "followup_refinement"
+  | "execution_actions";
+
+export type ScenarioType = "date_night" | "weekend_trip" | "city_trip" | "big_purchase";
+export type InputLanguage = "en" | "zh" | "mixed" | "other" | "unknown";
+export type OutputLanguage = "en" | "zh";
+
+export interface MultilingualQueryContext {
+  input_language: InputLanguage;
+  output_language: OutputLanguage;
+  normalized_query: string;
+  intent_summary: string;
+  category_hint?: CategoryType | null;
+  scenario_hint?: ScenarioType | null;
+  location_hint?: string;
+  cuisine_hint?: string;
+  purpose_hint?: string;
+  party_size_hint?: number;
+  budget_per_person_hint?: number;
+  budget_total_hint?: number;
+  date_text_hint?: string;
+  time_hint?: string;
+  constraints_hint?: string[];
+}
+
+export interface PlanLinkAction {
+  id: string;
+  label: string;
+  url: string;
+}
+
+export interface PlanAction {
+  id: string;
+  type:
+    | "share_plan"
+    | "refine"
+    | "swap_backup"
+    | "approve_plan"
+    | "request_changes";
+  label: string;
+  description: string;
+  prompt?: string;
+  option_id?: string;
+}
+
+export interface PlanOption {
+  id: string;
+  label: string;
+  option_category: CategoryType;
+  title: string;
+  subtitle: string;
+  summary: string;
+  why_this_now: string;
+  best_for: string;
+  estimated_total: string;
+  timing_note: string;
+  risks: string[];
+  tradeoffs: string[];
+  highlights: string[];
+  primary_action?: PlanLinkAction;
+  secondary_actions?: PlanLinkAction[];
+  evidence_card_id?: string;
+  score: number;
+  fallback_reason?: string;
+}
+
+export interface DecisionEvidenceItem {
+  id: string;
+  title: string;
+  detail: string;
+  tag?: string;
+}
+
+export interface DecisionPlan {
+  id: string;
+  scenario: ScenarioType;
+  output_language: OutputLanguage;
+  title: string;
+  summary: string;
+  approval_prompt: string;
+  confidence: "high" | "medium" | "low";
+  scenario_brief: string[];
+  primary_plan: PlanOption;
+  backup_plans: PlanOption[];
+  risks: string[];
+  next_actions: PlanAction[];
+  evidence_card_ids: string[];
+  evidence_items: DecisionEvidenceItem[];
+}
+
+export type PlanOutcomeType =
+  | "went"
+  | "skipped"
+  | "rated_positive"
+  | "rated_negative"
+  | "partner_approved";
 
 // ─── Phase 7: Multi-category types ───────────────────────────────────────────
 
-export type CategoryType = "restaurant" | "hotel" | "flight" | "credit_card" | "laptop" | "smartphone" | "headphone" | "subscription" | "unknown";
+export type CategoryType = "restaurant" | "hotel" | "flight" | "credit_card" | "laptop" | "smartphone" | "headphone" | "subscription" | "trip" | "unknown";
 
 export interface BaseIntent {
   category: CategoryType;
@@ -168,6 +278,68 @@ export interface RestaurantIntent extends BaseIntent {
   party_size?: number;
   neighborhood?: string;
   near_location?: string;
+}
+
+export type DateNightStage =
+  | "first_date"
+  | "anniversary"
+  | "steady_relationship"
+  | "casual_date"
+  | "surprise"
+  | "unknown";
+
+export type DateNightFollowUp =
+  | "dessert"
+  | "cocktail"
+  | "walk"
+  | "none"
+  | "open";
+
+export type DateNightDecisionStyle =
+  | "safe"
+  | "romantic"
+  | "impressive"
+  | "playful"
+  | "relaxed";
+
+export interface DateNightIntent extends RestaurantIntent {
+  scenario: "date_night";
+  scenario_goal: string;
+  stage: DateNightStage;
+  follow_up_preference: DateNightFollowUp;
+  decision_style: DateNightDecisionStyle;
+  time_hint?: string;
+  detected_date_text?: string;
+  wants_quiet_buffer: boolean;
+}
+
+export type WeekendTripPace = "easy" | "balanced" | "packed";
+export type WeekendTripHotelStyle =
+  | "value"
+  | "comfortable"
+  | "boutique"
+  | "luxury"
+  | "any";
+
+export interface WeekendTripIntent extends BaseIntent {
+  category: "trip";
+  scenario: "weekend_trip";
+  scenario_goal: string;
+  departure_city?: string;
+  destination_city?: string;
+  start_date?: string;
+  end_date?: string;
+  nights?: number;
+  travelers?: number;
+  trip_pace: WeekendTripPace;
+  hotel_style: WeekendTripHotelStyle;
+  hotel_star_rating?: number;
+  hotel_neighborhood?: string;
+  cabin_class?: "economy" | "business" | "first";
+  prefer_direct?: boolean | null;
+  planning_assumptions: string[];
+  needs_clarification: boolean;
+  missing_fields: string[];
 }
 
 export interface HotelIntent extends BaseIntent {
@@ -206,6 +378,47 @@ export interface SubscriptionIntent extends BaseIntent {
   brands: string[];     // e.g. ["Apple", "NVIDIA"]
   keywords: string[];   // e.g. ["MacBook Pro", "RTX"]
   label: string;        // human-readable summary, e.g. "Apple MacBook releases"
+}
+
+export interface CityTripIntent extends BaseIntent {
+  category: "trip";
+  scenario: "city_trip";
+  scenario_goal: string;
+  destination_city: string;
+  start_date?: string;
+  end_date?: string;
+  nights?: number;
+  travelers?: number;
+  hotel_star_rating?: number;
+  hotel_neighborhood?: string;
+  activities: string[];
+  cuisine_preferences: string[];
+  vibe: "trendy" | "upscale" | "local" | "mixed";
+  planning_assumptions: string[];
+  needs_clarification: boolean;
+  missing_fields: string[];
+}
+
+export type ScenarioIntent = DateNightIntent | WeekendTripIntent | CityTripIntent;
+
+export type ScenarioTelemetryEventType =
+  | "plan_viewed"
+  | "plan_approved"
+  | "backup_promoted"
+  | "action_clicked"
+  | "feedback_negative";
+
+export interface ScenarioTelemetryEvent {
+  type: ScenarioTelemetryEventType;
+  scenario: ScenarioType;
+  plan_id: string;
+  session_id: string;
+  option_id?: string;
+  action_id?: string;
+  request_id?: string;
+  query?: string;
+  metadata?: Record<string, unknown>;
+  timestamp: string;
 }
 
 export type ParsedIntent = RestaurantIntent | HotelIntent | FlightIntent | CreditCardIntent | LaptopIntent | SmartphoneIntent | HeadphoneIntent | SubscriptionIntent;

@@ -1,7 +1,18 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
-import { RecommendationCard as CardType, Message, SessionPreferences, HotelRecommendationCard, FlightRecommendationCard, CreditCardRecommendationCard, LaptopRecommendationCard, SmartphoneRecommendationCard, HeadphoneRecommendationCard, CategoryType, SubscriptionIntent } from "@/lib/types";
+import { RecommendationCard as CardType, Message, SessionPreferences, HotelRecommendationCard, FlightRecommendationCard, CreditCardRecommendationCard, LaptopRecommendationCard, SmartphoneRecommendationCard, HeadphoneRecommendationCard, CategoryType, SubscriptionIntent, DecisionPlan, ResultMode, ScenarioTelemetryEvent, ScenarioType, OutputLanguage } from "@/lib/types";
 import { LearnedWeights } from "@/lib/types";
 import { WATCH_CATEGORY_META } from "@/lib/watchTypes";
+import {
+  buildFlightFoundCopy,
+  buildFlightNeedInfoCopy,
+  buildGenericErrorCopy,
+  buildHotelFoundCopy,
+  buildNoFlightCopy,
+  buildNoHotelCopy,
+  buildCityTripFollowupCopy,
+  buildWeekendTripFollowupCopy,
+  pickLanguageCopy,
+} from "@/lib/outputCopy";
 
 export const LOADING_STEPS = [
   "Parsing your request...",
@@ -60,6 +71,38 @@ export function useChat({
   const [allHeadphoneCards, setAllHeadphoneCards] = useState<HeadphoneRecommendationCard[]>([]);
   const [deviceDbGapWarning, setDeviceDbGapWarning] = useState<string | null>(null);
   const [resultCategory, setResultCategory] = useState<CategoryType>("restaurant");
+  const [resultMode, setResultMode] = useState<ResultMode>("category_cards");
+  const [decisionPlan, setDecisionPlan] = useState<DecisionPlan | null>(null);
+  const latestRequestIdRef = useRef<string | null>(null);
+  const viewedPlanIdsRef = useRef<Set<string>>(new Set());
+
+  const getTelemetrySessionId = useCallback(() => {
+    if (typeof window === "undefined") return "anonymous";
+    const key = "folio_scenario_session_id";
+    const existing = window.localStorage.getItem(key);
+    if (existing) return existing;
+    const created = window.crypto?.randomUUID?.() ?? `session-${Date.now()}`;
+    window.localStorage.setItem(key, created);
+    return created;
+  }, []);
+
+  const trackScenarioEvent = useCallback((
+    event: Omit<ScenarioTelemetryEvent, "session_id" | "timestamp"> & {
+      timestamp?: string;
+    }
+  ) => {
+    const payload: ScenarioTelemetryEvent = {
+      ...event,
+      session_id: getTelemetrySessionId(),
+      timestamp: event.timestamp ?? new Date().toISOString(),
+    };
+
+    fetch("/api/telemetry", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    }).catch(() => {});
+  }, [getTelemetrySessionId]);
 
   // Stable ref to always-current messages (avoids stale closure in sendMessage)
   const messagesRef = useRef(messages);
@@ -80,10 +123,23 @@ export function useChat({
       setMessages([]);
       setVisibleCards([]);
       setAllCards([]);
+      setAllHotelCards([]);
+      setAllFlightCards([]);
+      setAllCreditCardCards([]);
+      setAllLaptopCards([]);
+      setAllSmartphoneCards([]);
+      setAllHeadphoneCards([]);
+      setLaptopDbGapWarning(null);
+      setDeviceDbGapWarning(null);
+      setResultCategory("restaurant");
       setActivePrice(null);
       setActiveCuisine(null);
       setSessionPreferences(DEFAULT_SESSION_PREFS);
       setSuggestedRefinements([]);
+      setResultMode("category_cards");
+      setDecisionPlan(null);
+      latestRequestIdRef.current = null;
+      viewedPlanIdsRef.current.clear();
     }
     prevCityIdRef.current = cityId;
     prevIsNearMeRef.current = isNearMe;
@@ -133,7 +189,14 @@ export function useChat({
       setAllFlightCards([]);
       setAllCreditCardCards([]);
       setAllLaptopCards([]);
+      setAllSmartphoneCards([]);
+      setAllHeadphoneCards([]);
+      setLaptopDbGapWarning(null);
+      setDeviceDbGapWarning(null);
       setResultCategory("restaurant");
+      setResultMode("category_cards");
+      setDecisionPlan(null);
+      latestRequestIdRef.current = null;
 
       const url = new URL(window.location.href);
       url.searchParams.set("q", text);
@@ -225,9 +288,105 @@ export function useChat({
                 setLoadingStep(2);
               } else if (event.type === "complete") {
                 const category: CategoryType = event.category ?? "restaurant";
+                const mode: ResultMode = event.result_mode ?? "category_cards";
+                const outputLanguage: OutputLanguage = event.output_language ?? "en";
+                if (event.request_id) {
+                  latestRequestIdRef.current = String(event.request_id);
+                }
                 setResultCategory(category);
+                setResultMode(mode);
                 const refinements: string[] = event.suggested_refinements ?? [];
                 setSuggestedRefinements(refinements);
+                if (mode !== "scenario_plan") {
+                  setDecisionPlan(null);
+                }
+
+                if (mode === "followup_refinement" && event.scenarioIntent?.scenario === "weekend_trip") {
+                  const missingFields: string[] = event.scenarioIntent?.missing_fields ?? [];
+                  const assumptions: string[] = event.scenarioIntent?.planning_assumptions ?? [];
+
+                  setMessages((prev) => [
+                    ...prev,
+                    {
+                      role: "assistant",
+                      content: buildWeekendTripFollowupCopy(
+                        outputLanguage,
+                        missingFields,
+                        assumptions[0]
+                      ),
+                      category: "trip" as const,
+                      result_mode: "followup_refinement",
+                      scenario: "weekend_trip",
+                      output_language: outputLanguage,
+                    },
+                  ]);
+                  continue;
+                }
+
+                if (mode === "followup_refinement" && event.scenarioIntent?.scenario === "city_trip") {
+                  const missingFields: string[] = event.scenarioIntent?.missing_fields ?? [];
+                  const assumptions: string[] = event.scenarioIntent?.planning_assumptions ?? [];
+
+                  setMessages((prev) => [
+                    ...prev,
+                    {
+                      role: "assistant",
+                      content: buildCityTripFollowupCopy(
+                        outputLanguage,
+                        missingFields,
+                        assumptions[0]
+                      ),
+                      category: "trip" as const,
+                      result_mode: "followup_refinement",
+                      scenario: "city_trip",
+                      output_language: outputLanguage,
+                    },
+                  ]);
+                  continue;
+                }
+
+                if (mode === "scenario_plan" && event.decisionPlan) {
+                  const plan: DecisionPlan = event.decisionPlan;
+                  const scenarioCategory = (event.category ?? "trip") as CategoryType;
+                  setDecisionPlan(plan);
+                  setAllCards(event.recommendations ?? []);
+                  setVisibleCards(event.recommendations ?? []);
+                  setAllHotelCards(event.hotelRecommendations ?? []);
+                  setAllFlightCards(event.flightRecommendations ?? []);
+                  setAllCreditCardCards(event.creditCardRecommendations ?? []);
+
+                  const assistantMessage: Message = {
+                    role: "assistant",
+                    content: plan.summary,
+                    cards: event.recommendations ?? [],
+                    hotelCards: event.hotelRecommendations ?? [],
+                    flightCards: event.flightRecommendations ?? [],
+                    creditCardCards: event.creditCardRecommendations ?? [],
+                    decisionPlan: plan,
+                    category: scenarioCategory,
+                    result_mode: "scenario_plan",
+                    scenario: plan.scenario,
+                    output_language: outputLanguage,
+                  };
+                  setMessages((prev) => [...prev, assistantMessage]);
+
+                  if (!viewedPlanIdsRef.current.has(plan.id)) {
+                    viewedPlanIdsRef.current.add(plan.id);
+                    trackScenarioEvent({
+                      type: "plan_viewed",
+                      scenario: plan.scenario,
+                      plan_id: plan.id,
+                      option_id: plan.primary_plan.id,
+                      request_id: latestRequestIdRef.current ?? undefined,
+                      query: text,
+                      metadata: {
+                        backup_count: plan.backup_plans.length,
+                        category: scenarioCategory,
+                      },
+                    });
+                  }
+                  continue;
+                }
 
                 if (category === "credit_card") {
                   const ccRecs: CreditCardRecommendationCard[] = event.creditCardRecommendations ?? [];
@@ -294,8 +453,9 @@ export function useChat({
                       ...prev,
                       {
                         role: "assistant",
-                        content: `To search for flights, I need a bit more info: **${missingFields.join(", ")}**. Could you provide those?`,
+                        content: buildFlightNeedInfoCopy(outputLanguage, missingFields),
                         category: "flight" as const,
+                        output_language: outputLanguage,
                       },
                     ]);
                   } else if (flightRecs.length === 0) {
@@ -303,20 +463,22 @@ export function useChat({
                       ...prev,
                       {
                         role: "assistant",
-                        content: "No flights found for that route. Try adjusting your dates or airports.",
+                        content: buildNoFlightCopy(outputLanguage),
                         category: "flight" as const,
+                        output_language: outputLanguage,
                       },
                     ]);
                   } else {
-                    const noDirectAvailable: boolean = event.no_direct_available ?? false;
-                    const contentMsg = noDirectAvailable
-                      ? `No nonstop flights found for that route. Here are the best connecting options:`
-                      : `Found ${flightRecs.length} flight${flightRecs.length > 1 ? "s" : ""} for you.`;
                     const assistantMessage: Message = {
                       role: "assistant",
-                      content: contentMsg,
+                      content: buildFlightFoundCopy(
+                        outputLanguage,
+                        flightRecs.length,
+                        event.no_direct_available ?? false
+                      ),
                       flightCards: flightRecs,
                       category: "flight" as const,
+                      output_language: outputLanguage,
                     };
                     setMessages((prev) => [...prev, assistantMessage]);
                     setAllFlightCards(flightRecs);
@@ -329,16 +491,18 @@ export function useChat({
                       ...prev,
                       {
                         role: "assistant",
-                        content: "No hotels matched your search. Try adjusting your dates, budget, or location.",
+                        content: buildNoHotelCopy(outputLanguage),
                         category: "hotel" as const,
+                        output_language: outputLanguage,
                       },
                     ]);
                   } else {
                     const assistantMessage: Message = {
                       role: "assistant",
-                      content: `Found ${hotelRecs.length} hotels for you.`,
+                      content: buildHotelFoundCopy(outputLanguage, hotelRecs.length),
                       hotelCards: hotelRecs,
                       category: "hotel" as const,
+                      output_language: outputLanguage,
                     };
                     setMessages((prev) => [...prev, assistantMessage]);
                     setAllHotelCards(hotelRecs);
@@ -519,7 +683,7 @@ export function useChat({
         const message =
           err instanceof Error
             ? err.message
-            : "Something went wrong. Please try again.";
+            : buildGenericErrorCopy("en");
         setMessages((prev) => [
           ...prev,
           { role: "assistant", content: message },
@@ -533,7 +697,7 @@ export function useChat({
         setLoadingStep(-1);
       }
     },
-    [loading, isNearMe, cityId, gpsCoords, nearLocation, profileContext, sessionPreferences, learnedWeights]
+    [loading, isNearMe, cityId, gpsCoords, nearLocation, profileContext, sessionPreferences, learnedWeights, onSubscriptionIntent, trackScenarioEvent]
   );
 
   const autoSearchFired = useRef(false);
@@ -549,6 +713,82 @@ export function useChat({
       sendMessageRef.current(q);
     }
   }, []);
+
+  function swapDecisionPlanOption(optionId: string) {
+    setDecisionPlan((currentPlan) => {
+      if (!currentPlan) return currentPlan;
+
+      const backupIndex = currentPlan.backup_plans.findIndex(
+        (plan) => plan.id === optionId
+      );
+      if (backupIndex < 0) return currentPlan;
+
+      const nextPrimary = currentPlan.backup_plans[backupIndex];
+      const language = currentPlan.output_language;
+      const nextBackups = currentPlan.backup_plans.filter(
+        (_, index) => index !== backupIndex
+      );
+
+      return {
+        ...currentPlan,
+        // Clear stale brief/risks/evidence — they were built from the original primary option
+        // and would describe the old option after promotion. Reset to the promoted option's data.
+        scenario_brief: [nextPrimary.summary],
+        risks: [],
+        evidence_items: [],
+        primary_plan: {
+          ...nextPrimary,
+          label: pickLanguageCopy(language, "Main pick", "主方案"),
+          fallback_reason: undefined,
+        },
+        backup_plans: [
+          {
+            ...currentPlan.primary_plan,
+            label: pickLanguageCopy(language, "Backup 1", "备选 1"),
+            fallback_reason:
+              nextPrimary.fallback_reason ??
+              pickLanguageCopy(
+                language,
+                "Use this if you want to revert to the original default.",
+                "如果你想切回最初默认方案，就选这个。"
+              ),
+          },
+          ...nextBackups.map((plan, index) => ({
+            ...plan,
+            label: pickLanguageCopy(
+              language,
+              `Backup ${index + 2}`,
+              `备选 ${index + 2}`
+            ),
+          })),
+        ],
+      };
+    });
+  }
+
+  function trackDecisionPlanEvent(params: {
+    type: ScenarioTelemetryEvent["type"];
+    option_id?: string;
+    action_id?: string;
+    metadata?: Record<string, unknown>;
+    query?: string;
+    scenario?: ScenarioType;
+    plan_id?: string;
+  }) {
+    const activePlan = decisionPlan;
+    if (!activePlan && !params.plan_id) return;
+
+    trackScenarioEvent({
+      type: params.type,
+      scenario: params.scenario ?? activePlan?.scenario ?? "date_night",
+      plan_id: params.plan_id ?? activePlan!.id,
+      option_id: params.option_id,
+      action_id: params.action_id,
+      request_id: latestRequestIdRef.current ?? undefined,
+      query: params.query,
+      metadata: params.metadata,
+    });
+  }
 
   return {
     messages,
@@ -567,6 +807,8 @@ export function useChat({
     allHeadphoneCards,
     deviceDbGapWarning,
     resultCategory,
+    resultMode,
+    decisionPlan,
     activePrice,
     setActivePrice,
     activeCuisine,
@@ -582,5 +824,9 @@ export function useChat({
     sessionPreferences,
     isStreaming,
     suggestedRefinements,
+    swapDecisionPlanOption,
+    trackDecisionPlanEvent,
+    getSessionId: getTelemetrySessionId,
+    latestRequestId: latestRequestIdRef.current,
   };
 }

@@ -205,6 +205,17 @@ create_agents_sidecar() {
       fi
     fi
   done
+
+  # Sidecar files that skills reference at runtime
+  for file in ETHOS.md; do
+    local src="$GSTACK_DIR/$file"
+    local dst="$agents_gstack/$file"
+    if [ -f "$src" ]; then
+      if [ -L "$dst" ] || [ ! -e "$dst" ]; then
+        ln -snf "$src" "$dst"
+      fi
+    fi
+  done
 }
 
 # 4. Install for Claude (default)
@@ -256,30 +267,3 @@ if [ ! -d "$HOME/.gstack" ]; then
   echo "  Welcome! Run /gstack-upgrade anytime to stay current."
 fi
 rm -f /tmp/gstack-latest-version
-
-## gstack
-
-Use /browse from gstack for all web browsing. Never use mcp__claude-in-chrome__* tools.
-
-Available skills:
-- /office-hours
-- /plan-ceo-review
-- /plan-eng-review
-- /plan-design-review
-- /design-consultation
-- /review
-- /ship
-- /browse
-- /qa
-- /qa-only
-- /design-review
-- /setup-browser-cookies
-- /retro
-- /investigate
-- /document-release
-- /codex
-- /careful
-- /freeze
-- /guard
-- /unfreeze
-- /gstack-upgrade

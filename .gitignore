@@ -39,3 +39,12 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+.gstack/
+
+# Claude Code local settings (machine-specific permissions)
+.claude/settings.local.json
+# Dev artifacts
+.next-dev.log
+.playwright-cli/
+.claude/worktrees/
+.context/
