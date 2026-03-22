@@ -2,7 +2,7 @@
 // const client = new Anthropic();
 
 import { googlePlacesSearch, tavilySearch, geocodeLocation, fetchReviewSignals, searchHotels, searchFlights, resolveMultiAirport, normalizeDate } from "./tools";
-import { UserRequirements, Restaurant, RecommendationCard, SessionPreferences, ScoringDimensions, HotelIntent, RestaurantIntent, FlightIntent, CreditCardIntent, LaptopIntent, LaptopUseCase, ParsedIntent, HotelRecommendationCard, FlightRecommendationCard, CreditCardRecommendationCard, LaptopRecommendationCard, SpendingProfile, CategoryType, Flight, SubscriptionIntent, SmartphoneIntent, SmartphoneUseCase, SmartphoneRecommendationCard, HeadphoneIntent, HeadphoneUseCase, HeadphoneRecommendationCard, ScenarioIntent, DecisionPlan, ResultMode, WeekendTripIntent, DateNightIntent, MultilingualQueryContext } from "./types";
+import { UserRequirements, Restaurant, RecommendationCard, SessionPreferences, ScoringDimensions, HotelIntent, RestaurantIntent, FlightIntent, CreditCardIntent, LaptopIntent, LaptopUseCase, ParsedIntent, HotelRecommendationCard, FlightRecommendationCard, CreditCardRecommendationCard, LaptopRecommendationCard, SpendingProfile, CategoryType, Flight, SubscriptionIntent, SmartphoneIntent, SmartphoneUseCase, SmartphoneRecommendationCard, HeadphoneIntent, HeadphoneUseCase, HeadphoneRecommendationCard, ScenarioIntent, DecisionPlan, ResultMode, WeekendTripIntent, CityTripIntent, DateNightIntent, MultilingualQueryContext } from "./types";
 import type { WatchCategory } from "./watchTypes";
 import { CITIES, DEFAULT_CITY } from "./cities";
 import { UserRequirementsSchema, RankedItemArraySchema } from "./schemas";
@@ -10,7 +10,7 @@ import { recommendCreditCards } from "./creditCardEngine";
 import { recommendLaptops, classifyMentionedModels } from "./laptopEngine";
 import { recommendSmartphones, classifyMentionedSmartphones } from "./smartphoneEngine";
 import { recommendHeadphones, classifyMentionedHeadphones } from "./headphoneEngine";
-import { detectScenarioFromMessage, parseScenarioIntent, runScenarioPlanner, runWeekendTripPlanner } from "./scenario2";
+import { detectScenarioFromMessage, parseScenarioIntent, runScenarioPlanner, runWeekendTripPlanner, runCityTripPlanner } from "./scenario2";
 import { minimaxChat } from "./minimax";
 import { analyzeMultilingualQuery, resolveLocationHint } from "./nlu";
 
@@ -33,7 +33,9 @@ import { runHotelPipeline } from "./agent/pipelines/hotel";
 import { runFlightPipeline } from "./agent/pipelines/flight";
 import { gatherCandidates, rankAndExplain } from "./agent/pipelines/restaurant";
 import { parseWeekendTripIntent } from "./agent/parse/weekend-trip";
+import { parseCityTripIntent } from "./agent/parse/city-trip";
 import { buildWeekendTripFlightIntent, buildWeekendTripHotelIntent, buildWeekendTripCardIntent } from "./agent/planners/weekend-trip";
+import { buildCityTripHotelIntent, buildCityTripRestaurantRequirements, buildCityTripBarRequirements } from "./agent/planners/city-trip";
 import { buildDateNightFallbackIntent } from "./agent/planners/date-night";
 
 // ─── Main Agent Function ──────────────────────────────────────────────────────
@@ -205,6 +207,51 @@ export async function runAgent(
       hotelRecommendations,
       creditCardRecommendations,
       no_direct_available,
+      result_mode: decisionPlan ? "scenario_plan" : "followup_refinement",
+    });
+  }
+
+  if (detectedScenario === "city_trip") {
+    const scenarioIntent = await parseCityTripIntent(userMessage, queryContext);
+
+    if (scenarioIntent.needs_clarification) {
+      return buildBaseResult(scenarioIntent, "trip", {
+        scenarioIntent,
+        result_mode: "followup_refinement",
+      });
+    }
+
+    const hotelIntent = buildCityTripHotelIntent(scenarioIntent);
+    const restaurantRequirements = buildCityTripRestaurantRequirements(scenarioIntent);
+    const barRequirements = buildCityTripBarRequirements(scenarioIntent);
+
+    const [
+      { hotelRecommendations },
+      { cards: restaurantCards },
+      { cards: barCards },
+    ] = await Promise.all([
+      runHotelPipeline(hotelIntent, conversationHistory, scenarioIntent.destination_city),
+      gatherCandidates(restaurantRequirements, cityId, null, undefined).then((r) =>
+        rankAndExplain(restaurantRequirements, r.restaurants, r.semanticSignals, conversationHistory, scenarioIntent.destination_city, sessionPreferences, profileContext, customWeights)
+      ),
+      gatherCandidates(barRequirements, cityId, null, undefined).then((r) =>
+        rankAndExplain(barRequirements, r.restaurants, r.semanticSignals, conversationHistory, scenarioIntent.destination_city, sessionPreferences, profileContext, customWeights)
+      ),
+    ]);
+
+    const decisionPlan = runCityTripPlanner({
+      scenarioIntent,
+      hotelRecommendations,
+      restaurantRecommendations: restaurantCards,
+      barRecommendations: barCards,
+      outputLanguage: queryContext.output_language,
+    });
+
+    return buildBaseResult(scenarioIntent, "trip", {
+      scenarioIntent,
+      decisionPlan,
+      hotelRecommendations,
+      recommendations: [...restaurantCards, ...barCards],
       result_mode: decisionPlan ? "scenario_plan" : "followup_refinement",
     });
   }

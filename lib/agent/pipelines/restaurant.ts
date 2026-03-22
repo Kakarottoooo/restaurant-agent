@@ -349,6 +349,7 @@ Return ONLY the JSON array, no other text.`,
     system: systemPrompt,
     messages,
     max_tokens: 4096,
+    timeout_ms: 60000,
   });
 
   const effectiveWeights = customWeights

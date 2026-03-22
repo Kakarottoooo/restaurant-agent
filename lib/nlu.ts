@@ -34,6 +34,7 @@ const VALID_CATEGORIES: CategoryType[] = [
 const VALID_SCENARIOS: ScenarioType[] = [
   "date_night",
   "weekend_trip",
+  "city_trip",
   "big_purchase",
 ];
 
@@ -109,6 +110,12 @@ function buildFallbackContext(
     scenarioHint = "weekend_trip";
   } else if (/\bdate night\b|\bfirst date\b|\bromantic\b|\banniversary\b/.test(lower)) {
     scenarioHint = "date_night";
+  } else if (
+    (/\btravel(?:ing)? to\b|\bgoing to\b|\bvisit(?:ing)?\b|\btrip to\b/i.test(lower)) &&
+    /\bhotel\b|\bstay\b/i.test(lower) &&
+    /\brestaurants?\b|\bbars?\b|\bnightlife\b|\bmusic\b|\bplan/i.test(lower)
+  ) {
+    scenarioHint = "city_trip";
   }
 
   return {
@@ -229,7 +236,7 @@ Return ONLY valid JSON with this schema:
   "normalized_query": "short internal canonical paraphrase in English",
   "intent_summary": "one sentence summary in the user's preferred output language",
   "category_hint": "restaurant" | "hotel" | "flight" | "credit_card" | "laptop" | "smartphone" | "headphone" | "subscription" | "trip" | "unknown" | null,
-  "scenario_hint": "date_night" | "weekend_trip" | "big_purchase" | null,
+  "scenario_hint": "date_night" | "weekend_trip" | "city_trip" | "big_purchase" | null,
   "location_hint": "canonical place name like New York, NY" | null,
   "cuisine_hint": "western|italian|french|japanese|..." | null,
   "purpose_hint": "date|business|family|friends|solo|group|..." | null,

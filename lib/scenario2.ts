@@ -1,4 +1,5 @@
 import {
+  CityTripIntent,
   CreditCardRecommendationCard,
   DateNightDecisionStyle,
   DateNightFollowUp,
@@ -20,6 +21,9 @@ import {
   WeekendTripIntent,
 } from "./types";
 import { pickLanguageCopy } from "./outputCopy";
+import { runModularPlanner } from "./agent/planner-engine";
+import { ModuleResults } from "./agent/planner-engine/types";
+import { buildCityTripEngineConfig } from "./agent/scenario-configs/city-trip";
 
 const DATE_NIGHT_REGEX =
   /\bdate night\b|\bfirst date\b|\banniversary\b|\bromantic\b|\bproposal\b|\bdating\b|\bdate\b|\bpartner\b|\bgirlfriend\b|\bboyfriend\b|\bwife\b|\bhusband\b|\bfiance\b/i;
@@ -28,6 +32,9 @@ const DATE_NIGHT_ZH_REGEX =
 const WEEKEND_TRIP_REGEX =
   /\bweekend trip\b|\bweekend getaway\b|\bweekend away\b|\bgetaway\b|\bcity break\b|\bshort trip\b|\bmini vacation\b|\btrip package\b/i;
 const WEEKEND_ZH_REGEX = /周末|短途|旅行|出游|度假/;
+const CITY_TRIP_REGEX =
+  /\bformulate.*plans?\b|\bplans? for.*trip\b|\btrip.*plans?\b|\bitinerary\b|\bseveral plans\b/i;
+const CITY_TRIP_ZH_REGEX = /制定.*方案|旅游.*方案|行程.*规划|出行.*计划|几套.*方案|行程.*安排/;
 const EVENING_ZH_REGEX = /晚上|晚饭|晚餐/;
 const NOON_ZH_REGEX = /中午|午饭|午餐/;
 const MORNING_ZH_REGEX = /早餐|早饭/;
@@ -67,6 +74,16 @@ export function detectScenarioFromMessage(message: string): ScenarioType | null 
     (WEEKEND_ZH_REGEX.test(message) && /航班|机票/.test(message) && /酒店|住宿/.test(message));
 
   if (hasWeekendSignal) return "weekend_trip";
+
+  // City trip: traveling to a city + hotel + activities (restaurants/bars/nightlife)
+  const hasCityTripSignal =
+    ((/\btravel(?:ing)? to\b|\bgoing to\b|\bvisit(?:ing)?\b|\btrip to\b/i.test(lower)) &&
+      /\bhotel\b|\bstay\b|\bbook\b.*\bhotel\b|\breserve\b.*\bhotel\b/i.test(lower) &&
+      /\brestaurants?\b|\bbars?\b|\bnightlife\b|\bmusic\b|\beat\b|\bdining\b|\bdrink/i.test(lower)) ||
+    (CITY_TRIP_REGEX.test(lower) && /\bhotel\b|\bstay\b/i.test(lower)) ||
+    (CITY_TRIP_ZH_REGEX.test(message) && /酒店|住宿/.test(message));
+  if (hasCityTripSignal) return "city_trip";
+
   if (DATE_NIGHT_REGEX.test(lower) || DATE_NIGHT_ZH_REGEX.test(message)) {
     return "date_night";
   }
@@ -78,9 +95,8 @@ export function detectScenario(
   intent: ParsedIntent
 ): ScenarioType | null {
   if (intent.category !== "restaurant") {
-    return detectScenarioFromMessage(message) === "weekend_trip"
-      ? "weekend_trip"
-      : null;
+    const scenario = detectScenarioFromMessage(message);
+    return scenario === "weekend_trip" || scenario === "city_trip" ? scenario : null;
   }
   if (intent.purpose === "date") return "date_night";
   if (DATE_NIGHT_REGEX.test(message.toLowerCase()) || DATE_NIGHT_ZH_REGEX.test(message)) {
@@ -1455,4 +1471,26 @@ function inferConfidence(
 
 function dedupeStrings(values: string[]): string[] {
   return Array.from(new Set(values.map((value) => value.trim()).filter(Boolean)));
+}
+
+export function runCityTripPlanner(params: {
+  scenarioIntent: CityTripIntent;
+  hotelRecommendations: HotelRecommendationCard[];
+  restaurantRecommendations: RecommendationCard[];
+  barRecommendations: RecommendationCard[];
+  outputLanguage: OutputLanguage;
+}): DecisionPlan | null {
+  const { scenarioIntent: intent, hotelRecommendations, restaurantRecommendations, barRecommendations, outputLanguage: lang } = params;
+
+  const moduleResults: ModuleResults = {
+    hotels: hotelRecommendations,
+    flights: [],
+    restaurants: restaurantRecommendations,
+    bars: barRecommendations,
+    creditCards: [],
+  };
+
+  const config = buildCityTripEngineConfig(intent, lang);
+
+  return runModularPlanner({ results: moduleResults, config, outputLanguage: lang });
 }
