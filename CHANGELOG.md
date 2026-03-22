@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.2.16.0] - 2026-03-22
+
+### Added
+- **Add to Calendar — ICS route** (3b-2): `GET /api/plan/[id]/calendar` returns a RFC 5545–compliant `.ics` file with `VEVENT` populated from `DecisionPlan.event_datetime`, `event_location`, and the primary plan title. Returns 422 when `event_datetime` is missing.
+- **Add to Calendar — Google Calendar deep links** (3b-2): `buildPlanOptionFromPackage` in the modular planner engine now appends a Google Calendar "Add to calendar" secondary action for trip packages when `startDate` is known. Computes check-in/check-out dates from `startDate + nights`.
+- **15 tests** in `plan-calendar.test.ts` and `scenario2.test.ts` covering ICS content, error states, and event_datetime/event_location field population across planners.
+- **Preference weight correction from negative feedback** (3d-1): `user_preferences` table (`session_id, preference_key, preference_value, confidence`) with `upsertUserPreference` and `getUserPreferences` helpers. `POST /api/feedback-prompts` maps structured feedback issues to preference keys: `too_noisy → noise_sensitivity:high`, `too_expensive → budget_sensitivity:high`, `too_far → distance_tolerance:low`.
+- **Preference injection into NLU** (3d-1): `analyzeMultilingualQuery` accepts an optional `userPreferences` map. For English queries (fast-path, no MiniMax), learned preferences are injected directly into `constraints_hint`. For non-English queries, they are appended to the merged `constraints_hint` after MiniMax parsing. Constraints flow through to restaurant scoring via `UserRequirements.constraints`.
+- **Session ID plumbing** (3d-1): `ChatRequestSchema` now accepts `session_id`; `app/api/chat/route.ts` extracts and passes it to `runAgent`; `runAgent` loads `getUserPreferences(sessionId)` from DB (graceful no-op on error) and passes preferences to NLU.
+- **Unique index on `feedback_prompts(plan_id)`** prevents duplicate prompts from concurrent cron runs.
+- **7 new tests** in `nlu.test.ts` covering preference injection for all three keys, multiple preferences, empty preferences, and the non-English (MiniMax) path.
+
 ## [0.2.15.0] - 2026-03-22
 
 ### Added
