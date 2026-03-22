@@ -12,17 +12,17 @@ Three-layer AI pipeline:
 2. **Parallel data gathering** — Google Places / SerpAPI for real data + Tavily editorial context, run concurrently
 3. **Ranking & explanation** (MiniMax) — scores candidates and generates personalized explanations, watch-outs, and "skip if" notes
 
-### Scenario plan (date_night, weekend_trip, city_trip, big_purchase, gift)
+### Scenario plan (date_night, weekend_trip, city_trip, big_purchase, concert_event, gift, fitness)
 Scenario decision engine (`lib/scenario2.ts`):
 1. **NLU analysis** (`lib/nlu.ts`) — multilingual query understanding; English fast-path skips the API (~300ms saved)
-2. **Scenario detection** — routes to `date_night`, `weekend_trip`, `city_trip`, `big_purchase`, `concert_event`, or `gift` planner
+2. **Scenario detection** — routes to `date_night`, `weekend_trip`, `city_trip`, `big_purchase`, `concert_event`, `gift`, or `fitness` planner
 3. **Plan generation** — produces a `DecisionPlan` with primary + ranked backup options + a plan-level `tradeoff_summary` (1–2 sentences explaining why the primary is the default and what each backup trades off); weekend_trip runs parallel hotel + flight searches; city_trip runs parallel hotel + restaurant + bar searches and produces 3 tiered packages (Upscale / Trendy / Local vibe); big_purchase routes to the appropriate device pipeline (laptop/headphone/smartphone) and returns 1 clear pick + up to 2 backup alternatives with price-delta tradeoff labels
 4. **Modular planner engine** (`lib/agent/planner-engine/`) — generic tiered-package engine shared by all trip scenarios; new scenarios only need an `EngineConfig` factory
 5. **SSE streaming** — streams plan chunks to the client in real time
 
 ## Features
 
-- Natural language search with automatic scenario detection (date night, weekend trip, city trip, big purchase, concert/event, gift, category search)
+- Natural language search with automatic scenario detection (date night, weekend trip, city trip, big purchase, concert/event, gift, fitness, category search)
 - Multilingual support — Chinese queries return Chinese results via MiniMax NLU
 - 27 US cities + GPS-based "Near Me" mode + custom landmark search
 - List view and full-screen interactive map view
@@ -41,6 +41,7 @@ Scenario decision engine (`lib/scenario2.ts`):
 - **Push notifications** — "Watch prices" requests browser permission and delivers a Web Push notification when the price drops, even when the app is closed
 - **Concert & event ticket OS** — "find me a Taylor Swift concert in NYC" returns up to 3 events from Ticketmaster with direct buy-ticket links, venue info, price ranges, and Google Maps links; supports concerts, festivals, theater, sports, and comedy
 - **Gift recommendation OS** — "find me a birthday gift for my girlfriend who loves hiking under $80" returns 3 curated options (Safe pick / Most thoughtful / Most creative) sourced from SerpAPI Google Shopping with direct purchase links
+- **Fitness/wellness OS** — "find me a vinyasa yoga class in Brooklyn on Saturday morning under $25" returns 3 studio options (Top rated / Most popular / Best value) sourced from Google Places with ClassPass + Mindbody + Google Maps booking links; covers yoga, pilates, spin, HIIT, CrossFit, boxing, barre, dance, meditation, swimming, running, martial arts
 - Save favorites (localStorage)
 - Dark mode (system preference)
 - PWA-installable with offline support
@@ -128,9 +129,9 @@ app/
 lib/
   agent.ts              # Thin orchestrator — routes to sub-modules, runs restaurant pipeline inline
   agent/
-    parse/              # Intent parsers per category (restaurant, hotel, flight, credit-card, city-trip, concert-event, gift, …)
+    parse/              # Intent parsers per category (restaurant, hotel, flight, credit-card, city-trip, concert-event, gift, fitness, …)
     pipelines/          # Category pipelines (hotel, flight, credit-card, laptop, smartphone, headphone)
-    planners/           # Scenario planners (weekend-trip, date-night, city-trip, big-purchase, concert-event, gift) + shared utils
+    planners/           # Scenario planners (weekend-trip, date-night, city-trip, big-purchase, concert-event, gift, fitness) + shared utils
     planner-engine/     # Generic modular planner engine (selectors, plan-option-builder, types)
     scenario-configs/   # EngineConfig factories per scenario (city-trip, …)
     composer/           # Scoring + refinement helpers
