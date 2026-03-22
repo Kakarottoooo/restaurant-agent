@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.2.6.0] - 2026-03-22
+
+### Added
+- **Comparative tradeoff summary** (`tradeoff_summary`): all 4 scenario planners (date_night, weekend_trip, city_trip, big_purchase) now generate a 1–2 sentence plan-level summary explaining why the primary is the default pick and what each backup trades off — rendered between the primary card and the backup section in `ScenarioPlanView`
+- **Phase 3 TODOS**: added comprehensive Phase 3 implementation backlog (3a Decision Compression → 3b Execution Layer → 3c Monitoring → 3d Learning Loop) to TODOS.md
+
+### Fixed
+- **Planner-engine `tradeoff_summary` passthrough** (`lib/agent/planner-engine`): added `tradeoff_summary` to `EngineConfig` so city_trip config can supply its own comparative text
+
 ## [0.2.5.0] - 2026-03-22
 
 ### Added
