@@ -162,7 +162,7 @@ export type ResultMode =
   | "followup_refinement"
   | "execution_actions";
 
-export type ScenarioType = "date_night" | "weekend_trip" | "big_purchase";
+export type ScenarioType = "date_night" | "weekend_trip" | "city_trip" | "big_purchase";
 export type InputLanguage = "en" | "zh" | "mixed" | "other" | "unknown";
 export type OutputLanguage = "en" | "zh";
 
@@ -373,7 +373,26 @@ export interface SubscriptionIntent extends BaseIntent {
   label: string;        // human-readable summary, e.g. "Apple MacBook releases"
 }
 
-export type ScenarioIntent = DateNightIntent | WeekendTripIntent;
+export interface CityTripIntent extends BaseIntent {
+  category: "trip";
+  scenario: "city_trip";
+  scenario_goal: string;
+  destination_city: string;
+  start_date?: string;
+  end_date?: string;
+  nights?: number;
+  travelers?: number;
+  hotel_star_rating?: number;
+  hotel_neighborhood?: string;
+  activities: string[];
+  cuisine_preferences: string[];
+  vibe: "trendy" | "upscale" | "local" | "mixed";
+  planning_assumptions: string[];
+  needs_clarification: boolean;
+  missing_fields: string[];
+}
+
+export type ScenarioIntent = DateNightIntent | WeekendTripIntent | CityTripIntent;
 
 export type ScenarioTelemetryEventType =
   | "plan_viewed"

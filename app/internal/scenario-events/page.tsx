@@ -161,6 +161,16 @@ export default async function ScenarioEventsPage({
             </Link>
             <Link
               className={`rounded-full px-3 py-1.5 text-sm transition ${
+                activeScenario === "city_trip"
+                  ? "bg-[var(--gold)] text-[#2C2416]"
+                  : "border border-[var(--border)] bg-[var(--card)] text-[var(--text-secondary)] hover:bg-[var(--card-2)]"
+              }`}
+              href={buildHref(snapshot.filters.days, "city_trip")}
+            >
+              City Trip
+            </Link>
+            <Link
+              className={`rounded-full px-3 py-1.5 text-sm transition ${
                 activeScenario === "big_purchase"
                   ? "bg-[var(--gold)] text-[#2C2416]"
                   : "border border-[var(--border)] bg-[var(--card)] text-[var(--text-secondary)] hover:bg-[var(--card-2)]"

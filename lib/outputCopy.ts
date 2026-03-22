@@ -137,6 +137,30 @@ export function buildWeekendTripFollowupCopy(
   return parts.join("\n\n");
 }
 
+export function buildCityTripFollowupCopy(
+  language: OutputLanguage | undefined,
+  missingFields: string[],
+  assumption?: string
+): string {
+  const localizedFields = localizeFieldList(missingFields, language);
+
+  if (language === "zh") {
+    const parts = [
+      "我可以继续给你生成城市旅行方案，但还差一两个关键信息。",
+      localizedFields.length > 0 ? `还缺：${localizedFields.join("、")}。` : "",
+      assumption ? `当前假设：${assumption}` : "",
+    ].filter(Boolean);
+    return parts.join("\n\n");
+  }
+
+  const parts = [
+    "I can build a city-trip package, but I need one or two more details first.",
+    localizedFields.length > 0 ? `Missing: ${localizedFields.join(", ")}.` : "",
+    assumption ? `Current assumption: ${assumption}` : "",
+  ].filter(Boolean);
+  return parts.join("\n\n");
+}
+
 export function buildRestaurantFoundCopy(
   language: OutputLanguage | undefined,
   count: number

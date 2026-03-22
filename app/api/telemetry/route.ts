@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { ensureScenarioEventsTable, sql } from "@/lib/db";
 import { ScenarioTelemetryEvent, ScenarioType } from "@/lib/types";
 
-const VALID_SCENARIO_TYPES = new Set<ScenarioType>(["date_night", "weekend_trip", "big_purchase"]);
+const VALID_SCENARIO_TYPES = new Set<ScenarioType>(["date_night", "weekend_trip", "city_trip", "big_purchase"]);
 
 export interface SelectionEvent {
   type: "map_click" | "reserve_click";
