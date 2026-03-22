@@ -47,3 +47,4 @@ next-env.d.ts
 .next-dev.log
 .playwright-cli/
 .claude/worktrees/
+.context/
