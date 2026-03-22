@@ -12,16 +12,17 @@ Three-layer AI pipeline:
 2. **Parallel data gathering** — Google Places / SerpAPI for real data + Tavily editorial context, run concurrently
 3. **Ranking & explanation** (MiniMax) — scores candidates and generates personalized explanations, watch-outs, and "skip if" notes
 
-### Scenario plan (date_night, weekend_trip)
+### Scenario plan (date_night, weekend_trip, city_trip)
 Scenario decision engine (`lib/scenario2.ts`):
 1. **NLU analysis** (`lib/nlu.ts`) — multilingual query understanding; English fast-path skips the API (~300ms saved)
-2. **Scenario detection** — routes to `date_night` or `weekend_trip` planner
-3. **Plan generation** — produces a `DecisionPlan` with primary + ranked backup options; weekend_trip runs parallel hotel + flight searches
-4. **SSE streaming** — streams plan chunks to the client in real time
+2. **Scenario detection** — routes to `date_night`, `weekend_trip`, or `city_trip` planner
+3. **Plan generation** — produces a `DecisionPlan` with primary + ranked backup options; weekend_trip runs parallel hotel + flight searches; city_trip runs parallel hotel + restaurant + bar searches and produces 3 tiered packages (Upscale / Trendy / Local vibe)
+4. **Modular planner engine** (`lib/agent/planner-engine/`) — generic tiered-package engine shared by all trip scenarios; new scenarios only need an `EngineConfig` factory
+5. **SSE streaming** — streams plan chunks to the client in real time
 
 ## Features
 
-- Natural language search with automatic scenario detection (date night, weekend trip, category search)
+- Natural language search with automatic scenario detection (date night, weekend trip, city trip, category search)
 - Multilingual support — Chinese queries return Chinese results via MiniMax NLU
 - 27 US cities + GPS-based "Near Me" mode + custom landmark search
 - List view and full-screen interactive map view
@@ -93,11 +94,13 @@ app/
 lib/
   agent.ts              # Thin orchestrator — routes to sub-modules, runs restaurant pipeline inline
   agent/
-    parse/              # Intent parsers per category (restaurant, hotel, flight, credit-card, …)
+    parse/              # Intent parsers per category (restaurant, hotel, flight, credit-card, city-trip, …)
     pipelines/          # Category pipelines (hotel, flight, credit-card, laptop, smartphone, headphone)
-    planners/           # Scenario planners (weekend-trip, date-night)
+    planners/           # Scenario planners (weekend-trip, date-night, city-trip)
+    planner-engine/     # Generic modular planner engine (selectors, plan-option-builder, types)
+    scenario-configs/   # EngineConfig factories per scenario (city-trip, …)
     composer/           # Scoring + refinement helpers
-  scenario2.ts          # Scenario decision engine (detectScenario, runScenarioPlanner, runWeekendTripPlanner)
+  scenario2.ts          # Scenario decision engine (detectScenario, runScenarioPlanner, runWeekendTripPlanner, runCityTripPlanner)
   nlu.ts                # Multilingual query analysis (MiniMax + English fast-path)
   minimax.ts            # Shared MiniMax chat helper with configurable timeout
   scenarioEvents.ts     # Internal analytics query parsing + Clerk access guard
@@ -139,4 +142,4 @@ Deploy to Vercel — it's a standard Next.js app. Set the environment variables 
 - No user accounts — favorites are stored in localStorage only
 - Restaurant and hotel data sourced from Google Places + SerpAPI (US coverage best)
 - Tavily search enrichment is additive and non-fatal; recommendations still work without it
-- `lib/agent.ts` (2467L) and `app/page.tsx` (2185L) are candidates for future extraction — see TODOS.md
+- Restaurant and hotel data is US-centric; international city_trip searches depend on SerpAPI coverage for the destination
