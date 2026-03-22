@@ -214,6 +214,7 @@ export function runScenarioPlanner(params: {
     ),
     primary_plan: primaryPlan,
     backup_plans: backupPlans,
+    tradeoff_summary: buildDateNightTradeoffSummary(primaryCard, backupCards, params.outputLanguage),
     risks,
     next_actions: buildDateNightActions(
       primaryCard.suggested_refinements ?? [],
@@ -366,6 +367,15 @@ export function runWeekendTripPlanner(params: {
       fallback_reason: undefined,
     },
     backup_plans: backups,
+    tradeoff_summary: buildWeekendTripTradeoffSummary(
+      ordered.map((opt) => ({
+        label: opt.label,
+        total: parseFloat(opt.estimated_total.replace(/[$,]/g, "")) || 0,
+        flightLabel: opt.highlights[0]?.split(":")[0]?.trim() ?? opt.title,
+        hotelLabel: opt.highlights[1]?.split(":")[0]?.trim() ?? "",
+      })),
+      params.outputLanguage
+    ),
     risks: dedupeStrings([
       ...primary.risks,
       ...backups.flatMap((option) => option.risks.slice(0, 1)),
@@ -381,6 +391,100 @@ export function runWeekendTripPlanner(params: {
     ]),
     evidence_items: evidenceItems,
   };
+}
+
+// ─── Plan-level tradeoff summary ──────────────────────────────────────────────
+
+/**
+ * Builds a 1-2 sentence plan-level comparative summary explaining why the
+ * primary is the default pick and what each backup trades away.
+ * Rendered between the primary card and the backup section in ScenarioPlanView.
+ */
+function buildDateNightTradeoffSummary(
+  primaryCard: RecommendationCard,
+  backupCards: RecommendationCard[],
+  language: OutputLanguage
+): string {
+  if (backupCards.length === 0) return "";
+  const parts: string[] = [];
+
+  const primaryScore = primaryCard.score.toFixed(1);
+  parts.push(
+    pickLanguageCopy(
+      language,
+      `${primaryCard.restaurant.name} is the default pick (score ${primaryScore}).`,
+      `${primaryCard.restaurant.name} 是默认推荐（评分 ${primaryScore}）。`
+    )
+  );
+
+  backupCards.forEach((card) => {
+    const scoreDiff = (primaryCard.score - card.score).toFixed(1);
+    const primaryPrice = normalizePrice(primaryCard.restaurant.price);
+    const backupPrice = normalizePrice(card.restaurant.price);
+    if (backupPrice < primaryPrice) {
+      parts.push(
+        pickLanguageCopy(
+          language,
+          `${card.restaurant.name} is cheaper but scores ${scoreDiff} lower.`,
+          `${card.restaurant.name} 更便宜，但评分低 ${scoreDiff} 分。`
+        )
+      );
+    } else if (
+      card.restaurant.review_signals?.noise_level === "quiet" &&
+      primaryCard.restaurant.review_signals?.noise_level !== "quiet"
+    ) {
+      parts.push(
+        pickLanguageCopy(
+          language,
+          `${card.restaurant.name} is quieter but trades some overall score (−${scoreDiff}).`,
+          `${card.restaurant.name} 更安静，但整体评分低 ${scoreDiff} 分。`
+        )
+      );
+    } else if (card.restaurant.rating > primaryCard.restaurant.rating) {
+      parts.push(
+        pickLanguageCopy(
+          language,
+          `${card.restaurant.name} has stronger public ratings but a lower composite score (−${scoreDiff}).`,
+          `${card.restaurant.name} 大众评分更高，但综合评分低 ${scoreDiff} 分。`
+        )
+      );
+    } else {
+      parts.push(
+        pickLanguageCopy(
+          language,
+          `${card.restaurant.name} is the next-best alternative (−${scoreDiff}).`,
+          `${card.restaurant.name} 是次优备选（评分低 ${scoreDiff} 分）。`
+        )
+      );
+    }
+  });
+
+  return parts.join(" ");
+}
+
+function buildWeekendTripTradeoffSummary(
+  packages: Array<{ label: string; total: number; flightLabel: string; hotelLabel: string }>,
+  language: OutputLanguage
+): string {
+  if (packages.length < 2) return "";
+  const primary = packages[0];
+  const backups = packages.slice(1);
+  const primaryStr = pickLanguageCopy(
+    language,
+    `${primary.label} is the default: ${primary.flightLabel} + ${primary.hotelLabel} (~$${Math.round(primary.total)}).`,
+    `${primary.label} 是默认方案：${primary.flightLabel} + ${primary.hotelLabel}（约 $${Math.round(primary.total)}）。`
+  );
+  const backupStrs = backups.map((b) => {
+    const diff = b.total - primary.total;
+    const sign = diff >= 0 ? "+" : "−";
+    const absDiff = Math.abs(Math.round(diff));
+    return pickLanguageCopy(
+      language,
+      `${b.label} costs ${sign}$${absDiff} vs. the default (${b.flightLabel} + ${b.hotelLabel}).`,
+      `${b.label} 比默认方案 ${sign}$${absDiff}（${b.flightLabel} + ${b.hotelLabel}）。`
+    );
+  });
+  return [primaryStr, ...backupStrs].join(" ");
 }
 
 function buildDateNightGoal(

@@ -921,4 +921,82 @@ describe("runBigPurchasePlanner", () => {
     expect(result?.output_language).toBe("zh");
     expect(result?.primary_plan.label).toContain("主推");
   });
+
+  it("sets tradeoff_summary on big purchase plan with backups", () => {
+    const result = runBigPurchasePlanner({
+      intent: baseBigPurchaseIntent(),
+      recommendations: [
+        makeLaptopCard({ id: "l1", name: "Top Pick", price_usd: 1999 }),
+        makeLaptopCard({ id: "l2", name: "Budget Option", price_usd: 999 }),
+      ],
+      outputLanguage: "en",
+    });
+    expect(result?.tradeoff_summary).toBeDefined();
+    expect(typeof result?.tradeoff_summary).toBe("string");
+    expect(result?.tradeoff_summary?.length).toBeGreaterThan(0);
+  });
+});
+
+// ─── tradeoff_summary ────────────────────────────────────────────────────────
+
+describe("tradeoff_summary", () => {
+  it("runScenarioPlanner sets tradeoff_summary with 2 backup cards", () => {
+    const primary = makeCard({ score: 9.2, restaurant: makeRestaurant({ name: "Nobu", price: "$$$$" }) });
+    const backup1 = makeCard({ score: 8.8, restaurant: makeRestaurant({ id: "r2", name: "Le Bernardin", price: "$$$$" }) });
+    const backup2 = makeCard({ score: 8.0, restaurant: makeRestaurant({ id: "r3", name: "Café Boulud", price: "$$" }) });
+    const result = runScenarioPlanner({
+      scenarioIntent: { scenario: "date_night", category: "restaurant" },
+      recommendations: [primary, backup1, backup2],
+      userMessage: "romantic dinner",
+      cityLabel: "NYC",
+      outputLanguage: "en",
+    });
+    expect(result.tradeoff_summary).toBeDefined();
+    expect(result.tradeoff_summary).toContain("Nobu");
+  });
+
+  it("runScenarioPlanner sets empty tradeoff_summary with no backups", () => {
+    const result = runScenarioPlanner({
+      scenarioIntent: { scenario: "date_night", category: "restaurant" },
+      recommendations: [makeCard()],
+      userMessage: "romantic dinner",
+      cityLabel: "NYC",
+      outputLanguage: "en",
+    });
+    expect(result.tradeoff_summary).toBe("");
+  });
+
+  it("runScenarioPlanner tradeoff_summary in zh contains restaurant name", () => {
+    const primary = makeCard({ score: 9.0, restaurant: makeRestaurant({ name: "東京餐廳" }) });
+    const backup = makeCard({ score: 8.5, restaurant: makeRestaurant({ id: "r2", name: "大阪屋" }) });
+    const result = runScenarioPlanner({
+      scenarioIntent: { scenario: "date_night", category: "restaurant" },
+      recommendations: [primary, backup],
+      userMessage: "找一个约会餐厅",
+      cityLabel: "NYC",
+      outputLanguage: "zh",
+    });
+    expect(result.tradeoff_summary).toContain("東京餐廳");
+  });
+
+  it("runWeekendTripPlanner sets tradeoff_summary with price comparison", () => {
+    const result = runWeekendTripPlanner({
+      scenarioIntent: makeBaseWeekendTripIntent(),
+      flightRecommendations: [
+        makeFlightCard({ flight: makeFlight({ id: "f1", price: 200 }), rank: 1 }),
+        makeFlightCard({ flight: makeFlight({ id: "f2", price: 150 }), rank: 2 }),
+        makeFlightCard({ flight: makeFlight({ id: "f3", price: 350 }), rank: 3 }),
+      ],
+      hotelRecommendations: [
+        makeHotelCard({ hotel: makeHotel({ id: "h1", price_per_night: 180 }), rank: 1 }),
+        makeHotelCard({ hotel: makeHotel({ id: "h2", price_per_night: 120 }), rank: 2 }),
+        makeHotelCard({ hotel: makeHotel({ id: "h3", price_per_night: 320 }), rank: 3 }),
+      ],
+      creditCardRecommendations: [],
+      outputLanguage: "en",
+    });
+    expect(result?.tradeoff_summary).toBeDefined();
+    expect(typeof result?.tradeoff_summary).toBe("string");
+    expect(result?.tradeoff_summary!.length).toBeGreaterThan(0);
+  });
 });

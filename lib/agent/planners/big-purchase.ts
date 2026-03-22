@@ -333,6 +333,24 @@ export function runBigPurchasePlanner(params: {
     scenario_brief: scenarioBrief,
     primary_plan: primaryOption,
     backup_plans: backupOptions,
+    tradeoff_summary: (() => {
+      const primaryName = primaryCard.device.name;
+      const primaryScore = primaryCard.final_score?.toFixed(1) ?? "";
+      const scoreStr = primaryScore
+        ? pickLanguageCopy(lang, ` (score ${primaryScore})`, `（评分 ${primaryScore}）`)
+        : "";
+      const lead = pickLanguageCopy(
+        lang,
+        `${primaryName}${scoreStr} is the top pick.`,
+        `${primaryName}${scoreStr} 是首选。`
+      );
+      const backupSummaries = backupOptions.map((opt) =>
+        opt.tradeoff_reason
+          ? pickLanguageCopy(lang, `${opt.title}: ${opt.tradeoff_reason}.`, `${opt.title}：${opt.tradeoff_reason}。`)
+          : null
+      ).filter(Boolean);
+      return [lead, ...backupSummaries].join(" ");
+    })(),
     risks: backupOptions.flatMap((o) => o.risks.slice(0, 1)),
     next_actions: [
       ...openLinkActions,

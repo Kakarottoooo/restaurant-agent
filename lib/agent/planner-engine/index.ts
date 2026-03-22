@@ -121,6 +121,7 @@ export function runModularPlanner(params: {
     scenario_brief: config.briefLines,
     primary_plan: { ...primary, label: pickLanguageCopy(lang, "Main pick", "主方案"), fallback_reason: undefined },
     backup_plans: backups,
+    tradeoff_summary: config.tradeoff_summary,
     risks,
     next_actions: buildDefaultActions(lang),
     evidence_card_ids: evidenceCardIds,

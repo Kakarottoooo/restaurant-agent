@@ -90,5 +90,10 @@ export function buildCityTripEngineConfig(
     briefLines: buildBriefLines(intent, lang),
     nights,
     startDate: intent.start_date,
+    tradeoff_summary: pickLanguageCopy(
+      lang,
+      "Upscale is the default: best hotel quality and refined dining. Trendy trades polish for social energy. Local vibe skips tourist traps for an authentic neighborhood feel.",
+      "默认推荐高端精致套餐：酒店质量最佳，餐饮精致。时髦活力换来更好的社交氛围。本地地道放弃精致感，换取真实的街区体验。"
+    ),
   };
 }

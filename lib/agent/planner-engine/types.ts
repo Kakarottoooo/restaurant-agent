@@ -44,4 +44,6 @@ export interface EngineConfig {
   briefLines: string[];
   nights: number;
   startDate?: string;
+  /** Optional plan-level comparative summary passed through to DecisionPlan.tradeoff_summary. */
+  tradeoff_summary?: string;
 }
