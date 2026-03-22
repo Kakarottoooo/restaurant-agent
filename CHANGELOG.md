@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.2.20.0] - 2026-03-22
+
+### Added
+- **Gift recommendation OS (5a-1)**: New `gift` scenario powered by SerpAPI Google Shopping. Ask "find a birthday gift for my girlfriend who loves hiking under $80" — the agent parses recipient, relationship, occasion, interests, and budget, then runs three parallel Google Shopping searches to return a `DecisionPlan` with three gift angles: **Safe pick** (crowd-pleasing, well-reviewed), **Most thoughtful** (personalised to their interests), and **Most creative** (unique surprise they wouldn't buy themselves). Each option includes a direct buy link, price, retailer, and rating. Falls back to a Google Shopping search URL when no direct product link is available. Full bilingual (EN/ZH) support with appropriate copy for all three tiers.
+- **`lib/serpapi-shopping.ts`**: SerpAPI Google Shopping client — queries `engine=google_shopping`, parses product titles, prices, sources, links, images, ratings, and review counts. API key read inside the function (not at module level) for `vi.stubEnv` compatibility in tests.
+- **`lib/agent/parse/gift.ts`**: Gift intent parser — detects occasion (birthday, anniversary, Christmas, Valentine's, Mother's Day, etc.), relationship (partner, parent, sibling, friend, colleague, boss, child), interests (cooking, hiking, gaming, fitness, reading, music, etc.), and budget via regex. Marks missing fields for `needs_clarification`.
+- **`lib/agent/planners/gift.ts`**: Custom gift planner — builds three search queries (safe/thoughtful/creative) in parallel, maps the top result from each to a `PlanOption`, and assembles a `DecisionPlan` with tier-specific copy and refine actions.
+
 ## [0.2.19.0] - 2026-03-22
 
 ### Added

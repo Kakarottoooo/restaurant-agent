@@ -37,6 +37,7 @@
 **Pros:** EngineConfig 模式已存在，新场景成本极低。商品搜索可复用 SerpAPI (shopping search)。无需新 DB 表。
 **Cons:** 商品数据质量参差不齐；Amazon/商家 URL 有 affiliate 合规问题需注意。
 **Context:** 新建 `lib/agent/scenario-configs/gift.ts` EngineConfig + `lib/agent/parse/gift.ts` 意图解析。数据源：SerpAPI shopping API。 评分维度：偏好匹配度 + 独特性 + 实用性 + 价位合理性。
+**Completed:** v0.2.20.0 (2026-03-22)
 
 ---
 
