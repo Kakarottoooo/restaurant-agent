@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.2.2.0] - 2026-03-22
+
+### Added
+- **City trip scenario** (`city_trip`): new scenario that builds 3 tiered packages (Upscale / Trendy / Local vibe) combining hotel + restaurant + bar recommendations for multi-night city visits — ask things like "3 nights in Tokyo, want great food and nightlife"
+- **Modular planner engine** (`lib/agent/planner-engine/`): generic tiered-package engine that can power any trip scenario; replaces per-scenario boilerplate with configuration — new scenarios now only need an `EngineConfig` factory instead of 400+ lines of custom code
+- **City trip NLU detection**: `detectScenarioFromMessage` now recognizes city trip queries (destination + hotel + activities) and routes to the `city_trip` planner; includes priority logic to prefer `weekend_trip` when flight signals are present
+- **City trip clarification flow**: when the agent needs more info (missing destination, dates, etc.), users now see a clear "I need one or two more details" message instead of silent fallthrough
+- **City Trip analytics filter tab**: internal analytics dashboard now has a City Trip filter alongside Date Night, Weekend Trip, and Big Purchase
+
+### Fixed
+- **Analytics scenario filter** (`lib/scenarioEvents.ts`): `city_trip` was missing from `VALID_SCENARIOS` set — analytics queries filtered by city_trip scenario returned nothing silently; now included
+
 ## [0.2.1.1] - 2026-03-21
 
 ### Fixed
