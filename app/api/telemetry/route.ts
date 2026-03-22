@@ -1,7 +1,9 @@
 import { auth } from "@clerk/nextjs/server";
 import { NextRequest, NextResponse } from "next/server";
 import { ensureScenarioEventsTable, sql } from "@/lib/db";
-import { ScenarioTelemetryEvent } from "@/lib/types";
+import { ScenarioTelemetryEvent, ScenarioType } from "@/lib/types";
+
+const VALID_SCENARIO_TYPES = new Set<ScenarioType>(["date_night", "weekend_trip", "big_purchase"]);
 
 export interface SelectionEvent {
   type: "map_click" | "reserve_click";
@@ -33,6 +35,9 @@ export async function POST(req: NextRequest) {
     const event = (await req.json()) as TelemetryEvent;
 
     if (isScenarioEvent(event)) {
+      if (!VALID_SCENARIO_TYPES.has(event.scenario)) {
+        return NextResponse.json({ error: "Invalid telemetry event" }, { status: 400 });
+      }
       const { userId } = await auth();
       await ensureScenarioEventsTable();
       await sql`
