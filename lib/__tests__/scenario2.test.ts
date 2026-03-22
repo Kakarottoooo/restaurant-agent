@@ -5,8 +5,10 @@ import {
   parseScenarioIntent,
   runScenarioPlanner,
   runWeekendTripPlanner,
+  runCityTripPlanner,
 } from "../scenario2";
 import type {
+  CityTripIntent,
   CreditCardRecommendationCard,
   DateNightIntent,
   Flight,
@@ -95,12 +97,42 @@ describe("detectScenarioFromMessage", () => {
     expect(detectScenarioFromMessage("booking a flight and hotel for the weekend")).toBe("weekend_trip");
   });
 
-  it("returns null for a plain restaurant query", () => {
-    expect(detectScenarioFromMessage("best sushi in San Francisco")).toBeNull();
+  it("detects city_trip from travel + hotel + restaurant signals", () => {
+    expect(
+      detectScenarioFromMessage(
+        "i am going to travel to la, i need a hotel for 3 days and want to go to music bars and try some good restaurants, formulate several plans for me"
+      )
+    ).toBe("city_trip");
   });
 
-  it("returns null for a hotel-only query", () => {
+  it("detects city_trip from visiting + hotel + bars", () => {
+    expect(
+      detectScenarioFromMessage("visiting Nashville next friday, reserve a 4 star hotel and suggest some bars and restaurants")
+    ).toBe("city_trip");
+  });
+
+  it("detects city_trip from itinerary keyword + hotel", () => {
+    expect(
+      detectScenarioFromMessage("help me build an itinerary for NYC with hotel and dining")
+    ).toBe("city_trip");
+  });
+
+  it("does not detect city_trip from hotel-only without activities", () => {
     expect(detectScenarioFromMessage("find me a hotel in Boston")).toBeNull();
+  });
+
+  it("does not detect city_trip from restaurant-only without hotel", () => {
+    expect(detectScenarioFromMessage("best bars and restaurants in LA")).toBeNull();
+  });
+
+  it("detects weekend_trip over city_trip when flight+hotel both present", () => {
+    expect(
+      detectScenarioFromMessage("book a flight and hotel to Chicago this weekend")
+    ).toBe("weekend_trip");
+  });
+
+  it("returns null for a plain restaurant query", () => {
+    expect(detectScenarioFromMessage("best sushi in San Francisco")).toBeNull();
   });
 
   it("returns null for empty string", () => {
@@ -133,7 +165,7 @@ describe("detectScenario", () => {
   it("returns null for non-restaurant category even with date words", () => {
     const intent = { category: "hotel" as const, party_size: 2 };
     // detectScenario only returns date_night for restaurant category
-    expect(detectScenario("romantic hotel for my partner", intent as RestaurantIntent)).toBeNull();
+    expect(detectScenario("romantic hotel for my partner", intent as unknown as RestaurantIntent)).toBeNull();
   });
 
   it("returns null for a plain restaurant query", () => {
@@ -168,37 +200,37 @@ describe("parseScenarioIntent", () => {
 
   it("infers stage=first_date from 'first date' in message", () => {
     const intent: RestaurantIntent = { ...baseRestaurantIntent(), purpose: "date" };
-    const result = parseScenarioIntent("best restaurant for a first date", intent);
+    const result = parseScenarioIntent("best restaurant for a first date", intent) as DateNightIntent | null;
     expect(result?.stage).toBe("first_date");
   });
 
   it("infers stage=anniversary from 'anniversary' in message", () => {
     const intent: RestaurantIntent = { ...baseRestaurantIntent(), purpose: "date" };
-    const result = parseScenarioIntent("anniversary dinner reservation", intent);
+    const result = parseScenarioIntent("anniversary dinner reservation", intent) as DateNightIntent | null;
     expect(result?.stage).toBe("anniversary");
   });
 
   it("infers stage=steady_relationship from 'girlfriend' in message", () => {
     const intent: RestaurantIntent = { ...baseRestaurantIntent(), purpose: "date" };
-    const result = parseScenarioIntent("dinner with my girlfriend", intent);
+    const result = parseScenarioIntent("dinner with my girlfriend", intent) as DateNightIntent | null;
     expect(result?.stage).toBe("steady_relationship");
   });
 
   it("sets wants_quiet_buffer=true when noise_level is quiet", () => {
     const intent: RestaurantIntent = { ...baseRestaurantIntent(), purpose: "date", noise_level: "quiet" };
-    const result = parseScenarioIntent("romantic restaurant", intent);
+    const result = parseScenarioIntent("romantic restaurant", intent) as DateNightIntent | null;
     expect(result?.wants_quiet_buffer).toBe(true);
   });
 
   it("sets wants_quiet_buffer=true when message mentions 'quiet'", () => {
     const intent: RestaurantIntent = { ...baseRestaurantIntent(), purpose: "date" };
-    const result = parseScenarioIntent("quiet romantic dinner for two", intent);
+    const result = parseScenarioIntent("quiet romantic dinner for two", intent) as DateNightIntent | null;
     expect(result?.wants_quiet_buffer).toBe(true);
   });
 
   it("preserves base intent fields (cuisine, party_size)", () => {
     const intent: RestaurantIntent = { ...baseRestaurantIntent(), purpose: "date", cuisine: "French" };
-    const result = parseScenarioIntent("romantic French restaurant", intent);
+    const result = parseScenarioIntent("romantic French restaurant", intent) as DateNightIntent | null;
     expect(result?.cuisine).toBe("French");
     expect(result?.party_size).toBe(2);
   });
@@ -390,13 +422,13 @@ describe("parseScenarioIntent", () => {
 
   it("sets wants_quiet_buffer when noise_level is quiet", () => {
     const intent: RestaurantIntent = { category: "restaurant", purpose: "date", noise_level: "quiet" };
-    const result = parseScenarioIntent("quiet romantic dinner", intent);
+    const result = parseScenarioIntent("quiet romantic dinner", intent) as DateNightIntent | null;
     expect(result?.wants_quiet_buffer).toBe(true);
   });
 
   it("sets wants_quiet_buffer from message keywords", () => {
     const intent: RestaurantIntent = { category: "restaurant", purpose: "date" };
-    const result = parseScenarioIntent("romantic dinner, not too loud, easy conversation", intent);
+    const result = parseScenarioIntent("romantic dinner, not too loud, easy conversation", intent) as DateNightIntent | null;
     expect(result?.wants_quiet_buffer).toBe(true);
   });
 
@@ -408,7 +440,7 @@ describe("parseScenarioIntent", () => {
       party_size: 2,
       budget_per_person: 80,
     };
-    const result = parseScenarioIntent("romantic Italian dinner", intent);
+    const result = parseScenarioIntent("romantic Italian dinner", intent) as DateNightIntent | null;
     expect(result?.cuisine).toBe("Italian");
     expect(result?.party_size).toBe(2);
     expect(result?.budget_per_person).toBe(80);
@@ -484,8 +516,8 @@ function makeBaseWeekendTripIntent(): WeekendTripIntent {
     scenario_goal: "Weekend trip to Chicago",
     departure_city: "New York",
     destination_city: "Chicago",
-    trip_pace: "relaxed",
-    hotel_style: "comfort",
+    trip_pace: "balanced",
+    hotel_style: "comfortable",
     planning_assumptions: [],
     needs_clarification: false,
     missing_fields: [],
@@ -573,5 +605,129 @@ describe("runWeekendTripPlanner", () => {
       outputLanguage: "zh",
     });
     expect(result?.output_language).toBe("zh");
+  });
+});
+
+// ─── runCityTripPlanner ────────────────────────────────────────────────────────
+
+function makeBaseCityTripIntent(overrides: Partial<CityTripIntent> = {}): CityTripIntent {
+  return {
+    category: "trip",
+    scenario: "city_trip",
+    destination_city: "Tokyo",
+    nights: 3,
+    travelers: 2,
+    activities: ["dining", "nightlife"],
+    cuisine_preferences: ["Japanese", "Ramen"],
+    hotel_star_rating: 4,
+    vibe: "vibrant",
+    planning_assumptions: [],
+    needs_clarification: false,
+    missing_fields: [],
+    ...overrides,
+  };
+}
+
+describe("runCityTripPlanner", () => {
+  it("returns null when no hotels and no restaurants provided", () => {
+    const result = runCityTripPlanner({
+      scenarioIntent: makeBaseCityTripIntent(),
+      hotelRecommendations: [],
+      restaurantRecommendations: [],
+      barRecommendations: [],
+      outputLanguage: "en",
+    });
+    expect(result).toBeNull();
+  });
+
+  it("produces a valid DecisionPlan with hotel + restaurant data", () => {
+    const result = runCityTripPlanner({
+      scenarioIntent: makeBaseCityTripIntent(),
+      hotelRecommendations: [
+        makeHotelCard({ hotel: makeHotel({ id: "h1", star_rating: 5, rating: 4.8 }), rank: 1, score: 9.2 }),
+        makeHotelCard({ hotel: makeHotel({ id: "h2", star_rating: 4, rating: 4.3 }), rank: 2, score: 8.1 }),
+        makeHotelCard({ hotel: makeHotel({ id: "h3", star_rating: 3, rating: 4.0 }), rank: 3, score: 7.5 }),
+      ],
+      restaurantRecommendations: [
+        makeCard({ restaurant: makeRestaurant({ id: "r1" }), rank: 1, score: 9.0 }),
+        makeCard({ restaurant: makeRestaurant({ id: "r2" }), rank: 2, score: 8.0 }),
+        makeCard({ restaurant: makeRestaurant({ id: "r3" }), rank: 3, score: 7.0 }),
+      ],
+      barRecommendations: [],
+      outputLanguage: "en",
+    });
+
+    expect(result).not.toBeNull();
+    expect(result?.scenario).toBe("city_trip");
+    expect(result?.primary_plan).toBeDefined();
+    expect(result?.backup_plans.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("plan has required DecisionPlan fields", () => {
+    const result = runCityTripPlanner({
+      scenarioIntent: makeBaseCityTripIntent(),
+      hotelRecommendations: [makeHotelCard()],
+      restaurantRecommendations: [makeCard()],
+      barRecommendations: [],
+      outputLanguage: "en",
+    });
+    expect(result).toMatchObject({
+      id: expect.any(String),
+      scenario: "city_trip",
+      output_language: "en",
+      title: expect.any(String),
+      summary: expect.any(String),
+      primary_plan: expect.objectContaining({ id: expect.any(String) }),
+      backup_plans: expect.any(Array),
+      evidence_items: expect.any(Array),
+      next_actions: expect.any(Array),
+    });
+  });
+
+  it("planId includes destination city", () => {
+    const result = runCityTripPlanner({
+      scenarioIntent: makeBaseCityTripIntent({ destination_city: "Paris" }),
+      hotelRecommendations: [makeHotelCard()],
+      restaurantRecommendations: [makeCard()],
+      barRecommendations: [],
+      outputLanguage: "en",
+    });
+    expect(result?.id).toContain("Paris");
+  });
+
+  it("returns Chinese output when outputLanguage is zh", () => {
+    const result = runCityTripPlanner({
+      scenarioIntent: makeBaseCityTripIntent({ destination_city: "东京" }),
+      hotelRecommendations: [makeHotelCard()],
+      restaurantRecommendations: [makeCard()],
+      barRecommendations: [],
+      outputLanguage: "zh",
+    });
+    expect(result?.output_language).toBe("zh");
+    expect(result?.title).toContain("东京");
+  });
+
+  it("works with only hotels (no restaurants or bars)", () => {
+    const result = runCityTripPlanner({
+      scenarioIntent: makeBaseCityTripIntent(),
+      hotelRecommendations: [makeHotelCard()],
+      restaurantRecommendations: [],
+      barRecommendations: [],
+      outputLanguage: "en",
+    });
+    expect(result).not.toBeNull();
+    expect(result?.scenario).toBe("city_trip");
+  });
+
+  it("works with only restaurants (no hotels)", () => {
+    const result = runCityTripPlanner({
+      scenarioIntent: makeBaseCityTripIntent(),
+      hotelRecommendations: [],
+      restaurantRecommendations: [makeCard()],
+      barRecommendations: [],
+      outputLanguage: "en",
+    });
+    expect(result).not.toBeNull();
+    expect(result?.scenario).toBe("city_trip");
   });
 });
