@@ -7,10 +7,12 @@ AI-powered decision engine for dining, travel, and lifestyle. Tell it what you'r
 Two modes depending on your query:
 
 ### Category cards (restaurant, hotel, flight, laptop)
-Three-layer AI pipeline:
+Five-layer AI pipeline:
 1. **Intent parsing** (MiniMax) — extracts structured requirements from your message
 2. **Parallel data gathering** — Google Places / SerpAPI for real data + Tavily editorial context, run concurrently
-3. **Ranking & explanation** (MiniMax) — scores candidates and generates personalized explanations, watch-outs, and "skip if" notes
+3. **Review signal extraction** — MiniMax parses real user reviews (Google Maps + Yelp/Reddit via Tavily) into structured signals: noise level, wait time, date suitability score, service pace, notable dishes, red flags
+4. **Structured scoring** — `computeWeightedScore()` ranks candidates on 5 weighted dimensions (scene match 30%, budget match 25%, review quality 20%, location convenience 15%, preference match 10%) minus red-flag penalty; system-computed rather than free-form AI guess
+5. **Ranking & explanation** (MiniMax) — fills dimension scores, writes personalized explanations, watch-outs, and "skip if" notes; result re-sorted by `weighted_total`
 
 ### Scenario plan (date_night, weekend_trip, city_trip, big_purchase, concert_event, gift, fitness)
 Scenario decision engine (`lib/scenario2.ts`):
@@ -42,6 +44,8 @@ Scenario decision engine (`lib/scenario2.ts`):
 - **Concert & event ticket OS** — "find me a Taylor Swift concert in NYC" returns up to 3 events from Ticketmaster with direct buy-ticket links, venue info, price ranges, and Google Maps links; supports concerts, festivals, theater, sports, and comedy
 - **Gift recommendation OS** — "find me a birthday gift for my girlfriend who loves hiking under $80" returns 3 curated options (Safe pick / Most thoughtful / Most creative) sourced from SerpAPI Google Shopping with direct purchase links
 - **Fitness/wellness OS** — "find me a vinyasa yoga class in Brooklyn on Saturday morning under $25" returns 3 studio options (Top rated / Most popular / Best value) sourced from Google Places with ClassPass + Mindbody + Google Maps booking links; covers yoga, pilates, spin, HIIT, CrossFit, boxing, barre, dance, meditation, swimming, running, martial arts
+- **Review signal extraction** — each restaurant candidate gets structured signals from real user reviews (Google Maps preferred, Yelp/Reddit/TripAdvisor via Tavily as fallback): noise level, wait times, date suitability, notable dishes, red flags; shown in "Real reviews say" block on cards
+- **Structured scoring** — restaurant ranking uses 5 weighted dimensions (scene match, budget match, review quality, location convenience, preference match) computed deterministically; collapsible score breakdown panel on each card
 - Save favorites (localStorage)
 - Dark mode (system preference)
 - PWA-installable with offline support
