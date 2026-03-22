@@ -314,6 +314,41 @@ export default function Home() {
       return;
     }
 
+    if (action.type === "send_for_vote") {
+      chat.trackDecisionPlanEvent({
+        type: "action_clicked",
+        action_id: action.id,
+        option_id: chat.decisionPlan?.primary_plan.id,
+        query: lastUserQuery,
+      });
+
+      if (!chat.decisionPlan) throw new Error("No plan to share for vote");
+
+      // Mark vote_mode on the plan before saving
+      const voteModePlan = { ...chat.decisionPlan, vote_mode: true };
+      const res = await fetch("/api/plan/save", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          plan: voteModePlan,
+          session_id: chat.getSessionId(),
+          query_text: lastUserQuery,
+          parent_plan_id: refinedFromPlanIdRef.current ?? undefined,
+        }),
+      });
+      if (!res.ok) throw new Error(`Save failed: ${res.status}`);
+
+      const voteUrl = `${window.location.origin}/plan/${voteModePlan.id}?vote=true`;
+      await navigator.clipboard.writeText(voteUrl);
+
+      setPlanFeedbackMessage(
+        chat.decisionPlan.output_language === "zh"
+          ? "投票链接已复制 — 发给朋友吧！"
+          : "Vote link copied — send it to your friends!"
+      );
+      return;
+    }
+
     if (action.type === "export_brief") {
       if (!chat.decisionPlan) throw new Error("No plan to export");
 

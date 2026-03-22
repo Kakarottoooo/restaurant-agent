@@ -194,6 +194,7 @@ export interface PlanAction {
   id: string;
   type:
     | "share_plan"
+    | "send_for_vote"
     | "export_brief"
     | "refine"
     | "swap_backup"
@@ -260,6 +261,8 @@ export interface DecisionPlan {
   trip_card_callout?: string;
   /** True when the planner found more than 2 backup options but capped the display at 2. */
   show_more_available?: boolean;
+  /** True when this plan was shared in group-vote mode — enables vote UI on the share page. */
+  vote_mode?: boolean;
   risks: string[];
   next_actions: PlanAction[];
   evidence_card_ids: string[];

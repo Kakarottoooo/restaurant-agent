@@ -636,6 +636,16 @@ function buildDateNightActions(
       ),
     },
     {
+      id: "send-for-vote",
+      type: "send_for_vote",
+      label: pickLanguageCopy(language, "Send to friends", "发给朋友投票"),
+      description: pickLanguageCopy(
+        language,
+        "Let your group vote on the options.",
+        "让朋友们投票选出最喜欢的方案。"
+      ),
+    },
+    {
       id: "request-changes",
       type: "request_changes",
       label: pickLanguageCopy(language, "Needs tweaks", "需要调整"),
@@ -758,6 +768,12 @@ function buildWeekendTripActions(
       type: "share_plan",
       label: pickLanguageCopy(language, "Share trip brief", "分享行程摘要"),
       description: pickLanguageCopy(language, "Copy a shareable link for this trip package.", "复制这套旅行方案的分享链接。"),
+    },
+    {
+      id: "send-for-vote",
+      type: "send_for_vote",
+      label: pickLanguageCopy(language, "Send to friends", "发给朋友投票"),
+      description: pickLanguageCopy(language, "Let your group vote on the trip options.", "让朋友们投票选出最喜欢的方案。"),
     },
     {
       id: "refine-cheaper",

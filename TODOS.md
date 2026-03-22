@@ -60,17 +60,6 @@ Current `open_link` actions in `lib/types.ts` have a `url: string` field. The pl
 
 ---
 
-### 3b-3: Send plan to friends (group voting)
-**Priority:** P1
-**What:** "Send to friends" ActionRail button generates a shareable link where multiple people can vote on the backup options. Requester sees a live tally. When consensus is reached, system confirms the winner.
-**Why:** Many plans (date night, group trip) involve multiple people. Current share flow only shows one partner a read-only view. Voting removes the "where do YOU want to go?" back-and-forth.
-**Pros:** High social virality. Each share is a new user touchpoint.
-**Cons:** Requires a new `plan_votes` DB table. UI for the vote page needs to be built.
-**Context:** New DB table: `plan_votes (id, plan_id, voter_session, option_index, created_at)`. New route: `POST /api/plan/[id]/vote` records a vote. `GET /api/plan/[id]/votes` returns tally. Shared plan page (`app/plan/[id]/page.tsx`) shows vote buttons when `plan.vote_mode = true`. Requester's view shows live tally. Add `vote_mode?: boolean` to `DecisionPlan`. ActionRail new action type: `send_for_vote` — generates share URL with `?vote=true` param.
-**Depends on:** Existing share plan infrastructure (completed v0.2.3.0).
-
----
-
 ### 3b-4: Trip brief generation
 **Priority:** P2
 **What:** "Export trip brief" generates a clean text/markdown summary of the entire plan: hotel name + address + check-in time, flight details, restaurant reservation, total budget, key risks, confirmation codes (if provided). Shareable as a single document.
@@ -164,6 +153,10 @@ Current `open_link` actions in `lib/types.ts` have a `url: string` field. The pl
 ### SSE stream timeout for scenario planners
 **Completed:** v0.2.5.0 (2026-03-22)
 Server-side 45s `Promise.race` timeout wraps `runAgent()` in `app/api/chat/route.ts`. Client-side `AbortController` stall watchdog (50s) in `app/hooks/useChat.ts` cancels hung streams with a clear user-facing retry message.
+
+### 3b-3: Send plan to friends (group voting)
+**Completed:** v0.2.13.0 (2026-03-22)
+`plan_votes` table with unique `(plan_id, voter_session)` index. `POST /api/plan/[id]/vote` upserts a vote; `GET` returns tally by option_id. Share page renders vote UI (all options + vote buttons + live progress bars) when `?vote=true` is present. `send_for_vote` ActionRail action (all 4 planners) saves the plan with `vote_mode: true` and copies `?vote=true` URL to clipboard. 7 new tests.
 
 ### 3a-1: Collapse all scenario outputs to 1+2 format
 **Completed:** v0.2.12.0 (2026-03-22)

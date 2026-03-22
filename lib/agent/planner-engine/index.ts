@@ -30,6 +30,12 @@ function buildDefaultActions(lang: OutputLanguage): PlanAction[] {
       description: pickLanguageCopy(lang, "Finalize the selected package", "确定所选方案"),
     },
     {
+      id: "send-for-vote",
+      type: "send_for_vote",
+      label: pickLanguageCopy(lang, "Send to friends", "发给朋友投票"),
+      description: pickLanguageCopy(lang, "Let your group vote on the trip options.", "让朋友们投票选出最喜欢的方案。"),
+    },
+    {
       id: "swap-backup",
       type: "swap_backup",
       label: pickLanguageCopy(lang, "Try a different package", "换一套方案"),

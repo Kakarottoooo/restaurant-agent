@@ -362,6 +362,12 @@ export function runBigPurchasePlanner(params: {
         description: pickLanguageCopy(lang, "Copy a shareable link for this recommendation.", "复制这个推荐方案的分享链接。"),
       },
       {
+        id: "send-for-vote",
+        type: "send_for_vote",
+        label: pickLanguageCopy(lang, "Send to friends", "发给朋友投票"),
+        description: pickLanguageCopy(lang, "Let others vote on the options.", "让朋友们投票选出最喜欢的方案。"),
+      },
+      {
         id: "refine-0",
         type: "refine",
         label: pickLanguageCopy(lang, "Show cheaper options", "看更便宜的"),

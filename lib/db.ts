@@ -6,6 +6,7 @@ let scenarioEventsTableReady: Promise<void> | null = null;
 let decisionPlansTableReady: Promise<void> | null = null;
 let planOutcomesTableReady: Promise<void> | null = null;
 let feedbackPromptsTableReady: Promise<void> | null = null;
+let planVotesTableReady: Promise<void> | null = null;
 
 /**
  * Initialize the database tables if they don't exist.
@@ -48,6 +49,7 @@ export async function initDb() {
   await ensureDecisionPlansTable();
   await ensurePlanOutcomesTable();
   await ensureFeedbackPromptsTable();
+  await ensurePlanVotesTable();
 }
 
 export async function ensureScenarioEventsTable() {
@@ -154,4 +156,26 @@ export async function ensureFeedbackPromptsTable() {
   }
 
   await feedbackPromptsTableReady;
+}
+
+export async function ensurePlanVotesTable() {
+  if (!planVotesTableReady) {
+    planVotesTableReady = (async () => {
+      await sql`
+        CREATE TABLE IF NOT EXISTS plan_votes (
+          id            BIGSERIAL PRIMARY KEY,
+          plan_id       TEXT NOT NULL,
+          voter_session TEXT NOT NULL,
+          option_id     TEXT NOT NULL,
+          created_at    TIMESTAMPTZ DEFAULT NOW()
+        )
+      `;
+      await sql`CREATE INDEX IF NOT EXISTS plan_votes_plan_idx ON plan_votes (plan_id)`;
+      await sql`CREATE UNIQUE INDEX IF NOT EXISTS plan_votes_voter_idx ON plan_votes (plan_id, voter_session)`;
+    })().catch((err) => {
+      planVotesTableReady = null;
+      throw err;
+    });
+  }
+  await planVotesTableReady;
 }
