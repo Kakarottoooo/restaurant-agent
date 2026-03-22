@@ -249,6 +249,8 @@ export interface DecisionPlan {
   scenario_brief: string[];
   primary_plan: PlanOption;
   backup_plans: PlanOption[];
+  /** Plan-level comparative summary: why primary beats the backups, and what each backup trades off. */
+  tradeoff_summary?: string;
   risks: string[];
   next_actions: PlanAction[];
   evidence_card_ids: string[];

@@ -66,6 +66,20 @@ export default function ScenarioPlanView({
         onLinkClick={(action) => onLinkClick(action, plan.primary_plan.id)}
       />
 
+      {plan.tradeoff_summary && (
+        <p
+          style={{
+            fontFamily: "var(--font-dm-sans)",
+            fontSize: "13px",
+            lineHeight: 1.65,
+            color: "var(--text-secondary)",
+            padding: "0 2px",
+          }}
+        >
+          {plan.tradeoff_summary}
+        </p>
+      )}
+
       {plan.risks.length > 0 && (
         <div
           style={{
