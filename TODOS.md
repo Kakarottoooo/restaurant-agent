@@ -15,9 +15,27 @@
 
 ## Agent / Backend
 
+### SSE stream timeout for scenario planners
+**Priority:** P2
+**What:** When SerpAPI or MiniMax hangs, the SSE stream for date_night/weekend_trip/city_trip/big_purchase never completes — user sees an infinite spinner.
+**Why:** Degrades UX silently; hard to debug in production.
+**Pros:** Fixes a reliability gap across all 4 scenario planners.
+**Cons:** Requires per-planner timeout + client-side timeout detection.
+**Context:** Each planner makes SerpAPI + MiniMax calls via Promise.all(). If any call hangs past the AbortSignal timeout, the SSE stream is never closed. Client has no timeout. Fix: add AbortController with ~30s per planner and a final `data: [DONE]` flush in the catch handler; client should detect stalled stream after 45s.
+**Depends on:** None.
+
 ---
 
 ## Frontend / UI
+
+### ActionRail horizontal scroll on mobile
+**Priority:** P3
+**What:** On small viewports, switch ActionRail from flex-wrap to overflow-x: auto single scrollable row.
+**Why:** 5-7 pills wrapping into 2-3 rows creates visual noise on mobile. Single row is more intentional.
+**Pros:** Cleaner mobile UX. No content hidden.
+**Cons:** Discoverable only if user swipes. No scroll hint — may need a fade gradient at the right edge.
+**Context:** Deferred from Phase 2 (Big Purchase OS + Execution Deep Links). `ActionRail` is in `components/ActionRail.tsx`. Change: remove `flex-wrap`, add `overflow-x: auto`, `white-space: nowrap` to pill container. Add a right-edge fade gradient to hint at more content. Test at 375px with 7 buttons.
+**Depends on:** Phase 2 ship (Big Purchase OS).
 
 ---
 
