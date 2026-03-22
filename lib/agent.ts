@@ -39,6 +39,9 @@ import { buildWeekendTripFlightIntent, buildWeekendTripHotelIntent, buildWeekend
 import { buildCityTripHotelIntent, buildCityTripRestaurantRequirements, buildCityTripBarRequirements } from "./agent/planners/city-trip";
 import { buildDateNightFallbackIntent } from "./agent/planners/date-night";
 import { parseBigPurchaseIntent, runBigPurchasePlanner } from "./agent/planners/big-purchase";
+import { parseConcertEventIntent } from "./agent/parse/concert-event";
+import { runConcertEventPlanner } from "./agent/planners/concert-event";
+import { ConcertEventIntent } from "./types";
 
 // ─── Main Agent Function ──────────────────────────────────────────────────────
 
@@ -262,6 +265,33 @@ export async function runAgent(
       hotelRecommendations,
       recommendations: [...restaurantCards, ...barCards],
       result_mode: decisionPlan ? "scenario_plan" : "followup_refinement",
+    });
+  }
+
+  if (detectedScenario === "concert_event") {
+    const concertIntent = parseConcertEventIntent(userMessage, queryContext);
+    const decisionPlan = await runConcertEventPlanner({
+      intent: concertIntent,
+      outputLanguage: queryContext.output_language,
+    });
+
+    if (!decisionPlan) {
+      const noResults: ConcertEventIntent = {
+        ...concertIntent,
+        needs_clarification: true,
+        missing_fields: [...concertIntent.missing_fields, "no events found — try different dates or keywords"],
+      };
+      return buildBaseResult(noResults, "trip", {
+        scenarioIntent: noResults,
+        result_mode: "followup_refinement",
+      });
+    }
+
+    return buildBaseResult(concertIntent, "trip", {
+      scenarioIntent: concertIntent,
+      decisionPlan,
+      result_mode: "scenario_plan",
+      output_language: queryContext.output_language,
     });
   }
 
