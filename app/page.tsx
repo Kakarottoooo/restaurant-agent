@@ -9,17 +9,13 @@ import CreditCardCard from "@/components/CreditCardCard";
 import LaptopCard from "@/components/LaptopCard";
 import SmartphoneCard from "@/components/SmartphoneCard";
 import HeadphoneCard from "@/components/HeadphoneCard";
-import ScenarioBrief from "@/components/ScenarioBrief";
-import PrimaryPlanCard from "@/components/PrimaryPlanCard";
-import BackupPlanCard from "@/components/BackupPlanCard";
-import ActionRail from "@/components/ActionRail";
-import ScenarioEvidencePanel from "@/components/ScenarioEvidencePanel";
+import ScenarioPlanView from "@/components/ScenarioPlanView";
 import DateRangePicker from "@/components/DateRangePicker";
 import { CITIES_SORTED } from "@/lib/cities";
 import { useChat, LOADING_STEPS } from "@/app/hooks/useChat";
 import { useSubscriptions } from "@/app/hooks/useSubscriptions";
 import { WATCH_CATEGORY_META } from "@/lib/watchTypes";
-import { buildPlanFeedbackCopy, getScenarioUiCopy } from "@/lib/outputCopy";
+import { buildPlanFeedbackCopy } from "@/lib/outputCopy";
 import type { MapPin } from "@/components/MapView";
 import { useLocation } from "@/app/hooks/useLocation";
 import { useFavorites } from "@/app/hooks/useFavorites";
@@ -167,8 +163,6 @@ export default function Home() {
     chat.resultMode === "category_cards" &&
     chat.viewMode === "map" &&
     hasCategoryResults;
-  const scenarioCopy = getScenarioUiCopy(chat.decisionPlan?.output_language);
-
   // Unified map pins for restaurants and hotels (flights use arc lines, not pins)
   const mapPins: MapPin[] = chat.resultCategory === "hotel"
     ? chat.allHotelCards
@@ -1636,131 +1630,16 @@ export default function Home() {
 
                 {/* Scenario Plan Results */}
                 {chat.resultMode === "scenario_plan" && chat.decisionPlan && (
-                  <div className="flex flex-col gap-4">
-                    <ScenarioBrief plan={chat.decisionPlan} />
-                    {planFeedbackMessage && (
-                      <div
-                        style={{
-                          borderRadius: "14px",
-                          backgroundColor: "rgba(212,163,75,0.12)",
-                          border: "0.5px solid rgba(212,163,75,0.25)",
-                          padding: "12px 14px",
-                          fontFamily: "var(--font-dm-sans)",
-                          fontSize: "13px",
-                          color: "var(--text-primary)",
-                        }}
-                      >
-                        {planFeedbackMessage}
-                      </div>
-                    )}
-                    <PrimaryPlanCard
-                      option={chat.decisionPlan.primary_plan}
-                      language={chat.decisionPlan.output_language}
-                      onLinkClick={(action) =>
-                        handlePlanLinkClick(action, chat.decisionPlan!.primary_plan.id)
-                      }
-                    />
-
-                    {chat.decisionPlan.risks.length > 0 && (
-                      <div
-                        style={{
-                          backgroundColor: "#FDF6EC",
-                          borderRadius: "18px",
-                          border: "0.5px solid rgba(232,160,32,0.35)",
-                          padding: "16px",
-                        }}
-                      >
-                        <p
-                          style={{
-                            fontFamily: "var(--font-dm-sans)",
-                            fontSize: "11px",
-                            textTransform: "uppercase",
-                            letterSpacing: "0.06em",
-                            color: "#8B5E14",
-                            marginBottom: "10px",
-                          }}
-                        >
-                          {scenarioCopy.planRisks}
-                        </p>
-                        <div className="flex flex-col gap-2">
-                          {chat.decisionPlan.risks.map((risk, index) => (
-                            <p
-                              key={`${chat.decisionPlan?.id}-risk-${index}`}
-                              style={{
-                                fontFamily: "var(--font-dm-sans)",
-                                fontSize: "13px",
-                                lineHeight: 1.6,
-                                color: "#6B4A1A",
-                              }}
-                            >
-                              • {risk}
-                            </p>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    <ActionRail
-                      actions={chat.decisionPlan.next_actions}
-                      language={chat.decisionPlan.output_language}
-                      onAction={handlePlanAction}
-                    />
-
-                    {chat.decisionPlan.backup_plans.length > 0 && (
-                      <div className="flex flex-col gap-3">
-                        <div>
-                          <p
-                            style={{
-                              fontFamily: "var(--font-dm-sans)",
-                              fontSize: "11px",
-                              textTransform: "uppercase",
-                              letterSpacing: "0.06em",
-                              color: "var(--text-secondary)",
-                              marginBottom: "6px",
-                            }}
-                          >
-                            {scenarioCopy.backupOptions}
-                          </p>
-                          <h4
-                            style={{
-                              fontFamily: "var(--font-playfair)",
-                              fontSize: "24px",
-                              color: "var(--text-primary)",
-                            }}
-                          >
-                            {scenarioCopy.keepOnDeck}
-                          </h4>
-                        </div>
-                        <div className="grid gap-3 md:grid-cols-2">
-                          {chat.decisionPlan.backup_plans.map((plan) => (
-                            <BackupPlanCard
-                              key={plan.id}
-                              option={plan}
-                              onPromote={() => {
-                                chat.trackDecisionPlanEvent({
-                                  type: "backup_promoted",
-                                  option_id: plan.id,
-                                  query: lastUserQuery,
-                                });
-                                setPlanFeedbackMessage(
-                                  buildPlanFeedbackCopy(
-                                    chat.decisionPlan?.output_language,
-                                    "promoted",
-                                    plan.title
-                                  )
-                                );
-                                chat.swapDecisionPlanOption(plan.id);
-                              }}
-                              language={chat.decisionPlan!.output_language}
-                              onLinkClick={(action) => handlePlanLinkClick(action, plan.id)}
-                            />
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    <ScenarioEvidencePanel plan={chat.decisionPlan} />
-                  </div>
+                  <ScenarioPlanView
+                    plan={chat.decisionPlan}
+                    planFeedbackMessage={planFeedbackMessage}
+                    onAction={handlePlanAction}
+                    onLinkClick={handlePlanLinkClick}
+                    trackDecisionPlanEvent={chat.trackDecisionPlanEvent}
+                    swapDecisionPlanOption={chat.swapDecisionPlanOption}
+                    setPlanFeedbackMessage={setPlanFeedbackMessage}
+                    lastUserQuery={lastUserQuery}
+                  />
                 )}
 
                 {/* List View */}
