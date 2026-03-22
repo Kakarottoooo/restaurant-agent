@@ -1,5 +1,20 @@
 # TODOS
 
+## Phase 4 — Real-time Availability + Identity + Push
+
+### 4b-1: Real-time restaurant availability
+**Priority:** P0
+**What:** When generating a `date_night` plan, synchronously fetch real available time slots for the primary restaurant and display them inline — "20:00 · 2 seats available". Currently we only provide an OpenTable deep link; the user doesn't know if there's actually a table.
+**Why:** "I tried to book and there was no table" is the most common failure mode. Showing real availability transforms a recommendation into a confirmed option. Eliminates the user's biggest remaining anxiety.
+**Pros:** Closes the last gap between recommendation and action. High trust signal — if we say "20:00 is open", it's open.
+**Cons:** OpenTable and Resy don't have a free public availability API. Options: (1) OpenTable widget embed (free, limited control), (2) Resy API (waitlist-based partner access), (3) SevenRooms (enterprise), (4) browser automation / Puppeteer for scraping (fragile, ToS risk). Most realistic near-term path: OpenTable availability widget or iframe embed per restaurant when `opentable_url` is known.
+**Context:** `PrimaryPlanCard` already renders the "Check availability on OpenTable" link (3c-2). Upgrade: if we can get a restaurant's OpenTable `rid` (restaurant ID) from the Google Places data or OpenTable search API, we can embed their availability picker widget directly in the card (`<script src="https://www.opentable.com/widget/reservation/loader?rid=...">` or REST endpoint). Fall back to deep link if widget fails. Store `opentable_rid` on `RecommendationCard` if found.
+**Depends on:** OpenTable partner API access OR widget embed approach.
+
+---
+
+---
+
 ## Execution Layer / Learning Loop
 
 ### Learning loop activation
@@ -9,9 +24,39 @@
 **Pros:** Folio gets measurably better over time.
 **Cons:** Risk of promoting noise if enabled too early.
 **Context:** SQL query implemented in `lib/scenario2.ts` `getScoreAdjustments()`. Query JOINs `decision_plans + plan_outcomes`, extracts stable venue IDs via `evidence_card_id`, computes recency-weighted (30-day decay) signed approval rates, requires ≥3 outcomes per venue. Enable by setting `ENABLE_SCORE_ADJUSTMENTS=true` in env. Monitor ranking quality after enabling.
-**Depends on:** ≥30 days of live user data after v0.2.2.0.
+**Depends on:** ≥30 days of live user data after v0.2.2.0. Earliest activation: ~2026-04-22.
 
 ---
+
+## Phase 5 — New Scenarios (EngineConfig expansion)
+
+### 5a-1: Gift recommendation OS
+**Priority:** P2
+**What:** "给我妈买生日礼物，她喜欢园艺，预算 150 美元" → 3 个礼物包：安全选 / 最走心 / 最有创意。每个包含：具体商品 + 购买链接 + 为什么适合 + 为什么不选另外两个。
+**Why:** 礼物选择是高焦虑决策场景，和 date_night / weekend_trip 同等结构：有预算、有对象偏好、有场景约束、需要理由。
+**Pros:** EngineConfig 模式已存在，新场景成本极低。商品搜索可复用 SerpAPI (shopping search)。无需新 DB 表。
+**Cons:** 商品数据质量参差不齐；Amazon/商家 URL 有 affiliate 合规问题需注意。
+**Context:** 新建 `lib/agent/scenario-configs/gift.ts` EngineConfig + `lib/agent/parse/gift.ts` 意图解析。数据源：SerpAPI shopping API。 评分维度：偏好匹配度 + 独特性 + 实用性 + 价位合理性。
+
+---
+
+### 5a-2: Concert / event ticket OS
+**Priority:** P2
+**What:** "这周末 NYC 有什么好的演出？爵士或者 indie，不要超过 60 美元" → 3 个方案：最安全 / 最有趣 / 最独特，含场地 / 时间 / 票价 / Ticketmaster 或 Dice 预购链接。
+**Why:** 演出是典型的"发现 + 执行"场景——用户不知道有什么，看完了还要去别的地方买票。正好是 Folio 最擅长消灭的两段摩擦。
+**Pros:** 高频，有明确行动终点（购票）。Songkick / Bandsintown API 免费，覆盖全美演出数据。
+**Cons:** 票务实时性强，sold out 状态变化快，需要在方案里显示库存状态。
+**Context:** 数据源：Songkick API（免费，有 venue / artist / genre 过滤）+ Ticketmaster Discovery API（免费层）。新建 `lib/agent/scenario-configs/events.ts`。
+
+---
+
+### 5a-3: Fitness / wellness session OS
+**Priority:** P3
+**What:** "帮我在 Brooklyn 找个周六早上的瑜伽课，最好是 vinyasa，预算 25 美元以内" → 3 个方案 + ClassPass / Mindbody 预约链接。
+**Why:** 健身课预约是高重复频率的决策场景，用户每周都要做。越用越准的个性化效果最明显。
+**Pros:** ClassPass API（合作伙伴）或 Mindbody API 提供真实可用性查询，可做实时库存。
+**Cons:** API 接入需要商业合作申请，不是立即可用。Google Places 作为备选数据源（搜健身房 + 评价语义抽取）可作为 v1 回退。
+**Context:** 新建 `lib/agent/scenario-configs/fitness.ts`。
 
 ---
 
@@ -128,6 +173,16 @@ Current `open_link` actions in `lib/types.ts` have a `url: string` field. The pl
 ## Frontend / UI
 
 ## Completed
+
+### 4b-2: User accounts + cross-device preference sync
+**Completed:** v0.2.18.0 (2026-03-22) — `user_id TEXT` column added to `user_preferences` with partial unique index `(user_id, preference_key) WHERE user_id IS NOT NULL`. `getUserPreferences(sessionId, userId?)` queries by `user_id` when provided. `upsertUserPreference(...)` uses the user-keyed index when `userId` is set. `mergeSessionPreferences(sessionId, userId)` stamps `user_id` on all session rows on sign-in. `POST /api/user/preferences/merge` (Clerk `auth()` server-side) calls merge. `ClerkSync.tsx` fires the merge once per sign-in (fire-and-forget, idempotent). `useChat` now sends `session_id` + `user_id` in every request. `runAgent` passes `userId` to `getUserPreferences`.
+
+---
+
+### 4b-3: Active push notifications
+**Completed:** v0.2.18.0 (2026-03-22) — `user_notifications` table with `push_endpoint TEXT UNIQUE` + `push_subscription JSONB`. `web-push` npm package integrated. `lib/push.ts` wraps `webpush.sendNotification` with VAPID keys from env (`NEXT_PUBLIC_VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`). `GET /api/notifications/subscribe` returns the VAPID public key; `POST /api/notifications/subscribe` stores the subscription. Service worker (`public/sw.js`) handles `push` and `notificationclick` events. Price-check cron (`/api/cron/price-check`) calls `sendPushNotification` for all subscriptions linked to the session when a price drop ≥ threshold is detected. "Watch price" ActionRail button calls `subscribeToPushNotifications` before registering the watch — requests browser permission + stores the subscription.
+
+---
 
 ### 3a-3: Weekend Trip unified package assembly
 **Completed:** v0.2.7.0 (2026-03-22)

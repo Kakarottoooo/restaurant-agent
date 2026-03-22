@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.2.18.0] - 2026-03-22
+
+### Added
+- **User accounts + cross-device preference sync (4b-2)**: `user_preferences` table gains a `user_id` column and a partial unique index `(user_id, preference_key) WHERE user_id IS NOT NULL`. On Clerk sign-in, session preferences are merged into the user account via `POST /api/user/preferences/merge` (server-side Clerk auth — never trusts client-supplied `user_id`). The chat API flow passes `user_id` through to `runAgent`, which reads preferences by `user_id` first for logged-in users.
+- **Active push notifications (4b-3)**: New `user_notifications` table stores Web Push subscriptions. `GET /api/notifications/subscribe` returns the VAPID public key (503 if not configured). `POST /api/notifications/subscribe` stores a subscription server-side. `lib/push.ts` wraps `web-push` with VAPID setup and expired-subscription handling (410/404 → silent no-op). The price-check cron fires push notifications to all session subscribers on confirmed price drops. Notification permission is requested automatically in the "Watch price" UI flow. Service worker handles `push` events (shows notification) and `notificationclick` events (focuses/opens the plan URL).
+
+### Fixed
+- **`mergeSessionPreferences` unique constraint safety**: Plain UPDATE could violate the partial unique index `(user_id, preference_key) WHERE user_id IS NOT NULL` if the user already had the same preference key from a prior session. Fixed by excluding keys the user already owns: `AND preference_key NOT IN (SELECT preference_key FROM user_preferences WHERE user_id = $userId)`.
+
 ## [0.2.17.1] - 2026-03-22
 
 ### Fixed
