@@ -162,7 +162,7 @@ export type ResultMode =
   | "followup_refinement"
   | "execution_actions";
 
-export type ScenarioType = "date_night" | "weekend_trip" | "city_trip" | "big_purchase" | "concert_event" | "gift";
+export type ScenarioType = "date_night" | "weekend_trip" | "city_trip" | "big_purchase" | "concert_event" | "gift" | "fitness";
 export type InputLanguage = "en" | "zh" | "mixed" | "other" | "unknown";
 export type OutputLanguage = "en" | "zh";
 
@@ -315,7 +315,7 @@ export interface BigPurchaseIntent extends BaseIntent {
 
 // ─── Phase 7: Multi-category types ───────────────────────────────────────────
 
-export type CategoryType = "restaurant" | "hotel" | "flight" | "credit_card" | "laptop" | "smartphone" | "headphone" | "subscription" | "trip" | "big_purchase" | "gift" | "unknown";
+export type CategoryType = "restaurant" | "hotel" | "flight" | "credit_card" | "laptop" | "smartphone" | "headphone" | "subscription" | "trip" | "big_purchase" | "gift" | "fitness" | "unknown";
 
 export interface BaseIntent {
   category: CategoryType;
@@ -536,7 +536,57 @@ export interface GiftIntent extends BaseIntent {
   missing_fields: string[];
 }
 
-export type ScenarioIntent = DateNightIntent | WeekendTripIntent | CityTripIntent | BigPurchaseIntent | ConcertEventIntent | GiftIntent;
+// ─── Fitness types ────────────────────────────────────────────────────────────
+
+export type FitnessActivity =
+  | "yoga"
+  | "pilates"
+  | "spin"
+  | "hiit"
+  | "crossfit"
+  | "boxing"
+  | "dance"
+  | "meditation"
+  | "barre"
+  | "swimming"
+  | "running"
+  | "martial_arts"
+  | "other";
+
+export type FitnessTimePreference = "morning" | "afternoon" | "evening" | "any";
+export type FitnessSkillLevel = "beginner" | "intermediate" | "advanced" | "any";
+
+export interface FitnessStudio {
+  id: string;
+  name: string;
+  address: string;
+  rating: number;
+  review_count: number;
+  price_level?: string; // "$" | "$$" | "$$$"
+  lat?: number;
+  lng?: number;
+  website?: string;
+}
+
+export interface FitnessIntent extends BaseIntent {
+  category: "fitness";
+  scenario: "fitness";
+  scenario_goal: string;
+  activity: FitnessActivity;
+  activity_label: string; // human-readable e.g. "vinyasa yoga", "hot pilates"
+  style?: string; // e.g. "vinyasa", "hot", "power"
+  neighborhood?: string;
+  city: string;
+  day_preference?: string; // e.g. "saturday", "weekend", "weekday"
+  time_preference: FitnessTimePreference;
+  budget_per_class?: number;
+  skill_level: FitnessSkillLevel;
+  planning_assumptions: string[];
+  needs_clarification: boolean;
+  missing_fields: string[];
+}
+
+export type ScenarioIntent = DateNightIntent | WeekendTripIntent | CityTripIntent | BigPurchaseIntent | ConcertEventIntent | GiftIntent | FitnessIntent;
 
 export type ScenarioTelemetryEventType =
   | "plan_viewed"

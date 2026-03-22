@@ -43,14 +43,6 @@
 
 ---
 
-### 5a-3: Fitness / wellness session OS
-**Priority:** P3
-**What:** "帮我在 Brooklyn 找个周六早上的瑜伽课，最好是 vinyasa，预算 25 美元以内" → 3 个方案 + ClassPass / Mindbody 预约链接。
-**Why:** 健身课预约是高重复频率的决策场景，用户每周都要做。越用越准的个性化效果最明显。
-**Pros:** ClassPass API（合作伙伴）或 Mindbody API 提供真实可用性查询，可做实时库存。
-**Cons:** API 接入需要商业合作申请，不是立即可用。Google Places 作为备选数据源（搜健身房 + 评价语义抽取）可作为 v1 回退。
-**Context:** 新建 `lib/agent/scenario-configs/fitness.ts`。
-
 ---
 
 ## Phase 3a — Decision Compression (highest leverage)
@@ -166,6 +158,11 @@ Current `open_link` actions in `lib/types.ts` have a `url: string` field. The pl
 ## Frontend / UI
 
 ## Completed
+
+### 5a-3: Fitness / wellness session OS
+**Completed:** v0.2.21.0 (2026-03-22) — `fitness` scenario live. Google Places as v1 data source. Intent parser covers 12 activity types (yoga + 8 styles, pilates, spin, HIIT, CrossFit, boxing, dance, meditation, barre, swimming, running, martial arts) + day/time/skill/budget/neighborhood extraction. Three-tier studio selection (Top rated / Most popular / Best value). ClassPass primary CTA + Mindbody + Maps secondary links. Budget filters $$$ studios when budget < $20/class. City center coordinates resolved from CITIES config to prevent SF bias. Full bilingual (EN/ZH). 24 tests covering parser and planner.
+
+---
 
 ### 5a-2: Concert / event ticket OS
 **Completed:** v0.2.19.0 (2026-03-22) — `concert_event` scenario live. Ticketmaster Discovery API client (`lib/ticketmaster.ts`). Intent parser extracts artist name via proper-noun regex or falls back to genre keywords. Custom planner builds DecisionPlan with up to 3 events (Top pick / Most exciting / Hidden gem), direct buy-ticket links, venue map links, price ranges, and bilingual copy. Supports concerts, festivals, theater, sports, comedy. 17 tests covering API client, intent parser, and planner.

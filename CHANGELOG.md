@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.2.21.0] - 2026-03-22
+
+### Added
+- **Fitness/wellness OS (5a-3)**: New `fitness` scenario — "find me a vinyasa yoga class in Brooklyn on Saturday morning under $25" routes through the full intent→plan pipeline. Parses 12 activity types (yoga with 8 style modifiers, pilates, spin, HIIT, CrossFit, boxing, dance, meditation, barre, swimming, running, martial arts), day/time/skill/budget preferences, and neighborhood. Google Places search returns up to 9 studios, ranked into three tiers: **Top rated** (highest ★), **Most popular** (most reviews), and **Best value** (good rating + lowest price). Each option gets a ClassPass booking deep link as the primary CTA, plus Mindbody and Google Maps secondary links. Budget filtering drops $$$ studios when budget < $20/class. Full bilingual (EN/ZH) support via `pickLanguageCopy`.
+
+### Fixed
+- City center bias in fitness Google Places search: resolved city coordinates from `CITIES` config and pass as `cityCenter` to prevent Places API from defaulting to San Francisco bias for out-of-area requests (Codex P1).
+- No-result fitness responses now show a localized "no studios found" message (EN/ZH) instead of falling through to restaurant copy (Codex P2).
+- MiniMax NLU schema now includes `concert_event`, `gift`, and `fitness` in `scenario_hint`, and `fitness` in `category_hint`, so non-English fitness queries correctly route to the fitness planner (Codex P2).
+
 ## [0.2.20.0] - 2026-03-22
 
 ### Added

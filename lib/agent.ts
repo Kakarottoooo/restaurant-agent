@@ -43,7 +43,9 @@ import { parseConcertEventIntent } from "./agent/parse/concert-event";
 import { runConcertEventPlanner } from "./agent/planners/concert-event";
 import { parseGiftIntent } from "./agent/parse/gift";
 import { runGiftPlanner } from "./agent/planners/gift";
-import { ConcertEventIntent, GiftIntent } from "./types";
+import { parseFitnessIntent } from "./agent/parse/fitness";
+import { runFitnessPlanner } from "./agent/planners/fitness";
+import { ConcertEventIntent, FitnessIntent, GiftIntent } from "./types";
 
 // ─── Main Agent Function ──────────────────────────────────────────────────────
 
@@ -318,6 +320,33 @@ export async function runAgent(
 
     return buildBaseResult(giftIntent, "gift", {
       scenarioIntent: giftIntent,
+      decisionPlan,
+      result_mode: "scenario_plan",
+      output_language: queryContext.output_language,
+    });
+  }
+
+  if (detectedScenario === "fitness") {
+    const fitnessIntent = parseFitnessIntent(userMessage, queryContext);
+    const decisionPlan = await runFitnessPlanner({
+      intent: fitnessIntent,
+      outputLanguage: queryContext.output_language,
+    });
+
+    if (!decisionPlan) {
+      const noResults: FitnessIntent = {
+        ...fitnessIntent,
+        needs_clarification: true,
+        missing_fields: [...fitnessIntent.missing_fields, "no studios found — try a different neighborhood or activity"],
+      };
+      return buildBaseResult(noResults, "fitness", {
+        scenarioIntent: noResults,
+        result_mode: "followup_refinement",
+      });
+    }
+
+    return buildBaseResult(fitnessIntent, "fitness", {
+      scenarioIntent: fitnessIntent,
       decisionPlan,
       result_mode: "scenario_plan",
       output_language: queryContext.output_language,

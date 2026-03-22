@@ -10,6 +10,7 @@ import {
   buildNoFlightCopy,
   buildNoHotelCopy,
   buildCityTripFollowupCopy,
+  buildFitnessNoResultsCopy,
   buildWeekendTripFollowupCopy,
   pickLanguageCopy,
 } from "@/lib/outputCopy";
@@ -335,6 +336,22 @@ export function useChat({
                       category: "trip" as const,
                       result_mode: "followup_refinement",
                       scenario: "weekend_trip",
+                      output_language: outputLanguage,
+                    },
+                  ]);
+                  continue;
+                }
+
+                if (mode === "followup_refinement" && event.scenarioIntent?.scenario === "fitness") {
+                  const fitnessIntent = event.scenarioIntent as { activity_label?: string };
+                  setMessages((prev) => [
+                    ...prev,
+                    {
+                      role: "assistant",
+                      content: buildFitnessNoResultsCopy(outputLanguage, fitnessIntent?.activity_label),
+                      category: "fitness" as const,
+                      result_mode: "followup_refinement",
+                      scenario: "fitness",
                       output_language: outputLanguage,
                     },
                   ]);
