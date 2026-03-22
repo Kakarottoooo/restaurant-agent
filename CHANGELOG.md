@@ -12,6 +12,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **`lib/agent/parse/gift.ts`**: Gift intent parser — detects occasion (birthday, anniversary, Christmas, Valentine's, Mother's Day, etc.), relationship (partner, parent, sibling, friend, colleague, boss, child), interests (cooking, hiking, gaming, fitness, reading, music, etc.), and budget via regex. Marks missing fields for `needs_clarification`.
 - **`lib/agent/planners/gift.ts`**: Custom gift planner — builds three search queries (safe/thoughtful/creative) in parallel, maps the top result from each to a `PlanOption`, and assembles a `DecisionPlan` with tier-specific copy and refine actions.
 
+### Fixed
+- **Security: user_id trust boundary** (`app/api/chat/route.ts`): The `/api/chat` endpoint now derives `userId` from Clerk's server-side `auth()` instead of accepting it from the client JSON body, preventing privilege escalation via a spoofed user ID.
+- **GPS city placeholder filtering** (`lib/agent/parse/concert-event.ts`): "your current location" (the GPS fallback display label) was being passed as a literal city name to Ticketmaster. It's now treated as missing — the planner falls back to a safe default city instead.
+- **Date expression fallback for English queries** (`lib/agent/parse/concert-event.ts`): English fast-path queries skip MiniMax, leaving `date_text_hint` unpopulated. Expressions like "this weekend" or "tonight" now resolve correctly via a direct scan of the raw user message.
+
 ## [0.2.19.0] - 2026-03-22
 
 ### Added
