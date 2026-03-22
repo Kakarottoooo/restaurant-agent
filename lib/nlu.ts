@@ -132,7 +132,7 @@ function buildFallbackContext(
     scenarioHint = "gift";
   } else if (
     /\byoga\b|\bpilates\b|\bspin\b|\bhiit\b|\bcrossfit\b|\bbox(?:ing)?\s+class\b|\bdance\s+class\b|\bmeditation\b|\bbarre\b|\bfitness\s+class\b|\bworkout\s+class\b|\bexercise\s+class\b|\bvinyasa\b|\breformer\b|\bzumba\b/i.test(lower) &&
-    /\bfind\b|\bbook\b|\blook(?:ing)?\b|\bsign\s+up\b|\bjoin\b|\bclass\b|\bstudio\b|\bsession\b/i.test(lower)
+    /\bfind\b|\bbook\b|\blook(?:ing)?\b|\bsign\s+up\b|\bjoin\b|\bclass\b|\bstudio\b|\bsession\b|\bbest\b|\bgood\b|\brecommend\b|\bnear(?:by)?\b|\baround\b/i.test(lower)
   ) {
     scenarioHint = "fitness";
   }
