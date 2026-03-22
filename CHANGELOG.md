@@ -4,6 +4,19 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.2.3.0] - 2026-03-22
+
+### Added
+- **Share page** (`/plan/[id]`): read-only plan view for sharing with a partner — renders primary plan, backup options, and a "This works for me" approval button
+- **Partner approval API** (`POST /api/plan/[id]/outcome`): records `partner_approved` outcome to `plan_outcomes` table; GET variant supports calendar deep-link outcomes (`?type=went`)
+- **Plan save/fetch API** (`POST /api/plan/save`, `GET /api/plan/[id]`): persists `DecisionPlan` to `decision_plans` table; share action in the main UI saves plan and copies shareable URL
+- **Refine flow lineage** (`parent_plan_id`): when a user refines a plan, `refinedFromPlanIdRef` captures the source plan ID and passes it as `parent_plan_id` when the refined plan is saved — enables full refinement lineage in `decision_plans`
+- **Learning loop SQL** (`getScoreAdjustments`): implements the recency-weighted outcome query behind `ENABLE_SCORE_ADJUSTMENTS` flag — JOINs `plan_outcomes + decision_plans`, extracts stable venue IDs via `evidence_card_id`, computes signed approval rates in `[-1, 1]` with 30-day exponential decay and ≥3 sample minimum; activate by setting `ENABLE_SCORE_ADJUSTMENTS=true` after ≥30 days + ≥100 outcome rows
+- **`parent_plan_id` DB column**: `decision_plans` table now includes `parent_plan_id TEXT` (added via `ALTER TABLE … ADD COLUMN IF NOT EXISTS`)
+
+### Fixed
+- **Test type errors**: fixed pre-existing TypeScript errors in `getScoreAdjustments.test.ts` (`"group_dinner"` → `"big_purchase"`), `scenario2.test.ts` (`"vibrant"` → `"mixed"`, missing `scenario_goal`), and `plan-outcome.test.ts` (QueryResult mock types)
+
 ## [0.2.2.0] - 2026-03-22
 
 ### Added
