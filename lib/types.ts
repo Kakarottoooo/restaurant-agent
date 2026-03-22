@@ -258,6 +258,8 @@ export interface DecisionPlan {
   event_location?: string;
   /** One-line credit card recommendation for trip scenarios (weekend_trip, city_trip). */
   trip_card_callout?: string;
+  /** True when the planner found more than 2 backup options but capped the display at 2. */
+  show_more_available?: boolean;
   risks: string[];
   next_actions: PlanAction[];
   evidence_card_ids: string[];

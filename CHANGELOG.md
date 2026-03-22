@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.2.12.0] - 2026-03-22
+
+### Added
+- **`show_more_available` flag** (`DecisionPlan`): all 4 planners now set `show_more_available: boolean` — `true` when more than 2 backup options were found but capped for display. `ScenarioPlanView` renders a soft hint below the backup section when `true` — "More options available — tell me your preferences and I can surface more" — inviting refinement instead of overwhelming with options.
+- **2 new tests** covering `show_more_available` true/false in `runScenarioPlanner` (date night) and `runBigPurchasePlanner`
+
 ## [0.2.11.0] - 2026-03-22
 
 ### Added

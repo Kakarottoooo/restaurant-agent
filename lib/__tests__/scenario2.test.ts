@@ -321,6 +321,26 @@ describe("runScenarioPlanner", () => {
     expect(result?.backup_plans.length).toBeLessThanOrEqual(2);
   });
 
+  it("sets show_more_available=true when >3 recommendations, false otherwise", () => {
+    const many = Array.from({ length: 5 }, (_, i) =>
+      makeCard({ restaurant: makeRestaurant({ id: `r${i}`, name: `R${i}` }), rank: i + 1 })
+    );
+    const resultMany = runScenarioPlanner({
+      scenarioIntent: baseIntent(), recommendations: many,
+      userMessage: "date night", cityLabel: "NYC", outputLanguage: "en",
+    });
+    expect(resultMany?.show_more_available).toBe(true);
+
+    const few = Array.from({ length: 3 }, (_, i) =>
+      makeCard({ restaurant: makeRestaurant({ id: `r${i}`, name: `R${i}` }), rank: i + 1 })
+    );
+    const resultFew = runScenarioPlanner({
+      scenarioIntent: baseIntent(), recommendations: few,
+      userMessage: "date night", cityLabel: "NYC", outputLanguage: "en",
+    });
+    expect(resultFew?.show_more_available).toBe(false);
+  });
+
   it("returns Chinese output when output_language is zh", () => {
     const result = runScenarioPlanner({
       scenarioIntent: baseIntent(),
@@ -898,6 +918,30 @@ describe("runBigPurchasePlanner", () => {
       outputLanguage: "en",
     });
     expect(result?.backup_plans).toHaveLength(2);
+  });
+
+  it("sets show_more_available=true when >3 recommendations, false otherwise", () => {
+    const manyResult = runBigPurchasePlanner({
+      intent: baseBigPurchaseIntent(),
+      recommendations: [
+        makeLaptopCard({ id: "l1", name: "P" }),
+        makeLaptopCard({ id: "l2", name: "B1" }),
+        makeLaptopCard({ id: "l3", name: "B2" }),
+        makeLaptopCard({ id: "l4", name: "Extra" }),
+      ],
+      outputLanguage: "en",
+    });
+    expect(manyResult?.show_more_available).toBe(true);
+
+    const fewResult = runBigPurchasePlanner({
+      intent: baseBigPurchaseIntent(),
+      recommendations: [
+        makeLaptopCard({ id: "l1", name: "P" }),
+        makeLaptopCard({ id: "l2", name: "B1" }),
+      ],
+      outputLanguage: "en",
+    });
+    expect(fewResult?.show_more_available).toBe(false);
   });
 
   it("sets tradeoff_reason on backup options", () => {

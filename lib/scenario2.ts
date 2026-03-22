@@ -222,6 +222,7 @@ export function runScenarioPlanner(params: {
     ),
     primary_plan: primaryPlan,
     backup_plans: backupPlans,
+    show_more_available: params.recommendations.length > 3,
     tradeoff_summary: buildDateNightTradeoffSummary(primaryCard, backupCards, params.outputLanguage),
     ...(() => {
       const eventDate = resolveDateContext(params.scenarioIntent.detected_date_text);
@@ -386,6 +387,7 @@ export function runWeekendTripPlanner(params: {
       fallback_reason: undefined,
     },
     backup_plans: backups,
+    show_more_available: false,
     tradeoff_summary: buildWeekendTripTradeoffSummary(
       ordered.map((opt) => ({
         label: opt.label,

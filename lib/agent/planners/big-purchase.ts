@@ -333,6 +333,7 @@ export function runBigPurchasePlanner(params: {
     scenario_brief: scenarioBrief,
     primary_plan: primaryOption,
     backup_plans: backupOptions,
+    show_more_available: rest.length > 2,
     tradeoff_summary: (() => {
       const primaryName = primaryCard.device.name;
       const primaryScore = primaryCard.final_score?.toFixed(1) ?? "";

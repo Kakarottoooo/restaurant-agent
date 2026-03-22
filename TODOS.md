@@ -17,19 +17,6 @@
 
 ## Phase 3a — Decision Compression (highest leverage)
 
-### 3a-1: Collapse all scenario outputs to 1+2 format
-**Priority:** P0
-**What:** All scenario planners (date_night, weekend_trip, city_trip, big_purchase) must return exactly 1 primary recommendation + 2 ranked backups. No more Top-N card lists as the default output. The existing `DecisionPlan` type already has `primary` + `backups[]` — enforce max 2 backups and make the primary the dominant UI element.
-**Why:** Users don't want to compare 10 options. They want to approve or reject one. Every extra card is cognitive tax.
-**Pros:** Forces product to commit to a recommendation. Reduces decision paralysis. Aligns UI with "approve this?" mental model.
-**Cons:** System must have higher confidence before presenting. Needs a "show more" escape hatch if user wants to explore.
-**Context:** `lib/agent/planners/date-night.ts`, `lib/agent/planners/weekend-trip.ts`, `lib/agent/pipelines/` device pipelines all return `DecisionPlan`. The `DecisionPlan` type in `lib/types.ts` has `primary: PrimaryPlanCard` and `backups: BackupPlanCard[]`. Enforce `backups.length <= 2` at planner output. Add a `show_more_available: boolean` field if the underlying pool had more candidates. On the UI side (`ScenarioPlanView`), primary card should be large/prominent, backups collapsed or shown smaller.
-**Depends on:** None. All planners already output DecisionPlan.
-
----
-
----
-
 ### 3a-3: Weekend Trip unified package assembly
 **Priority:** P0
 **What:** Currently weekend_trip returns flight cards + hotel cards as separate lists. Final output must be 3 complete trip packages: Safest, Cheapest, Best Experience — each pre-combining one flight + one hotel + estimated total cost + which credit card earns most points + time-gap check (flight lands → hotel check-in feasible?).
@@ -177,6 +164,10 @@ Current `open_link` actions in `lib/types.ts` have a `url: string` field. The pl
 ### SSE stream timeout for scenario planners
 **Completed:** v0.2.5.0 (2026-03-22)
 Server-side 45s `Promise.race` timeout wraps `runAgent()` in `app/api/chat/route.ts`. Client-side `AbortController` stall watchdog (50s) in `app/hooks/useChat.ts` cancels hung streams with a clear user-facing retry message.
+
+### 3a-1: Collapse all scenario outputs to 1+2 format
+**Completed:** v0.2.12.0 (2026-03-22)
+Added `show_more_available?: boolean` to `DecisionPlan` in `lib/types.ts`. All 4 planners (date_night, weekend_trip, city_trip/modular engine, big_purchase) already capped backups at 2; now each sets the flag — `true` when the underlying pool had >2 extras (date_night if >3 total, big_purchase if >3 total; weekend_trip and modular engine always `false` since they build exactly 3 packages). `ScenarioPlanView` renders a subtle invite below the backup grid when `show_more_available=true`. 2 new tests.
 
 ### 3a-2: Comparative tradeoff_summary at plan level
 **Completed:** v0.2.6.0 (2026-03-22)

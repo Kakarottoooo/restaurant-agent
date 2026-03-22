@@ -192,6 +192,21 @@ export default function ScenarioPlanView({
               />
             ))}
           </div>
+          {plan.show_more_available && (
+            <p
+              style={{
+                fontFamily: "var(--font-dm-sans)",
+                fontSize: "12px",
+                color: "var(--text-secondary)",
+                textAlign: "center",
+                marginTop: "4px",
+              }}
+            >
+              {plan.output_language === "zh"
+                ? "还有更多选项可用 — 告诉我你的偏好，我可以为你精选更多方案"
+                : "More options available — tell me your preferences and I can surface more"}
+            </p>
+          )}
         </div>
       )}
 
