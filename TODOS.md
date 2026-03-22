@@ -159,6 +159,16 @@ Current `open_link` actions in `lib/types.ts` have a `url: string` field. The pl
 
 ## Completed
 
+### Phase 3.1: Review semantic signal extraction
+**Completed:** v0.2.22.0 (2026-03-22) — `fetchReviewSignals()` in `lib/tools.ts` extracts structured signals (noise_level, wait_time, date_suitability, service_pace, notable_dishes, red_flags, best_for, review_confidence) from real reviews. Google reviews used when available; Tavily (Yelp/Reddit/TripAdvisor) fetched for the rest. MiniMax parses the raw text into `ReviewSignals`. Injected before `rankAndExplain`. `RecommendationCard` shows "Real reviews say" block with noise icon, wait time, dishes, red flags, and up to 2 Google review quotes.
+
+---
+
+### Phase 3.2: Structured scoring framework
+**Completed:** v0.2.22.0 (2026-03-22) — `computeWeightedScore()` replaces free-form AI scores. 5 dimensions: scene_match (30%), budget_match (25%), review_quality (20%), location_convenience (15%), preference_match (10%), minus red_flag_penalty. AI fills dimension scores; system computes `weighted_total` and re-sorts. Custom weights injectable. `RecommendationCard` shows collapsible score breakdown panel. Full fallback path also uses same scorer.
+
+---
+
 ### 5a-3: Fitness / wellness session OS
 **Completed:** v0.2.21.0 (2026-03-22) — `fitness` scenario live. Google Places as v1 data source. Intent parser covers 12 activity types (yoga + 8 styles, pilates, spin, HIIT, CrossFit, boxing, dance, meditation, barre, swimming, running, martial arts) + day/time/skill/budget/neighborhood extraction. Three-tier studio selection (Top rated / Most popular / Best value). ClassPass primary CTA + Mindbody + Maps secondary links. Budget filters $$$ studios when budget < $20/class. City center coordinates resolved from CITIES config to prevent SF bias. Full bilingual (EN/ZH). 24 tests covering parser and planner.
 

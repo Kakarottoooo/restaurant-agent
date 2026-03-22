@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.2.22.0] - 2026-03-22
+
+### Added
+- **Phase 3.1 — Review semantic signal extraction**: `fetchReviewSignals()` in `lib/tools.ts` fetches structured signals from real user reviews for each restaurant candidate. For restaurants with Google reviews already attached, it skips the Tavily network call and uses them directly. For others, fetches Yelp/Reddit/TripAdvisor via Tavily (`search_depth: "advanced"`). MiniMax extracts `noise_level`, `wait_time`, `date_suitability` (1–10), `service_pace`, `notable_dishes`, `red_flags`, `best_for`, and `review_confidence`. Signals are injected into restaurant objects before `rankAndExplain`, making recommendation reasoning evidence-based.
+- **Phase 3.2 — Structured scoring framework**: `computeWeightedScore()` in `lib/agent/composer/scoring.ts` replaces free-form AI scores with deterministic 5-dimension weighted scoring: scene_match (30%), budget_match (25%), review_quality (20%), location_convenience (15%), preference_match (10%), minus red_flag_penalty (0–5). AI fills raw dimension scores; system computes `weighted_total` and re-sorts candidates. Custom weights injectable per request. Fallback path (`buildFallbackRestaurantCards`) also uses the same scorer. `RecommendationCard` shows a collapsible "综合评分" breakdown panel with gold progress bars per dimension.
+- **Test coverage for 3.1 and 3.2**: 28 new tests in `lib/__tests__/scoring-and-signals.test.ts` covering `computeWeightedScore` (edge cases, weight math, clamping, penalty), `ReviewSignalsSchema`, `ScoringDimensionsSchema`, `RankedItemArraySchema` with optional scoring, and `fetchReviewSignals` (empty list, JSON parse failure, valid signals, MiniMax error, Google reviews short-circuit).
+
 ## [0.2.21.0] - 2026-03-22
 
 ### Added
