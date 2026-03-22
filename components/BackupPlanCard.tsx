@@ -17,6 +17,8 @@ export default function BackupPlanCard({
   onLinkClick,
 }: BackupPlanCardProps) {
   const copy = getScenarioUiCopy(language);
+  const displayLabel = option.tradeoff_reason ?? option.label;
+  const displaySummary = option.tradeoff_detail ?? option.summary;
   return (
     <div
       style={{
@@ -36,7 +38,7 @@ export default function BackupPlanCard({
           marginBottom: "8px",
         }}
       >
-        {option.label}
+        {displayLabel}
       </p>
 
       <h4
@@ -85,7 +87,7 @@ export default function BackupPlanCard({
             color: "var(--text-secondary)",
           }}
         >
-          {option.summary}
+          {displaySummary}
         </p>
         <p
           style={{
