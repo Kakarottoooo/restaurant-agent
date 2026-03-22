@@ -66,6 +66,23 @@ export default function ScenarioPlanView({
         onLinkClick={(action) => onLinkClick(action, plan.primary_plan.id)}
       />
 
+      {plan.trip_card_callout && (
+        <div
+          style={{
+            borderRadius: "12px",
+            backgroundColor: "rgba(30, 100, 200, 0.06)",
+            border: "0.5px solid rgba(30, 100, 200, 0.18)",
+            padding: "10px 14px",
+            fontFamily: "var(--font-dm-sans)",
+            fontSize: "12px",
+            lineHeight: 1.6,
+            color: "var(--text-secondary)",
+          }}
+        >
+          💳 {plan.trip_card_callout}
+        </div>
+      )}
+
       {plan.tradeoff_summary && (
         <p
           style={{

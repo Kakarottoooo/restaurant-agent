@@ -3,6 +3,7 @@ import { pickLanguageCopy } from "../../outputCopy";
 import { EngineConfig, ModuleResults } from "./types";
 import { buildTieredPackages } from "./selectors";
 import { buildPlanOptionFromPackage } from "./plan-option-builder";
+import { getBestCardForTrip, buildTripCardCallout } from "../planners/trip-card";
 
 function dedupeStrings(values: string[]): string[] {
   return Array.from(new Set(values.map((v) => v.trim()).filter(Boolean)));
@@ -110,6 +111,30 @@ export function runModularPlanner(params: {
     ...backups.flatMap((b) => b.risks.slice(0, 1)),
   ]).slice(0, 4);
 
+  // event_datetime / event_location for ICS export
+  const eventFields: { event_datetime?: string; event_location?: string } = {};
+  if (config.startDate) {
+    const primaryHotel = [pkgA, pkgB, pkgC].find(
+      (p) => p.hotel && (sorted[0].evidence_card_id === p.hotel.hotel.id)
+    )?.hotel ?? pkgA.hotel;
+    eventFields.event_datetime = `${config.startDate}T14:00:00`;
+    if (primaryHotel) eventFields.event_location = primaryHotel.hotel.address || primaryHotel.hotel.name;
+  }
+
+  // trip_card_callout: best card to use (or sign up for) when booking this trip
+  let trip_card_callout: string | undefined;
+  {
+    const primaryHotel = [pkgA, pkgB, pkgC].find(
+      (p) => p.hotel && sorted[0].evidence_card_id === p.hotel.hotel.id
+    )?.hotel ?? pkgA.hotel;
+    const hotelUsd = primaryHotel?.hotel.total_price ?? (primaryHotel?.hotel.price_per_night ?? 0) * (config.nights ?? 1);
+    const bestCard = getBestCardForTrip({ hotel_usd: hotelUsd });
+    if (bestCard) {
+      const cardLang = lang === "zh" ? "zh" : "en";
+      trip_card_callout = buildTripCardCallout(bestCard, cardLang);
+    }
+  }
+
   return {
     id: config.planId,
     scenario: config.scenario,
@@ -122,6 +147,8 @@ export function runModularPlanner(params: {
     primary_plan: { ...primary, label: pickLanguageCopy(lang, "Main pick", "主方案"), fallback_reason: undefined },
     backup_plans: backups,
     tradeoff_summary: config.tradeoff_summary,
+    ...eventFields,
+    ...(trip_card_callout ? { trip_card_callout } : {}),
     risks,
     next_actions: buildDefaultActions(lang),
     evidence_card_ids: evidenceCardIds,

@@ -69,6 +69,7 @@ Current `open_link` actions in `lib/types.ts` have a `url: string` field. The pl
 **Cons:** Date/time must be parsed from plan — requires structured `event_datetime` field in DecisionPlan.
 **Context:** Google Calendar URL: `https://calendar.google.com/calendar/r/eventedit?text={title}&dates={start}/{end}&details={notes}&location={address}`. Apple/ICS: generate a `.ics` blob via a `/api/plan/[id]/calendar` route that returns `Content-Type: text/calendar`. Add `event_datetime?: string` (ISO 8601) and `event_location?: string` to `DecisionPlan` type. Planners should populate these when date/time is known. ActionRail renders "Add to Calendar" as a new `PlanAction` type: `add_to_calendar`.
 **Depends on:** 3a-1.
+**Completed:** v0.2.8.0 (2026-03-22) — `event_datetime` and `event_location` added to `DecisionPlan`. All three planners (date_night, weekend_trip, city_trip) populate these fields when date is known. `GET /api/plan/[id]/calendar` route returns a `.ics` file (RFC 5545, floating local time). Share page (`SharedPlanView.tsx`) shows "Add to Calendar (.ics)" download button when `event_datetime` is set. City_trip also gets a Google Calendar secondary action link in each plan option. 15 new tests across `scenario2.test.ts` and `plan-calendar.test.ts`.
 
 ---
 
@@ -102,6 +103,7 @@ Current `open_link` actions in `lib/types.ts` have a `url: string` field. The pl
 **Cons:** Requires knowing the user's existing cards OR recommending one. Can default to recommending the best card for this trip if no profile exists.
 **Context:** `lib/agent/pipelines/credit-card.ts` already scores cards by use case. Add a `getBestCardForTrip(tripSpend: {flight_usd, hotel_usd, dining_usd})` helper that scores top 3 cards and returns the winner + reason. Call this at the end of weekend_trip and city_trip assembly. Render as a small "💳 Best card for this trip: Chase Sapphire — 3x on travel" callout in the plan UI.
 **Depends on:** 3a-3.
+**Completed:** v0.2.9.0 (2026-03-22)
 
 ---
 

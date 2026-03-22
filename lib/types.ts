@@ -251,6 +251,12 @@ export interface DecisionPlan {
   backup_plans: PlanOption[];
   /** Plan-level comparative summary: why primary beats the backups, and what each backup trades off. */
   tradeoff_summary?: string;
+  /** ISO 8601 datetime for the primary event (e.g. "2026-04-12T19:00:00"). Enables ICS export. */
+  event_datetime?: string;
+  /** Human-readable location for the primary event. Included in the ICS file. */
+  event_location?: string;
+  /** One-line credit card recommendation for trip scenarios (weekend_trip, city_trip). */
+  trip_card_callout?: string;
   risks: string[];
   next_actions: PlanAction[];
   evidence_card_ids: string[];

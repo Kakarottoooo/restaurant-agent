@@ -1126,3 +1126,196 @@ describe("weekend trip pre-filled booking URLs (3b-1)", () => {
     expect(flightAction?.url).toContain("2026-04-11");
   });
 });
+
+// ─── 3b-2: Add to Calendar action ─────────────────────────────────────────────
+
+describe("event_datetime / event_location on DecisionPlan (3b-2)", () => {
+  it("date_night plan has event_datetime when detected_date_text is set", () => {
+    const intent: DateNightIntent = {
+      category: "restaurant",
+      stage: "first_date",
+      cuisine: "Italian",
+      party_size: 2,
+      detected_date_text: "2026-04-12",
+      time_hint: "7:30 pm",
+      scenario_goal: "romantic dinner",
+      scenario: "date_night",
+    };
+    const result = runScenarioPlanner({
+      scenarioIntent: intent,
+      recommendations: [makeCard()],
+      userMessage: "romantic dinner april 12",
+      cityLabel: "New York",
+      outputLanguage: "en",
+    });
+    expect(result?.event_datetime).toBeDefined();
+    expect(result?.event_datetime).toContain("2026-04-12");
+  });
+
+  it("date_night plan has event_location matching restaurant address", () => {
+    const intent: DateNightIntent = {
+      category: "restaurant",
+      stage: "first_date",
+      cuisine: "Italian",
+      party_size: 2,
+      detected_date_text: "2026-04-12",
+      scenario_goal: "romantic dinner",
+      scenario: "date_night",
+    };
+    const card = makeCard({ restaurant: makeRestaurant({ address: "456 Lovers Lane" }) });
+    const result = runScenarioPlanner({
+      scenarioIntent: intent,
+      recommendations: [card],
+      userMessage: "romantic dinner april 12",
+      cityLabel: "New York",
+      outputLanguage: "en",
+    });
+    expect(result?.event_location).toBe("456 Lovers Lane");
+  });
+
+  it("date_night plan has NO event_datetime when no date in intent", () => {
+    const intent: DateNightIntent = {
+      category: "restaurant",
+      stage: "first_date",
+      cuisine: "Italian",
+      party_size: 2,
+      scenario_goal: "romantic dinner",
+      scenario: "date_night",
+    };
+    const result = runScenarioPlanner({
+      scenarioIntent: intent,
+      recommendations: [makeCard()],
+      userMessage: "romantic dinner",
+      cityLabel: "New York",
+      outputLanguage: "en",
+    });
+    expect(result?.event_datetime).toBeUndefined();
+  });
+
+  it("weekend_trip plan has event_datetime matching start_date when start_date is set", () => {
+    const result = runWeekendTripPlanner({
+      scenarioIntent: {
+        ...makeBaseWeekendTripIntent(),
+        start_date: "2026-04-11",
+        end_date: "2026-04-13",
+      },
+      flightRecommendations: [makeFlightCard()],
+      hotelRecommendations: [makeHotelCard()],
+      creditCardRecommendations: [],
+      userMessage: "weekend trip to Chicago",
+      outputLanguage: "en",
+    });
+    expect(result?.event_datetime).toBeDefined();
+    expect(result?.event_datetime).toContain("2026-04-11");
+  });
+
+  it("weekend_trip plan has event_location set to hotel address", () => {
+    const result = runWeekendTripPlanner({
+      scenarioIntent: {
+        ...makeBaseWeekendTripIntent(),
+        start_date: "2026-04-11",
+        end_date: "2026-04-13",
+      },
+      flightRecommendations: [makeFlightCard()],
+      hotelRecommendations: [makeHotelCard({ hotel: makeHotel({ address: "789 Hotel Ave" }) })],
+      creditCardRecommendations: [],
+      userMessage: "weekend trip to Chicago",
+      outputLanguage: "en",
+    });
+    expect(result?.event_location).toBe("789 Hotel Ave");
+  });
+
+  it("weekend_trip plan has NO event_datetime when start_date is absent", () => {
+    const result = runWeekendTripPlanner({
+      scenarioIntent: { ...makeBaseWeekendTripIntent(), start_date: undefined, end_date: undefined },
+      flightRecommendations: [makeFlightCard()],
+      hotelRecommendations: [makeHotelCard()],
+      creditCardRecommendations: [],
+      userMessage: "weekend trip",
+      outputLanguage: "en",
+    });
+    expect(result?.event_datetime).toBeUndefined();
+  });
+
+  it("city_trip plan has event_datetime matching start_date via modular engine", () => {
+    const result = runCityTripPlanner({
+      scenarioIntent: makeBaseCityTripIntent({ start_date: "2026-05-01" }),
+      hotelRecommendations: [makeHotelCard()],
+      restaurantRecommendations: [makeCard()],
+      barRecommendations: [],
+      outputLanguage: "en",
+    });
+    expect(result?.event_datetime).toBeDefined();
+    expect(result?.event_datetime).toContain("2026-05-01");
+  });
+
+  it("city_trip plan has Google Calendar link in secondary_actions when startDate is set", () => {
+    const result = runCityTripPlanner({
+      scenarioIntent: makeBaseCityTripIntent({ start_date: "2026-05-01" }),
+      hotelRecommendations: [makeHotelCard({ hotel: makeHotel({ id: "h1" }) })],
+      restaurantRecommendations: [makeCard()],
+      barRecommendations: [],
+      outputLanguage: "en",
+    });
+    const calAction = result?.primary_plan.secondary_actions?.find((a) =>
+      a.url?.includes("calendar.google.com")
+    );
+    expect(calAction).toBeDefined();
+    // Google Calendar URL encodes dates as "20260501T..." (no dashes)
+    expect(calAction?.url).toContain("20260501T");
+  });
+});
+
+// ─── 3b-5: Credit card cross-reference in trip planning ───────────────────────
+
+describe("trip_card_callout on DecisionPlan (3b-5)", () => {
+  it("weekend_trip plan has trip_card_callout when flight + hotel costs are sufficient", () => {
+    const result = runWeekendTripPlanner({
+      scenarioIntent: makeBaseWeekendTripIntent(),
+      flightRecommendations: [makeFlightCard({ flight: makeFlight({ price: 350 }) })],
+      hotelRecommendations: [makeHotelCard({ hotel: makeHotel({ total_price: 500 }) })],
+      creditCardRecommendations: [],
+      userMessage: "weekend trip to Chicago",
+      outputLanguage: "en",
+    });
+    expect(result?.trip_card_callout).toBeDefined();
+    expect(typeof result?.trip_card_callout).toBe("string");
+    expect(result?.trip_card_callout?.length).toBeGreaterThan(10);
+  });
+
+  it("weekend_trip callout starts with 'Pay with' for English output", () => {
+    const result = runWeekendTripPlanner({
+      scenarioIntent: makeBaseWeekendTripIntent(),
+      flightRecommendations: [makeFlightCard()],
+      hotelRecommendations: [makeHotelCard()],
+      creditCardRecommendations: [],
+      userMessage: "weekend trip",
+      outputLanguage: "en",
+    });
+    expect(result?.trip_card_callout).toMatch(/^Pay with /);
+  });
+
+  it("weekend_trip callout uses Chinese prefix for zh output", () => {
+    const result = runWeekendTripPlanner({
+      scenarioIntent: makeBaseWeekendTripIntent(),
+      flightRecommendations: [makeFlightCard()],
+      hotelRecommendations: [makeHotelCard()],
+      creditCardRecommendations: [],
+      userMessage: "周末去芝加哥",
+      outputLanguage: "zh",
+    });
+    expect(result?.trip_card_callout).toMatch(/^用 /);
+  });
+
+  it("city_trip plan has trip_card_callout from modular engine", () => {
+    const result = runCityTripPlanner({
+      scenarioIntent: makeBaseCityTripIntent({ start_date: "2026-05-01" }),
+      hotelRecommendations: [makeHotelCard({ hotel: makeHotel({ id: "h1", total_price: 900 }) })],
+      restaurantRecommendations: [makeCard()],
+      barRecommendations: [],
+      outputLanguage: "en",
+    });
+    expect(result?.trip_card_callout).toBeDefined();
+    expect(typeof result?.trip_card_callout).toBe("string");
+  });
+});

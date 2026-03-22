@@ -4,6 +4,22 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.2.9.0] - 2026-03-22
+
+### Added
+- **Credit card trip callout** (`trip_card_callout` on `DecisionPlan`): weekend_trip and city_trip plans now surface a one-line credit card recommendation — "Pay with Chase Sapphire Preferred ($95/yr) — earns 3x on travel and dining · sign-up bonus worth ~$750" — surfaced as a subtle strip below the primary plan card in `ScenarioPlanView`
+- **`getBestCardForTrip`** + **`buildTripCardCallout`** (`lib/agent/planners/trip-card.ts`): new helpers that build a travel spending profile from trip costs (flight + hotel spread over 3 months), call `recommendCreditCards` with travel reward preference, and format a concise callout string in English or Chinese
+- **14 new tests**: 10 unit tests for `getBestCardForTrip`/`buildTripCardCallout` in `trip-card.test.ts` + 4 integration tests in `scenario2.test.ts` verifying `trip_card_callout` presence and language on `weekend_trip` and `city_trip` plans
+
+## [0.2.8.0] - 2026-03-22
+
+### Added
+- **Add to Calendar action** (`event_datetime`, `event_location` on `DecisionPlan`): all three planners (date_night, weekend_trip, city_trip) now populate a structured event datetime and location when date is known — enabling `.ics` export and calendar deep links
+- **ICS calendar route** (`GET /api/plan/[id]/calendar`): returns a standards-compliant RFC 5545 `.ics` file with floating local time — works with Google Calendar, Apple Calendar, and Outlook
+- **Share page calendar download** (`SharedPlanView.tsx`): "Add to Calendar (.ics)" download button appears on the share page when `event_datetime` is set, letting plan recipients save the event to any calendar app
+- **City trip Google Calendar link**: `buildPlanOptionFromPackage` now adds a "Add to calendar" secondary action (Google Calendar deep link) for each city_trip option when `startDate` is known — links to hotel check-in event
+- **15 new tests**: 8 tests in `scenario2.test.ts` covering `event_datetime`/`event_location` for all three scenario types + 7 tests in `plan-calendar.test.ts` covering the ICS route (404, 422, content-type, body structure, DTSTART, Content-Disposition)
+
 ## [0.2.7.0] - 2026-03-22
 
 ### Added

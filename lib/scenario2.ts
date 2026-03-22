@@ -27,6 +27,10 @@ import { ModuleResults } from "./agent/planner-engine/types";
 import { buildCityTripEngineConfig } from "./agent/scenario-configs/city-trip";
 import { mapLinksToOpenLinkActions } from "./agent/planners/utils";
 import {
+  getBestCardForTrip,
+  buildTripCardCallout,
+} from "./agent/planners/trip-card";
+import {
   buildBookingComUrl,
   buildGoogleFlightsUrl,
 } from "./agent/planners/booking-links";
@@ -219,6 +223,17 @@ export function runScenarioPlanner(params: {
     primary_plan: primaryPlan,
     backup_plans: backupPlans,
     tradeoff_summary: buildDateNightTradeoffSummary(primaryCard, backupCards, params.outputLanguage),
+    ...(() => {
+      const eventDate = resolveDateContext(params.scenarioIntent.detected_date_text);
+      if (!eventDate) return {};
+      const { hours, minutes } = resolveTimeContext(params.scenarioIntent.time_hint);
+      const pad = (n: number) => String(n).padStart(2, "0");
+      const localISO = `${eventDate.getFullYear()}-${pad(eventDate.getMonth() + 1)}-${pad(eventDate.getDate())}T${pad(hours)}:${pad(minutes)}:00`;
+      return {
+        event_datetime: localISO,
+        event_location: primaryCard.restaurant.address,
+      };
+    })(),
     risks,
     next_actions: buildDateNightActions(
       primaryCard.suggested_refinements ?? [],
@@ -380,6 +395,23 @@ export function runWeekendTripPlanner(params: {
       })),
       params.outputLanguage
     ),
+    ...(() => {
+      if (!params.scenarioIntent.start_date) return {};
+      const primaryPairKey = uniqueKeys[0] as "stable" | "value" | "experience";
+      const primaryHotelCard = { stable: stablePair.hotel, value: valuePair.hotel, experience: experiencePair.hotel }[primaryPairKey];
+      return {
+        event_datetime: `${params.scenarioIntent.start_date}T09:00:00`,
+        event_location: primaryHotelCard.hotel.address || primaryHotelCard.hotel.name,
+      };
+    })(),
+    ...(() => {
+      const primaryPairKey = uniqueKeys[0] as "stable" | "value" | "experience";
+      const primaryPair = { stable: stablePair, value: valuePair, experience: experiencePair }[primaryPairKey];
+      const card = getBestCardForTrip({ flight_usd: primaryPair.flight.flight.price, hotel_usd: primaryPair.hotel.hotel.total_price });
+      if (!card) return {};
+      const lang = params.outputLanguage === "zh" ? "zh" : "en";
+      return { trip_card_callout: buildTripCardCallout(card, lang) };
+    })(),
     risks: dedupeStrings([
       ...primary.risks,
       ...backups.flatMap((option) => option.risks.slice(0, 1)),
