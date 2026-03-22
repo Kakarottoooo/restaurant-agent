@@ -509,6 +509,11 @@ export async function runAgent(
   const _followUpPref = scenarioIntent?.scenario === "date_night"
     ? (scenarioIntent as import("./types").DateNightIntent).follow_up_preference
     : "none";
+  // Map follow_up_preference to venue type for filtered search ("cocktail" and "dessert" narrow the query).
+  const _venueType: "cocktail" | "dessert" | "open" =
+    _followUpPref === "cocktail" ? "cocktail"
+    : _followUpPref === "dessert" ? "dessert"
+    : "open";
   const afterDinnerOption =
     scenarioIntent?.scenario === "date_night" &&
     _followUpPref !== "none" && _followUpPref !== "walk"
@@ -516,7 +521,8 @@ export async function runAgent(
           restaurantCityLabel,
           primaryRestaurantCoords?.lat !== undefined && primaryRestaurantCoords?.lng !== undefined
             ? primaryRestaurantCoords
-            : undefined
+            : undefined,
+          _venueType
         )
       : null;
 

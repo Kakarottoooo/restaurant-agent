@@ -136,16 +136,24 @@ export async function googlePlacesSearch(params: {
 
 /**
  * Finds a cocktail bar, dessert spot, or wine bar near the given restaurant coords.
- * Returns the best single option, or null if nothing suitable is found.
+ * Returns the best single option, or null if restaurant coords are unknown or nothing is found.
+ * @param venueType - filters the search by follow_up_preference: "cocktail", "dessert", or "open" (default)
  */
 export async function searchAfterDinnerVenue(
   city: string,
-  nearCoords?: { lat: number; lng: number }
+  nearCoords: { lat: number; lng: number } | undefined,
+  venueType: "cocktail" | "dessert" | "open" = "open"
 ): Promise<AfterDinnerVenue | null> {
+  // Without restaurant coords we cannot compute an accurate walk time — skip search.
+  if (!nearCoords) return null;
   try {
-    const query = `cocktail bar OR wine bar OR dessert cafe in ${city}`;
-    const center = nearCoords ?? { lat: 37.7749, lng: -122.4194 };
-    const radius = nearCoords ? 1200 : 5000;
+    const queryByType: Record<typeof venueType, string> = {
+      cocktail: `craft cocktail bar OR wine bar in ${city}`,
+      dessert: `dessert café OR ice cream shop OR dessert bar in ${city}`,
+      open: `cocktail bar OR wine bar OR dessert cafe in ${city}`,
+    };
+    const query = queryByType[venueType];
+    const radius = 1200;
 
     const res = await fetch(
       "https://places.googleapis.com/v1/places:searchText",
@@ -162,7 +170,7 @@ export async function searchAfterDinnerVenue(
           maxResultCount: 5,
           locationBias: {
             circle: {
-              center: { latitude: center.lat, longitude: center.lng },
+              center: { latitude: nearCoords.lat, longitude: nearCoords.lng },
               radius,
             },
           },
@@ -182,7 +190,7 @@ export async function searchAfterDinnerVenue(
     const venueLat: number | undefined = best.location?.latitude;
     const venueLng: number | undefined = best.location?.longitude;
     let walkMinutes = 10;
-    if (nearCoords && venueLat !== undefined && venueLng !== undefined) {
+    if (venueLat !== undefined && venueLng !== undefined) {
       const meters = haversineDistance(nearCoords.lat, nearCoords.lng, venueLat, venueLng);
       walkMinutes = Math.round(meters / 80); // ~80 m/min walking pace
       if (walkMinutes < 1) walkMinutes = 1;
