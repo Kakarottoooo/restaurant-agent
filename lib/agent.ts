@@ -41,7 +41,9 @@ import { buildDateNightFallbackIntent } from "./agent/planners/date-night";
 import { parseBigPurchaseIntent, runBigPurchasePlanner } from "./agent/planners/big-purchase";
 import { parseConcertEventIntent } from "./agent/parse/concert-event";
 import { runConcertEventPlanner } from "./agent/planners/concert-event";
-import { ConcertEventIntent } from "./types";
+import { parseGiftIntent } from "./agent/parse/gift";
+import { runGiftPlanner } from "./agent/planners/gift";
+import { ConcertEventIntent, GiftIntent } from "./types";
 
 // ─── Main Agent Function ──────────────────────────────────────────────────────
 
@@ -289,6 +291,33 @@ export async function runAgent(
 
     return buildBaseResult(concertIntent, "trip", {
       scenarioIntent: concertIntent,
+      decisionPlan,
+      result_mode: "scenario_plan",
+      output_language: queryContext.output_language,
+    });
+  }
+
+  if (detectedScenario === "gift") {
+    const giftIntent = parseGiftIntent(userMessage, queryContext);
+    const decisionPlan = await runGiftPlanner({
+      intent: giftIntent,
+      outputLanguage: queryContext.output_language,
+    });
+
+    if (!decisionPlan) {
+      const noResults: GiftIntent = {
+        ...giftIntent,
+        needs_clarification: true,
+        missing_fields: [...giftIntent.missing_fields, "no products found — try different interests or budget"],
+      };
+      return buildBaseResult(noResults, "gift", {
+        scenarioIntent: noResults,
+        result_mode: "followup_refinement",
+      });
+    }
+
+    return buildBaseResult(giftIntent, "gift", {
+      scenarioIntent: giftIntent,
       decisionPlan,
       result_mode: "scenario_plan",
       output_language: queryContext.output_language,
