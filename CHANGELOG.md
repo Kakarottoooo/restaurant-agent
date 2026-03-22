@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.2.5.0] - 2026-03-22
+
+### Added
+- **ActionRail mobile scroll**: pill row now scrolls horizontally on mobile with a right-edge fade gradient hint — all actions stay reachable without wrapping
+- **SSE stream timeout**: agent requests now time out after 45 seconds server-side; a client-side 50-second stall watchdog cancels hung streams with a clear retry message
+
+### Fixed
+- Fixed test fixtures for `MultilingualQueryContext` and `LaptopRecommendationCard` to match their interface shapes
+
 ## [0.2.4.0] - 2026-03-22
 
 ### Added
