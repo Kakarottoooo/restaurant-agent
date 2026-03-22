@@ -42,7 +42,11 @@ self.addEventListener("fetch", (event) => {
       fetch(event.request)
         .then((response) => {
           const copy = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put("/", copy));
+          // Only cache the app shell for root navigations — caching all navigation URLs under "/"
+          // would overwrite the app shell with responses from /share/... or /internal/... pages.
+          if (url.pathname === "/") {
+            caches.open(CACHE_NAME).then((cache) => cache.put("/", copy));
+          }
           return response;
         })
         .catch(() => caches.match("/") || Response.error())

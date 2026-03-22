@@ -58,9 +58,13 @@ export function detectScenarioFromMessage(message: string): ScenarioType | null 
   const tripWordIsWeekend = /\btrip\b/.test(lower) && !/\bround.?trip\b|\bbusiness.?trip\b|\bday.?trip\b|\bone.?way\b/i.test(lower);
   const hasWeekendSignal =
     WEEKEND_TRIP_REGEX.test(lower) ||
+    // Require BOTH flight and hotel signals — hotel-only or flight-only queries
+    // ("find a hotel for the weekend", "cheap flights this weekend") should NOT trigger
+    // the trip-package flow; only queries that explicitly involve both travel + accommodation do.
     ((/\bweekend\b|\btravel\b|\bgetaway\b|\bvacation\b/i.test(lower) || tripWordIsWeekend) &&
-      /\bflight\b|\bfly\b|\bhotel\b|\bstay\b|\bto\s+[a-z]/i.test(lower)) ||
-    (WEEKEND_ZH_REGEX.test(message) && /航班|机票|酒店|住宿|飞|去/.test(message));
+      /\bflight\b|\bfly\b/.test(lower) &&
+      /\bhotel\b|\bstay\b/.test(lower)) ||
+    (WEEKEND_ZH_REGEX.test(message) && /航班|机票/.test(message) && /酒店|住宿/.test(message));
 
   if (hasWeekendSignal) return "weekend_trip";
   if (DATE_NIGHT_REGEX.test(lower) || DATE_NIGHT_ZH_REGEX.test(message)) {
@@ -255,7 +259,22 @@ export function runWeekendTripPlanner(params: {
     }),
   };
 
-  const ordered = chooseWeekendTripPriority(params.scenarioIntent).map((key) => optionMap[key]);
+  // Deduplicate: when inventory is limited, pick* functions fall back to the same flight/hotel,
+  // producing options with identical itineraries but different labels. Filter them out before
+  // building the plan so the user never sees duplicate packages.
+  const pairCombo: Record<string, string> = {
+    stable: `${stablePair.flight.flight.id}:${stablePair.hotel.hotel.id}`,
+    value: `${valuePair.flight.flight.id}:${valuePair.hotel.hotel.id}`,
+    experience: `${experiencePair.flight.flight.id}:${experiencePair.hotel.hotel.id}`,
+  };
+  const seenCombos = new Set<string>();
+  const uniqueKeys = chooseWeekendTripPriority(params.scenarioIntent).filter((key) => {
+    const combo = pairCombo[key];
+    if (seenCombos.has(combo)) return false;
+    seenCombos.add(combo);
+    return true;
+  });
+  const ordered = uniqueKeys.map((key) => optionMap[key]);
   const primary = ordered[0];
   const backups = ordered.slice(1, 3).map((option, index) => ({
     ...option,

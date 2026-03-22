@@ -708,6 +708,11 @@ export function useChat({
 
       return {
         ...currentPlan,
+        // Clear stale brief/risks/evidence — they were built from the original primary option
+        // and would describe the old option after promotion. Reset to the promoted option's data.
+        scenario_brief: [nextPrimary.summary],
+        risks: [],
+        evidence_items: [],
         primary_plan: {
           ...nextPrimary,
           label: pickLanguageCopy(language, "Main pick", "主方案"),

@@ -203,7 +203,9 @@ export async function requireInternalAnalyticsAccess(): Promise<InternalAnalytic
   }
 
   const allowlist = parseAllowlist(process.env.INTERNAL_ANALYTICS_USER_IDS);
-  if (allowlist.length > 0 && !allowlist.includes(userId)) {
+  // If the env var is unset or empty, deny ALL access rather than falling through to
+  // "any signed-in user" mode — internal analytics expose raw query text and user IDs.
+  if (allowlist.length === 0 || !allowlist.includes(userId)) {
     return {
       allowed: false,
       status: 403,
@@ -215,7 +217,7 @@ export async function requireInternalAnalyticsAccess(): Promise<InternalAnalytic
   return {
     allowed: true,
     status: 200,
-    accessMode: allowlist.length > 0 ? "allowlist" : "signed_in",
+    accessMode: "allowlist",
     userId,
   };
 }

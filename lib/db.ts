@@ -63,7 +63,10 @@ export async function ensureScenarioEventsTable() {
           created_at    TIMESTAMPTZ DEFAULT NOW()
         )
       `;
-    })();
+    })().catch((err) => {
+      scenarioEventsTableReady = null;
+      throw err;
+    });
   }
 
   await scenarioEventsTableReady;
