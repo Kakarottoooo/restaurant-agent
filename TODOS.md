@@ -40,14 +40,6 @@
 
 ---
 
-### 5a-2: Concert / event ticket OS
-**Priority:** P2
-**What:** "这周末 NYC 有什么好的演出？爵士或者 indie，不要超过 60 美元" → 3 个方案：最安全 / 最有趣 / 最独特，含场地 / 时间 / 票价 / Ticketmaster 或 Dice 预购链接。
-**Why:** 演出是典型的"发现 + 执行"场景——用户不知道有什么，看完了还要去别的地方买票。正好是 Folio 最擅长消灭的两段摩擦。
-**Pros:** 高频，有明确行动终点（购票）。Songkick / Bandsintown API 免费，覆盖全美演出数据。
-**Cons:** 票务实时性强，sold out 状态变化快，需要在方案里显示库存状态。
-**Context:** 数据源：Songkick API（免费，有 venue / artist / genre 过滤）+ Ticketmaster Discovery API（免费层）。新建 `lib/agent/scenario-configs/events.ts`。
-
 ---
 
 ### 5a-3: Fitness / wellness session OS
@@ -173,6 +165,11 @@ Current `open_link` actions in `lib/types.ts` have a `url: string` field. The pl
 ## Frontend / UI
 
 ## Completed
+
+### 5a-2: Concert / event ticket OS
+**Completed:** v0.2.19.0 (2026-03-22) — `concert_event` scenario live. Ticketmaster Discovery API client (`lib/ticketmaster.ts`). Intent parser extracts artist name via proper-noun regex or falls back to genre keywords. Custom planner builds DecisionPlan with up to 3 events (Top pick / Most exciting / Hidden gem), direct buy-ticket links, venue map links, price ranges, and bilingual copy. Supports concerts, festivals, theater, sports, comedy. 17 tests covering API client, intent parser, and planner.
+
+---
 
 ### 4b-2: User accounts + cross-device preference sync
 **Completed:** v0.2.18.0 (2026-03-22) — `user_id TEXT` column added to `user_preferences` with partial unique index `(user_id, preference_key) WHERE user_id IS NOT NULL`. `getUserPreferences(sessionId, userId?)` queries by `user_id` when provided. `upsertUserPreference(...)` uses the user-keyed index when `userId` is set. `mergeSessionPreferences(sessionId, userId)` stamps `user_id` on all session rows on sign-in. `POST /api/user/preferences/merge` (Clerk `auth()` server-side) calls merge. `ClerkSync.tsx` fires the merge once per sign-in (fire-and-forget, idempotent). `useChat` now sends `session_id` + `user_id` in every request. `runAgent` passes `userId` to `getUserPreferences`.

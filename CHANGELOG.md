@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.2.19.0] - 2026-03-22
+
+### Added
+- **Concert & event ticket OS (5a-2)**: New `concert_event` scenario powered by the Ticketmaster Discovery API. Ask "find me a Taylor Swift concert in NYC" or "jazz shows this weekend in Chicago" — the agent parses the intent (artist, genre, city, date, event type), queries Ticketmaster, and returns up to 3 events as a `DecisionPlan` with direct buy-ticket links, venue info, price ranges, and Google Maps venue links. Supports concerts, festivals, theater, sports, and comedy. Gracefully degrades to a follow-up prompt when no events are found. Full bilingual (EN/ZH) support.
+- **`lib/ticketmaster.ts`**: Ticketmaster Discovery API client — searches by keyword, city, date range, and classification. Parses venues, price ranges, genres, and images from the API response. Handles API errors and network failures silently.
+- **`lib/agent/parse/concert-event.ts`**: Regex + NLU-based intent parser — extracts artist names via proper-noun patterns, falls back to genre keywords (jazz, rock, indie, hip-hop, etc.), detects event type, resolves "this weekend" to a real date.
+- **`lib/agent/planners/concert-event.ts`**: Custom planner that builds a `DecisionPlan` directly from Ticketmaster events — deduplicates by name, assigns tier labels (Top pick / Most exciting / Hidden gem), formats prices and datetimes, builds buy-ticket and venue map actions.
+
 ## [0.2.18.0] - 2026-03-22
 
 ### Added
