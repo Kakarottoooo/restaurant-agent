@@ -4,6 +4,25 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.2.1.0] - 2026-03-21
+
+### Added
+- **Agent sub-module split** (`lib/agent/`): extracted parsers, pipelines, and planners into 21 focused modules (`parse/`, `pipelines/`, `planners/`, `composer/`) — `lib/agent.ts` is now a thin orchestrator
+- **ScenarioPlanView component** (`components/ScenarioPlanView.tsx`): consolidated scenario plan rendering (ScenarioBrief + PrimaryPlanCard + BackupPlanCard + ActionRail + ScenarioEvidencePanel) into one composable component
+
+### Fixed
+- **DB singleton reset on transient failure** (`lib/db.ts`): `ensureScenarioEventsTable` cached rejected Promises permanently — now resets on failure so the next call retries
+- **Weekend trip detection false positive** (`lib/scenario2.ts`): hotel-only or flight-only queries ("find a hotel this weekend") no longer trigger the trip-package flow — requires BOTH flight AND hotel signals
+- **Near Me mode departure city** (`lib/agent.ts`): passed `"your current location"` as flight departure instead of the real city name — weekend trip flight search now uses `city.fullName`
+- **Stale scenario brief after backup promotion** (`app/hooks/useChat.ts`): `swapDecisionPlanOption` spread stale `scenario_brief`, `risks`, and `evidence_items` from the original primary plan — now reset on swap
+- **SW navigation caching** (`public/sw.js`): all navigation responses were cached under `"/"`, overwriting the app shell with any page response — now only caches root navigations
+- **Duplicate trip packages in limited inventory** (`lib/scenario2.ts`): `runWeekendTripPlanner` deduplicated flight+hotel combos before building backup plans — no more identical packages with different labels
+- **Analytics access control** (`lib/scenarioEvents.ts`): when `INTERNAL_ANALYTICS_USER_IDS` env var was unset, any signed-in user could access raw analytics — now denies all access when allowlist is empty
+- **Vitest picking up .claude/ worktrees** (`vitest.config.ts`): added exclude for `**/.claude/**` to prevent gstack internal tests and worktree snapshots from being included in test runs
+
+### Changed
+- **app/page.tsx**: replaced 5 individual scenario component imports with `ScenarioPlanView`
+
 ## [0.2.0.0] - 2026-03-21
 
 ### Added
