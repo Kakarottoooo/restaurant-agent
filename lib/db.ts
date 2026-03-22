@@ -9,6 +9,7 @@ let feedbackPromptsTableReady: Promise<void> | null = null;
 let planVotesTableReady: Promise<void> | null = null;
 let priceWatchesTableReady: Promise<void> | null = null;
 let userPreferencesTableReady: Promise<void> | null = null;
+let userNotificationsTableReady: Promise<void> | null = null;
 
 /**
  * Initialize the database tables if they don't exist.
@@ -54,6 +55,7 @@ export async function initDb() {
   await ensurePlanVotesTable();
   await ensurePriceWatchesTable();
   await ensureUserPreferencesTable();
+  await ensureUserNotificationsTable();
 }
 
 export async function ensureScenarioEventsTable() {
@@ -229,6 +231,10 @@ export async function ensureUserPreferencesTable() {
         )
       `;
       await sql`CREATE INDEX IF NOT EXISTS user_prefs_session_idx ON user_preferences (session_id)`;
+      // 4b-2 migrations: user_id column + per-user unique index
+      await sql`ALTER TABLE user_preferences ADD COLUMN IF NOT EXISTS user_id TEXT`;
+      await sql`CREATE INDEX IF NOT EXISTS user_prefs_user_idx ON user_preferences (user_id) WHERE user_id IS NOT NULL`;
+      await sql`CREATE UNIQUE INDEX IF NOT EXISTS user_prefs_user_key_idx ON user_preferences (user_id, preference_key) WHERE user_id IS NOT NULL`;
     })().catch((err) => {
       userPreferencesTableReady = null;
       throw err;
@@ -241,29 +247,142 @@ export async function upsertUserPreference(
   sessionId: string,
   key: string,
   value: string,
-  confidence = 1.0
+  confidence = 1.0,
+  userId?: string
 ): Promise<void> {
   await ensureUserPreferencesTable();
-  await sql`
-    INSERT INTO user_preferences (session_id, preference_key, preference_value, confidence, updated_at)
-    VALUES (${sessionId}, ${key}, ${value}, ${confidence}, NOW())
-    ON CONFLICT (session_id, preference_key)
-    DO UPDATE SET preference_value = EXCLUDED.preference_value,
-                  confidence = EXCLUDED.confidence,
-                  updated_at = NOW()
-  `;
+  if (userId) {
+    await sql`
+      INSERT INTO user_preferences (session_id, user_id, preference_key, preference_value, confidence, updated_at)
+      VALUES (${sessionId}, ${userId}, ${key}, ${value}, ${confidence}, NOW())
+      ON CONFLICT (user_id, preference_key) WHERE user_id IS NOT NULL
+      DO UPDATE SET preference_value = EXCLUDED.preference_value,
+                    confidence = EXCLUDED.confidence,
+                    session_id = EXCLUDED.session_id,
+                    updated_at = NOW()
+    `;
+  } else {
+    await sql`
+      INSERT INTO user_preferences (session_id, preference_key, preference_value, confidence, updated_at)
+      VALUES (${sessionId}, ${key}, ${value}, ${confidence}, NOW())
+      ON CONFLICT (session_id, preference_key)
+      DO UPDATE SET preference_value = EXCLUDED.preference_value,
+                    confidence = EXCLUDED.confidence,
+                    updated_at = NOW()
+    `;
+  }
 }
 
-export async function getUserPreferences(sessionId: string): Promise<Record<string, string>> {
+export async function getUserPreferences(
+  sessionId: string,
+  userId?: string
+): Promise<Record<string, string>> {
   await ensureUserPreferencesTable();
-  const result = await sql<{ preference_key: string; preference_value: string }>`
-    SELECT preference_key, preference_value
-    FROM user_preferences
-    WHERE session_id = ${sessionId}
-  `;
+  const result = userId
+    ? await sql<{ preference_key: string; preference_value: string }>`
+        SELECT preference_key, preference_value
+        FROM user_preferences
+        WHERE user_id = ${userId}
+      `
+    : await sql<{ preference_key: string; preference_value: string }>`
+        SELECT preference_key, preference_value
+        FROM user_preferences
+        WHERE session_id = ${sessionId}
+      `;
   const prefs: Record<string, string> = {};
   for (const row of result.rows) {
     prefs[row.preference_key] = row.preference_value;
   }
   return prefs;
+}
+
+export interface PushSubscriptionRecord {
+  id: number;
+  session_id: string;
+  user_id: string | null;
+  push_endpoint: string;
+  push_subscription: object;
+}
+
+export async function ensureUserNotificationsTable() {
+  if (!userNotificationsTableReady) {
+    userNotificationsTableReady = (async () => {
+      await sql`
+        CREATE TABLE IF NOT EXISTS user_notifications (
+          id                  BIGSERIAL PRIMARY KEY,
+          session_id          TEXT NOT NULL,
+          user_id             TEXT,
+          push_endpoint       TEXT NOT NULL,
+          push_subscription   JSONB NOT NULL,
+          notification_email  TEXT,
+          created_at          TIMESTAMPTZ DEFAULT NOW(),
+          UNIQUE (push_endpoint)
+        )
+      `;
+      await sql`CREATE INDEX IF NOT EXISTS user_notifs_session_idx ON user_notifications (session_id)`;
+      await sql`CREATE INDEX IF NOT EXISTS user_notifs_user_idx ON user_notifications (user_id) WHERE user_id IS NOT NULL`;
+    })().catch((err) => {
+      userNotificationsTableReady = null;
+      throw err;
+    });
+  }
+  await userNotificationsTableReady;
+}
+
+export async function upsertPushSubscription(
+  sessionId: string,
+  subscription: { endpoint: string; keys: { p256dh: string; auth: string } },
+  userId?: string
+): Promise<void> {
+  await ensureUserNotificationsTable();
+  await sql`
+    INSERT INTO user_notifications (session_id, user_id, push_endpoint, push_subscription)
+    VALUES (${sessionId}, ${userId ?? null}, ${subscription.endpoint}, ${JSON.stringify(subscription)})
+    ON CONFLICT (push_endpoint)
+    DO UPDATE SET
+      session_id = EXCLUDED.session_id,
+      user_id = COALESCE(EXCLUDED.user_id, user_notifications.user_id),
+      push_subscription = EXCLUDED.push_subscription
+  `;
+}
+
+export async function getPushSubscriptionsBySession(
+  sessionId: string
+): Promise<PushSubscriptionRecord[]> {
+  await ensureUserNotificationsTable();
+  const result = await sql<PushSubscriptionRecord>`
+    SELECT id, session_id, user_id, push_endpoint, push_subscription
+    FROM user_notifications
+    WHERE session_id = ${sessionId}
+  `;
+  return result.rows;
+}
+
+export async function getAllPushSubscriptions(): Promise<PushSubscriptionRecord[]> {
+  await ensureUserNotificationsTable();
+  const result = await sql<PushSubscriptionRecord>`
+    SELECT id, session_id, user_id, push_endpoint, push_subscription
+    FROM user_notifications
+    ORDER BY created_at DESC
+  `;
+  return result.rows;
+}
+
+/** On Clerk sign-in: copy all session-keyed prefs to the user account (idempotent). */
+export async function mergeSessionPreferences(
+  sessionId: string,
+  userId: string
+): Promise<void> {
+  await ensureUserPreferencesTable();
+  // Stamp user_id on session rows ONLY where no user-keyed pref already exists for that key.
+  // Skipping keys the user already has prevents unique constraint violations.
+  await sql`
+    UPDATE user_preferences
+    SET user_id = ${userId}
+    WHERE session_id = ${sessionId}
+      AND user_id IS NULL
+      AND preference_key NOT IN (
+        SELECT preference_key FROM user_preferences WHERE user_id = ${userId}
+      )
+  `;
 }

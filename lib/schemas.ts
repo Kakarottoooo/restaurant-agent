@@ -5,6 +5,7 @@ import { z } from "zod";
 export const ChatRequestSchema = z.object({
   message: z.string().min(1).max(500).trim(),
   session_id: z.string().max(128).optional(),
+  user_id: z.string().max(128).optional(),
   history: z
     .array(
       z.object({
