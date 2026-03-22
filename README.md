@@ -26,7 +26,7 @@ Scenario decision engine (`lib/scenario2.ts`):
 - 27 US cities + GPS-based "Near Me" mode + custom landmark search
 - List view and full-screen interactive map view
 - Filter chips by price and cuisine
-- Scenario plan UI: `ScenarioBrief` + `PrimaryPlanCard` + `ActionRail` with booking links
+- Scenario plan UI: `ScenarioPlanView` (consolidates `ScenarioBrief` + `PrimaryPlanCard` + `BackupPlanCard` + `ActionRail` + evidence panel) with booking links
 - Share results via URL
 - Save favorites (localStorage)
 - Dark mode (system preference)
@@ -91,7 +91,12 @@ app/
   layout.tsx            # Fonts, metadata, service worker registration
 
 lib/
-  agent.ts              # 3-layer AI pipeline (parseIntent → gatherCandidates → rankAndExplain)
+  agent.ts              # Thin orchestrator — routes to sub-modules, runs restaurant pipeline inline
+  agent/
+    parse/              # Intent parsers per category (restaurant, hotel, flight, credit-card, …)
+    pipelines/          # Category pipelines (hotel, flight, credit-card, laptop, smartphone, headphone)
+    planners/           # Scenario planners (weekend-trip, date-night)
+    composer/           # Scoring + refinement helpers
   scenario2.ts          # Scenario decision engine (detectScenario, runScenarioPlanner, runWeekendTripPlanner)
   nlu.ts                # Multilingual query analysis (MiniMax + English fast-path)
   minimax.ts            # Shared MiniMax chat helper with configurable timeout
@@ -105,6 +110,7 @@ lib/
   outputCopy.ts         # Output language copy helpers
 
 components/
+  ScenarioPlanView.tsx     # Scenario plan composite (Brief + Primary + Backups + ActionRail + Evidence)
   ScenarioBrief.tsx        # Query summary card for scenario_plan mode
   PrimaryPlanCard.tsx      # Primary plan display with swap + approve actions
   BackupPlanCard.tsx       # Backup option cards
