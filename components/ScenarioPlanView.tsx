@@ -67,7 +67,6 @@ export default function ScenarioPlanView({
         option={plan.primary_plan}
         language={plan.output_language}
         confidence={plan.confidence}
-        afterDinnerOption={plan.after_dinner_option}
         onLinkClick={(action) => onLinkClick(action, plan.primary_plan.id)}
       />
 

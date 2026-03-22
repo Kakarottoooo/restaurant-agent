@@ -1440,7 +1440,7 @@ describe("after_dinner_option", () => {
     google_maps_url: "https://maps.google.com/?cid=123",
   };
 
-  it("attaches after_dinner_option when provided", () => {
+  it("attaches after_dinner_option to primary_plan when provided", () => {
     const result = runScenarioPlanner({
       scenarioIntent: { scenario: "date_night", category: "restaurant" },
       recommendations: [makeCard()],
@@ -1449,9 +1449,21 @@ describe("after_dinner_option", () => {
       outputLanguage: "en",
       afterDinnerOption: mockVenue,
     });
-    expect(result?.after_dinner_option).toBeDefined();
-    expect(result?.after_dinner_option?.name).toBe("Bar Califa");
-    expect(result?.after_dinner_option?.walk_minutes).toBe(8);
+    expect(result?.primary_plan.after_dinner_option).toBeDefined();
+    expect(result?.primary_plan.after_dinner_option?.name).toBe("Bar Califa");
+    expect(result?.primary_plan.after_dinner_option?.walk_minutes).toBe(8);
+  });
+
+  it("backup plans do not get after_dinner_option", () => {
+    const result = runScenarioPlanner({
+      scenarioIntent: { scenario: "date_night", category: "restaurant" },
+      recommendations: [makeCard(), makeCard({ restaurant: makeRestaurant({ id: "r2", name: "B" }) })],
+      userMessage: "romantic dinner",
+      cityLabel: "SF",
+      outputLanguage: "en",
+      afterDinnerOption: mockVenue,
+    });
+    expect(result?.backup_plans[0].after_dinner_option).toBeUndefined();
   });
 
   it("omits after_dinner_option when not provided", () => {
@@ -1462,7 +1474,7 @@ describe("after_dinner_option", () => {
       cityLabel: "SF",
       outputLanguage: "en",
     });
-    expect(result?.after_dinner_option).toBeUndefined();
+    expect(result?.primary_plan.after_dinner_option).toBeUndefined();
   });
 
   it("omits after_dinner_option when null", () => {
@@ -1474,6 +1486,6 @@ describe("after_dinner_option", () => {
       outputLanguage: "en",
       afterDinnerOption: null,
     });
-    expect(result?.after_dinner_option).toBeUndefined();
+    expect(result?.primary_plan.after_dinner_option).toBeUndefined();
   });
 });

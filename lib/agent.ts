@@ -506,9 +506,12 @@ export async function runAgent(
     scenarioIntent?.scenario === "date_night" && withOpenTable[0]?.restaurant
       ? { lat: withOpenTable[0].restaurant.lat!, lng: withOpenTable[0].restaurant.lng! }
       : undefined;
+  const _followUpPref = scenarioIntent?.scenario === "date_night"
+    ? (scenarioIntent as import("./types").DateNightIntent).follow_up_preference
+    : "none";
   const afterDinnerOption =
     scenarioIntent?.scenario === "date_night" &&
-    (scenarioIntent as import("./types").DateNightIntent).follow_up_preference !== "none"
+    _followUpPref !== "none" && _followUpPref !== "walk"
       ? await searchAfterDinnerVenue(
           restaurantCityLabel,
           primaryRestaurantCoords?.lat !== undefined && primaryRestaurantCoords?.lng !== undefined

@@ -240,6 +240,8 @@ export interface PlanOption {
   tradeoff_reason?: string;
   tradeoff_detail?: string;
   product_model?: string;
+  /** After-dinner venue for date_night primary plans. Travels with the option so backup promotion stays correct. */
+  after_dinner_option?: AfterDinnerVenue;
 }
 
 export interface DecisionEvidenceItem {
@@ -272,8 +274,6 @@ export interface DecisionPlan {
   show_more_available?: boolean;
   /** True when this plan was shared in group-vote mode — enables vote UI on the share page. */
   vote_mode?: boolean;
-  /** After-dinner venue for date_night plans (cocktail bar, dessert spot, etc.). */
-  after_dinner_option?: AfterDinnerVenue;
   risks: string[];
   next_actions: PlanAction[];
   evidence_card_ids: string[];

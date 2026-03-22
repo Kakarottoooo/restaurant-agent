@@ -1,13 +1,12 @@
 "use client";
 
-import { AfterDinnerVenue, OutputLanguage, PlanLinkAction, PlanOption } from "@/lib/types";
+import { OutputLanguage, PlanLinkAction, PlanOption } from "@/lib/types";
 import { getScenarioUiCopy, pickLanguageCopy } from "@/lib/outputCopy";
 
 interface PrimaryPlanCardProps {
   option: PlanOption;
   language?: OutputLanguage;
   confidence?: "high" | "medium" | "low";
-  afterDinnerOption?: AfterDinnerVenue | null;
   onLinkClick?: (action: PlanLinkAction) => void;
 }
 
@@ -46,9 +45,9 @@ export default function PrimaryPlanCard({
   option,
   language,
   confidence,
-  afterDinnerOption,
   onLinkClick,
 }: PrimaryPlanCardProps) {
+  const afterDinnerOption = option.after_dinner_option ?? null;
   const copy = getScenarioUiCopy(language);
   const isHighConfidence = confidence === "high";
   return (
@@ -139,6 +138,18 @@ export default function PrimaryPlanCard({
           >
             {option.estimated_total}
           </p>
+          {option.after_dinner_option && (
+            <p
+              style={{
+                fontFamily: "var(--font-dm-sans)",
+                fontSize: "11px",
+                color: "var(--text-secondary)",
+                marginTop: "2px",
+              }}
+            >
+              {pickLanguageCopy(language, "dinner only", "仅餐厅")}
+            </p>
+          )}
         </div>
       </div>
 
