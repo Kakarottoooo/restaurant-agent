@@ -153,6 +153,8 @@ export async function ensureFeedbackPromptsTable() {
       `;
       await sql`CREATE INDEX IF NOT EXISTS feedback_prompts_plan_idx ON feedback_prompts (plan_id)`;
       await sql`CREATE INDEX IF NOT EXISTS feedback_prompts_session_idx ON feedback_prompts (user_session)`;
+      // Prevent duplicate prompts from concurrent cron runs
+      await sql`CREATE UNIQUE INDEX IF NOT EXISTS feedback_prompts_plan_unique_idx ON feedback_prompts (plan_id)`;
     })().catch((err) => {
       feedbackPromptsTableReady = null;
       throw err;
