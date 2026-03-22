@@ -7,6 +7,7 @@ vi.mock("@/lib/db", () => ({
   ensureFeedbackPromptsTable: vi.fn().mockResolvedValue(undefined),
   ensurePlanOutcomesTable: vi.fn().mockResolvedValue(undefined),
   ensureDecisionPlansTable: vi.fn().mockResolvedValue(undefined),
+  upsertUserPreference: vi.fn().mockResolvedValue(undefined),
   sql: vi.fn(),
 }));
 

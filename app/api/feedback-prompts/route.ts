@@ -1,6 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
-import { ensureFeedbackPromptsTable, ensurePlanOutcomesTable, sql } from "@/lib/db";
-import type { PostExperienceFeedback } from "@/lib/types";
+import { ensureFeedbackPromptsTable, ensurePlanOutcomesTable, upsertUserPreference, sql } from "@/lib/db";
+import type { FeedbackIssue, PostExperienceFeedback } from "@/lib/types";
+
+// Map structured feedback issues to learned preference keys
+const ISSUE_TO_PREFERENCE: Partial<Record<FeedbackIssue, { key: string; value: string }>> = {
+  too_noisy: { key: "noise_sensitivity", value: "high" },
+  too_expensive: { key: "budget_sensitivity", value: "high" },
+  too_far: { key: "distance_tolerance", value: "low" },
+};
 
 export interface FeedbackPromptItem {
   id: number;
@@ -106,6 +113,16 @@ export async function POST(req: NextRequest) {
         ${JSON.stringify(feedback)}
       )
     `;
+
+    // Upsert learned preference signals (fire-and-forget, don't block response)
+    if (feedback.issues?.length) {
+      const upserts = feedback.issues
+        .map((issue) => ISSUE_TO_PREFERENCE[issue])
+        .filter((p): p is { key: string; value: string } => p !== undefined);
+      for (const pref of upserts) {
+        upsertUserPreference(session_id, pref.key, pref.value).catch(() => {});
+      }
+    }
 
     return NextResponse.json({ ok: true });
   } catch {

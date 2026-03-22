@@ -120,6 +120,7 @@ Current `open_link` actions in `lib/types.ts` have a `url: string` field. The pl
 **Cons:** Requires per-user preference store. Session-based users (no login) need a stable device ID.
 **Context:** New table `user_preferences (session_id, preference_key, preference_value, confidence, updated_at)`. Keys: `noise_sensitivity`, `distance_tolerance_km`, `budget_sensitivity`, `cuisine_diversity`. Updated after each structured feedback event. `runNLU()` in `lib/nlu.ts` accepts an optional `userPreferences` map and injects them into the NLU prompt as soft constraints.
 **Depends on:** 3c-3 (structured feedback required to build preference signal).
+**Completed:** v0.2.16.0 (2026-03-22) — `user_preferences` table + `upsertUserPreference` / `getUserPreferences` in `lib/db.ts`. `analyzeMultilingualQuery` accepts `userPreferences` and injects them as `constraints_hint` entries for both English fast-path and non-English MiniMax path. `POST /api/feedback-prompts` maps `too_noisy → noise_sensitivity:high`, `too_expensive → budget_sensitivity:high`, `too_far → distance_tolerance:low` and upserts after each feedback event. `ChatRequestSchema` now accepts `session_id`; `runAgent` loads preferences from DB and passes to NLU. 7 new tests in `nlu.test.ts`.
 
 ---
 
