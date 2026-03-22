@@ -71,3 +71,8 @@ body {
 .location-input::placeholder {
   color: #B4A89A;
 }
+
+/* ─── Hide scrollbar (ActionRail pill row) ────────────── */
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
