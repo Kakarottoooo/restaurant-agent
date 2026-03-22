@@ -24,6 +24,8 @@ function checkRateLimit(ip: string): boolean {
 
 function classifyError(err: unknown): string {
   if (err instanceof Error) {
+    if (err.message.includes("Agent timeout"))
+      return "Request timed out — the search took too long. Please try again.";
     if (err.message.includes("Google Places"))
       return "Location search failed. Please try again.";
     if (err.message.includes("MiniMax API"))
@@ -32,6 +34,19 @@ function classifyError(err: unknown): string {
       return "Too many requests. Please wait a moment.";
   }
   return "Something went wrong. Please try again.";
+}
+
+// ─── Timeout ───────────────────────────────────────────────────────────────────
+
+const AGENT_TIMEOUT_MS = 45_000;
+
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error("Agent timeout: request took too long")), ms)
+    ),
+  ]);
 }
 
 // ─── Route handler ─────────────────────────────────────────────────────────────
@@ -75,20 +90,23 @@ export async function POST(req: NextRequest) {
       }
 
       try {
-        const result = await runAgent(
-          message,
-          history,
-          city ?? undefined,
-          gpsCoords ?? null,
-          nearLocation ?? undefined,
-          sessionPreferences ?? undefined,
-          profileContext ?? undefined,
-          {
-            onPartial: (cards, requirements) => {
-              sendEvent({ type: "partial", cards, requirements });
+        const result = await withTimeout(
+          runAgent(
+            message,
+            history,
+            city ?? undefined,
+            gpsCoords ?? null,
+            nearLocation ?? undefined,
+            sessionPreferences ?? undefined,
+            profileContext ?? undefined,
+            {
+              onPartial: (cards, requirements) => {
+                sendEvent({ type: "partial", cards, requirements });
+              },
             },
-          },
-          customWeights ?? undefined
+            customWeights ?? undefined
+          ),
+          AGENT_TIMEOUT_MS
         );
 
         const recCount =
