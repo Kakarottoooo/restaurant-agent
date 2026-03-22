@@ -333,6 +333,7 @@ export function runBigPurchasePlanner(params: {
     scenario_brief: scenarioBrief,
     primary_plan: primaryOption,
     backup_plans: backupOptions,
+    show_more_available: rest.length > 2,
     tradeoff_summary: (() => {
       const primaryName = primaryCard.device.name;
       const primaryScore = primaryCard.final_score?.toFixed(1) ?? "";
@@ -359,6 +360,12 @@ export function runBigPurchasePlanner(params: {
         type: "share_plan",
         label: pickLanguageCopy(lang, "Share plan", "分享方案"),
         description: pickLanguageCopy(lang, "Copy a shareable link for this recommendation.", "复制这个推荐方案的分享链接。"),
+      },
+      {
+        id: "send-for-vote",
+        type: "send_for_vote",
+        label: pickLanguageCopy(lang, "Send to friends", "发给朋友投票"),
+        description: pickLanguageCopy(lang, "Let others vote on the options.", "让朋友们投票选出最喜欢的方案。"),
       },
       {
         id: "refine-0",

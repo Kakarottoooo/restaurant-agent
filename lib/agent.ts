@@ -13,6 +13,7 @@ import { recommendHeadphones, classifyMentionedHeadphones } from "./headphoneEng
 import { detectScenarioFromMessage, parseScenarioIntent, runScenarioPlanner, runWeekendTripPlanner, runCityTripPlanner } from "./scenario2";
 import { minimaxChat } from "./minimax";
 import { analyzeMultilingualQuery, resolveLocationHint } from "./nlu";
+import { getUserPreferences } from "./db";
 
 // Sub-module imports
 export { DEFAULT_WEIGHTS, HOTEL_DEFAULT_WEIGHTS, computeWeightedScore, extractRefinements } from "./agent/composer/scoring";
@@ -50,7 +51,8 @@ export async function runAgent(
   sessionPreferences?: SessionPreferences,
   profileContext?: string,
   streamCallbacks?: StreamCallbacks,
-  customWeights?: Partial<typeof DEFAULT_WEIGHTS>
+  customWeights?: Partial<typeof DEFAULT_WEIGHTS>,
+  sessionId?: string
 ): Promise<{
   requirements:
     | UserRequirements
@@ -84,7 +86,11 @@ export async function runAgent(
 }> {
   const city = CITIES[cityId] ?? CITIES[DEFAULT_CITY];
   const cityFullName = gpsCoords ? "your current location" : city.fullName;
-  const queryContext = await analyzeMultilingualQuery(userMessage, cityFullName);
+
+  const userPreferences = sessionId
+    ? await getUserPreferences(sessionId).catch(() => ({}))
+    : {};
+  const queryContext = await analyzeMultilingualQuery(userMessage, cityFullName, userPreferences);
 
   function buildBaseResult(
     requirements:

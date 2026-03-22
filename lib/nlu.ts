@@ -214,17 +214,44 @@ function mergeContexts(
   };
 }
 
+function buildPreferenceConstraintHints(userPreferences: Record<string, string>): string[] {
+  return Object.entries(userPreferences).flatMap(([k, v]) => {
+    if (k === "noise_sensitivity" && v === "high") return ["quiet venues preferred"];
+    if (k === "budget_sensitivity" && v === "high") return ["budget-conscious options preferred"];
+    if (k === "distance_tolerance" && v === "low") return ["nearby venues only"];
+    return [];
+  });
+}
+
+function buildPreferenceConstraintBlock(userPreferences: Record<string, string>): string {
+  const hints = buildPreferenceConstraintHints(userPreferences);
+  if (hints.length === 0) return "";
+  const lines = hints.map((h) => `- ${h}`);
+  return "\n\nLearned user preferences (soft constraints from past feedback):\n" + lines.join("\n");
+}
+
 export async function analyzeMultilingualQuery(
   message: string,
-  fallbackLocation?: string
+  fallbackLocation?: string,
+  userPreferences?: Record<string, string>
 ): Promise<MultilingualQueryContext> {
   const fallback = buildFallbackContext(message, fallbackLocation);
+
+  const preferenceHints = userPreferences ? buildPreferenceConstraintHints(userPreferences) : [];
 
   // Fast path: pure English queries don't need MiniMax NLU — regex fallback is accurate enough.
   // MiniMax adds value for Chinese, mixed-language, and ambiguous queries.
   if (inferInputLanguage(message) === "en") {
+    if (preferenceHints.length > 0) {
+      return {
+        ...fallback,
+        constraints_hint: [...(fallback.constraints_hint ?? []), ...preferenceHints],
+      };
+    }
     return fallback;
   }
+
+  const preferenceBlock = userPreferences ? buildPreferenceConstraintBlock(userPreferences) : "";
 
   try {
     const text = await minimaxChat({
@@ -267,10 +294,17 @@ Rules:
 
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     if (!jsonMatch) return fallback;
-    return mergeContexts(
+    const merged = mergeContexts(
       fallback,
       JSON.parse(jsonMatch[0]) as Partial<MultilingualQueryContext>
     );
+    if (preferenceHints.length > 0) {
+      return {
+        ...merged,
+        constraints_hint: [...(merged.constraints_hint ?? []), ...preferenceHints],
+      };
+    }
+    return merged;
   } catch {
     return fallback;
   }

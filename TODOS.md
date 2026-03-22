@@ -17,19 +17,6 @@
 
 ## Phase 3a — Decision Compression (highest leverage)
 
-### 3a-1: Collapse all scenario outputs to 1+2 format
-**Priority:** P0
-**What:** All scenario planners (date_night, weekend_trip, city_trip, big_purchase) must return exactly 1 primary recommendation + 2 ranked backups. No more Top-N card lists as the default output. The existing `DecisionPlan` type already has `primary` + `backups[]` — enforce max 2 backups and make the primary the dominant UI element.
-**Why:** Users don't want to compare 10 options. They want to approve or reject one. Every extra card is cognitive tax.
-**Pros:** Forces product to commit to a recommendation. Reduces decision paralysis. Aligns UI with "approve this?" mental model.
-**Cons:** System must have higher confidence before presenting. Needs a "show more" escape hatch if user wants to explore.
-**Context:** `lib/agent/planners/date-night.ts`, `lib/agent/planners/weekend-trip.ts`, `lib/agent/pipelines/` device pipelines all return `DecisionPlan`. The `DecisionPlan` type in `lib/types.ts` has `primary: PrimaryPlanCard` and `backups: BackupPlanCard[]`. Enforce `backups.length <= 2` at planner output. Add a `show_more_available: boolean` field if the underlying pool had more candidates. On the UI side (`ScenarioPlanView`), primary card should be large/prominent, backups collapsed or shown smaller.
-**Depends on:** None. All planners already output DecisionPlan.
-
----
-
----
-
 ### 3a-3: Weekend Trip unified package assembly
 **Priority:** P0
 **What:** Currently weekend_trip returns flight cards + hotel cards as separate lists. Final output must be 3 complete trip packages: Safest, Cheapest, Best Experience — each pre-combining one flight + one hotel + estimated total cost + which credit card earns most points + time-gap check (flight lands → hotel check-in feasible?).
@@ -38,6 +25,7 @@
 **Cons:** Combinatorial assembly is complex — need a pairing algorithm (best flight × best hotel by each optimization target). Total cost calculation requires summing flight + hotel + fees.
 **Context:** `lib/agent/planners/weekend-trip.ts` currently runs parallel `runFlightPipeline()` + `runHotelPipeline()` and returns results independently. Add a `assembleWeekendPackages()` function that takes top-3 flights × top-3 hotels and assembles 3 packages: (1) lowest total price, (2) best flight + hotel combo score, (3) most flexible/refundable. Each package gets: `flight_summary`, `hotel_summary`, `total_estimated_cost`, `best_card_for_this_trip` (cross-ref credit card rewards), `check_in_gap_hours` (time between flight landing and hotel check-in). New type: `WeekendTripPackage`. `DecisionPlan.primary` becomes the safest package, `backups` are the other two.
 **Depends on:** 3a-1.
+**Completed (partial):** v0.2.7.0 (2026-03-22) — package assembly was already complete from v0.2.1.0. This version adds real `check_in_gap_hours` computation: `buildWeekendTripTimingNote()` now parses `arrival_time` (HH:MM), computes gap vs standard 15:00 check-in, and generates contextual notes (early/late-night/clean-handoff). `buildWeekendTripRisks()` adds warnings for early arrival (>3h gap), tight window (<2h gap), and late-night (≥22:00) scenarios.
 
 ---
 
@@ -56,6 +44,7 @@
 - OpenTable: `https://www.opentable.com/s/?dateTime={date}T{time}&covers={guests}&metroId={city_id}`
 Current `open_link` actions in `lib/types.ts` have a `url: string` field. The planners already set static URLs. Update each planner to construct dynamic pre-filled URLs using the parsed intent fields (dates, guests, city, etc.) that are already in scope during plan generation.
 **Depends on:** None. Planners already have all required fields in scope.
+**Completed:** v0.2.7.0 (2026-03-22) — `lib/agent/planners/booking-links.ts` added with `buildGoogleHotelsUrl`, `buildBookingComUrl`, `buildGoogleFlightsUrl`, `buildOpenTableUrl`. Weekend trip planner now builds Booking.com pre-filled hotel URL and Google Flights deep link (#flt=...) when intent has `start_date` + city/route. Falls back to existing `booking_link` when intent lacks dates.
 
 ---
 
@@ -67,17 +56,7 @@ Current `open_link` actions in `lib/types.ts` have a `url: string` field. The pl
 **Cons:** Date/time must be parsed from plan — requires structured `event_datetime` field in DecisionPlan.
 **Context:** Google Calendar URL: `https://calendar.google.com/calendar/r/eventedit?text={title}&dates={start}/{end}&details={notes}&location={address}`. Apple/ICS: generate a `.ics` blob via a `/api/plan/[id]/calendar` route that returns `Content-Type: text/calendar`. Add `event_datetime?: string` (ISO 8601) and `event_location?: string` to `DecisionPlan` type. Planners should populate these when date/time is known. ActionRail renders "Add to Calendar" as a new `PlanAction` type: `add_to_calendar`.
 **Depends on:** 3a-1.
-
----
-
-### 3b-3: Send plan to friends (group voting)
-**Priority:** P1
-**What:** "Send to friends" ActionRail button generates a shareable link where multiple people can vote on the backup options. Requester sees a live tally. When consensus is reached, system confirms the winner.
-**Why:** Many plans (date night, group trip) involve multiple people. Current share flow only shows one partner a read-only view. Voting removes the "where do YOU want to go?" back-and-forth.
-**Pros:** High social virality. Each share is a new user touchpoint.
-**Cons:** Requires a new `plan_votes` DB table. UI for the vote page needs to be built.
-**Context:** New DB table: `plan_votes (id, plan_id, voter_session, option_index, created_at)`. New route: `POST /api/plan/[id]/vote` records a vote. `GET /api/plan/[id]/votes` returns tally. Shared plan page (`app/plan/[id]/page.tsx`) shows vote buttons when `plan.vote_mode = true`. Requester's view shows live tally. Add `vote_mode?: boolean` to `DecisionPlan`. ActionRail new action type: `send_for_vote` — generates share URL with `?vote=true` param.
-**Depends on:** Existing share plan infrastructure (completed v0.2.3.0).
+**Completed:** v0.2.8.0 (2026-03-22) — `event_datetime` and `event_location` added to `DecisionPlan`. All three planners (date_night, weekend_trip, city_trip) populate these fields when date is known. `GET /api/plan/[id]/calendar` route returns a `.ics` file (RFC 5545, floating local time). Share page (`SharedPlanView.tsx`) shows "Add to Calendar (.ics)" download button when `event_datetime` is set. City_trip also gets a Google Calendar secondary action link in each plan option. 15 new tests across `scenario2.test.ts` and `plan-calendar.test.ts`.
 
 ---
 
@@ -89,6 +68,7 @@ Current `open_link` actions in `lib/types.ts` have a `url: string` field. The pl
 **Cons:** Formatting needs to be clean and mobile-readable.
 **Context:** New route `GET /api/plan/[id]/brief` returns a markdown string assembled from `DecisionPlan` fields. ActionRail new action type: `export_brief` — opens the brief in a new tab or triggers download. Can also be sent via share URL.
 **Depends on:** 3a-3 (weekend trip packages provide the richest brief content).
+**Completed:** v0.2.10.0 (2026-03-22)
 
 ---
 
@@ -100,21 +80,11 @@ Current `open_link` actions in `lib/types.ts` have a `url: string` field. The pl
 **Cons:** Requires knowing the user's existing cards OR recommending one. Can default to recommending the best card for this trip if no profile exists.
 **Context:** `lib/agent/pipelines/credit-card.ts` already scores cards by use case. Add a `getBestCardForTrip(tripSpend: {flight_usd, hotel_usd, dining_usd})` helper that scores top 3 cards and returns the winner + reason. Call this at the end of weekend_trip and city_trip assembly. Render as a small "💳 Best card for this trip: Chase Sapphire — 3x on travel" callout in the plan UI.
 **Depends on:** 3a-3.
+**Completed:** v0.2.9.0 (2026-03-22)
 
 ---
 
 ## Phase 3c — Monitoring Layer (creates real moat)
-
-### 3c-1: Price drop alert for saved plans
-**Priority:** P1
-**What:** After a user saves or shares a weekend_trip plan, monitor the hotel/flight prices daily. If price drops >10%, send an in-app notification (and optionally email). User can re-open the plan and re-book at the lower price.
-**Why:** Prices change constantly. Users lose money by booking at the wrong time or not knowing when to re-book. This is a "the app is working for me even when I'm not using it" moment.
-**Pros:** Creates a reason to return to the app daily. Directly saves users money.
-**Cons:** Requires background polling (cron job). SerpAPI calls have cost per query — need rate limiting.
-**Context:** New DB table: `price_watches (id, plan_id, item_type, item_key, last_known_price, threshold_pct, created_at, last_checked_at)`. New cron route `GET /api/cron/price-check` (protected by `CRON_SECRET` header) runs daily, re-queries SerpAPI for watched items, compares to `last_known_price`, records drop in `plan_outcomes` with `outcome_type: "price_drop_alert"`. Notification: in-app badge on saved plan card + optional email via Resend/SendGrid. Add `watch_price?: boolean` flag to ActionRail save action.
-**Depends on:** Existing plan save infrastructure.
-
----
 
 ### 3c-2: Restaurant availability monitoring
 **Priority:** P2
@@ -124,6 +94,7 @@ Current `open_link` actions in `lib/types.ts` have a `url: string` field. The pl
 **Cons:** OpenTable/Resy don't have free availability APIs — may require browser automation or third-party services.
 **Context:** Start with a simpler version: add an `availability_check_url` to the restaurant plan that deep-links directly to OpenTable/Resy search for that restaurant at that date/time. If the restaurant has a direct booking URL (from Google Places data), pre-fill it. Full availability polling is a phase 3d item.
 **Depends on:** 3b-1 (pre-filled deep links).
+**Completed (partial):** v0.2.15.0 (2026-03-22) — simpler version shipped: "Check availability on OpenTable" secondary action added to all date_night plan options when no direct `opentable_url` is known. Pre-fills restaurant name + covers from intent.party_size. Full real-time availability polling deferred to phase 3d.
 
 ---
 
@@ -135,6 +106,7 @@ Current `open_link` actions in `lib/types.ts` have a `url: string` field. The pl
 **Cons:** Requires a scheduler to send the prompt at the right time. UX must be frictionless (1-2 taps max).
 **Context:** New DB table: `feedback_prompts (id, plan_id, user_session, scheduled_for, sent_at, responded_at, response_json)`. New cron route `GET /api/cron/feedback-prompts` checks for plans where `event_datetime` was 24h ago and no feedback exists. In-app: a dismissible card at the top of the chat feed saying "How was your dinner at X?" with 3-4 quick-tap options. Response stored in `plan_outcomes` with `outcome_type: "post_experience_feedback"` and structured `metadata`.
 **Depends on:** 3b-2 (event_datetime in DecisionPlan enables scheduling).
+**Completed:** v0.2.11.0 (2026-03-22)
 
 ---
 
@@ -148,6 +120,7 @@ Current `open_link` actions in `lib/types.ts` have a `url: string` field. The pl
 **Cons:** Requires per-user preference store. Session-based users (no login) need a stable device ID.
 **Context:** New table `user_preferences (session_id, preference_key, preference_value, confidence, updated_at)`. Keys: `noise_sensitivity`, `distance_tolerance_km`, `budget_sensitivity`, `cuisine_diversity`. Updated after each structured feedback event. `runNLU()` in `lib/nlu.ts` accepts an optional `userPreferences` map and injects them into the NLU prompt as soft constraints.
 **Depends on:** 3c-3 (structured feedback required to build preference signal).
+**Completed:** v0.2.16.0 (2026-03-22) — `user_preferences` table + `upsertUserPreference` / `getUserPreferences` in `lib/db.ts`. `analyzeMultilingualQuery` accepts `userPreferences` and injects them as `constraints_hint` entries for both English fast-path and non-English MiniMax path. `POST /api/feedback-prompts` maps `too_noisy → noise_sensitivity:high`, `too_expensive → budget_sensitivity:high`, `too_far → distance_tolerance:low` and upserts after each feedback event. `ChatRequestSchema` now accepts `session_id`; `runAgent` loads preferences from DB and passes to NLU. 7 new tests in `nlu.test.ts`.
 
 ---
 
@@ -171,6 +144,18 @@ Current `open_link` actions in `lib/types.ts` have a `url: string` field. The pl
 ### SSE stream timeout for scenario planners
 **Completed:** v0.2.5.0 (2026-03-22)
 Server-side 45s `Promise.race` timeout wraps `runAgent()` in `app/api/chat/route.ts`. Client-side `AbortController` stall watchdog (50s) in `app/hooks/useChat.ts` cancels hung streams with a clear user-facing retry message.
+
+### 3c-1: Price drop alert for saved plans
+**Completed:** v0.2.14.0 (2026-03-22)
+`price_watches` table + `POST /api/plan/[id]/price-watch` (register) + `GET /api/cron/price-check` (daily SerpAPI re-query, records `price_drop_alert` in `plan_outcomes` when drop ≥10%). `watch_price` ActionRail action on weekend_trip and city_trip. 12 new tests.
+
+### 3b-3: Send plan to friends (group voting)
+**Completed:** v0.2.13.0 (2026-03-22)
+`plan_votes` table with unique `(plan_id, voter_session)` index. `POST /api/plan/[id]/vote` upserts a vote; `GET` returns tally by option_id. Share page renders vote UI (all options + vote buttons + live progress bars) when `?vote=true` is present. `send_for_vote` ActionRail action (all 4 planners) saves the plan with `vote_mode: true` and copies `?vote=true` URL to clipboard. 7 new tests.
+
+### 3a-1: Collapse all scenario outputs to 1+2 format
+**Completed:** v0.2.12.0 (2026-03-22)
+Added `show_more_available?: boolean` to `DecisionPlan` in `lib/types.ts`. All 4 planners (date_night, weekend_trip, city_trip/modular engine, big_purchase) already capped backups at 2; now each sets the flag — `true` when the underlying pool had >2 extras (date_night if >3 total, big_purchase if >3 total; weekend_trip and modular engine always `false` since they build exactly 3 packages). `ScenarioPlanView` renders a subtle invite below the backup grid when `show_more_available=true`. 2 new tests.
 
 ### 3a-2: Comparative tradeoff_summary at plan level
 **Completed:** v0.2.6.0 (2026-03-22)

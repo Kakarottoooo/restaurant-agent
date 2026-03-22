@@ -3,6 +3,7 @@ import { pickLanguageCopy } from "../../outputCopy";
 import { EngineConfig, ModuleResults } from "./types";
 import { buildTieredPackages } from "./selectors";
 import { buildPlanOptionFromPackage } from "./plan-option-builder";
+import { getBestCardForTrip, buildTripCardCallout } from "../planners/trip-card";
 
 function dedupeStrings(values: string[]): string[] {
   return Array.from(new Set(values.map((v) => v.trim()).filter(Boolean)));
@@ -17,10 +18,28 @@ function inferConfidence(score: number, backupCount: number): "high" | "medium" 
 function buildDefaultActions(lang: OutputLanguage): PlanAction[] {
   return [
     {
+      id: "export-brief",
+      type: "export_brief",
+      label: pickLanguageCopy(lang, "Export trip brief", "导出行程摘要"),
+      description: pickLanguageCopy(lang, "Download a markdown summary of this trip package.", "下载这套旅行方案的 Markdown 摘要。"),
+    },
+    {
       id: "approve-plan",
       type: "approve_plan",
       label: pickLanguageCopy(lang, "Lock in this plan", "确认这套方案"),
       description: pickLanguageCopy(lang, "Finalize the selected package", "确定所选方案"),
+    },
+    {
+      id: "send-for-vote",
+      type: "send_for_vote",
+      label: pickLanguageCopy(lang, "Send to friends", "发给朋友投票"),
+      description: pickLanguageCopy(lang, "Let your group vote on the trip options.", "让朋友们投票选出最喜欢的方案。"),
+    },
+    {
+      id: "watch-price",
+      type: "watch_price",
+      label: pickLanguageCopy(lang, "Watch prices", "价格提醒"),
+      description: pickLanguageCopy(lang, "Get notified if hotel prices drop.", "当酒店价格下降时提醒我。"),
     },
     {
       id: "swap-backup",
@@ -110,6 +129,30 @@ export function runModularPlanner(params: {
     ...backups.flatMap((b) => b.risks.slice(0, 1)),
   ]).slice(0, 4);
 
+  // event_datetime / event_location for ICS export
+  const eventFields: { event_datetime?: string; event_location?: string } = {};
+  if (config.startDate) {
+    const primaryHotel = [pkgA, pkgB, pkgC].find(
+      (p) => p.hotel && (sorted[0].evidence_card_id === p.hotel.hotel.id)
+    )?.hotel ?? pkgA.hotel;
+    eventFields.event_datetime = `${config.startDate}T14:00:00`;
+    if (primaryHotel) eventFields.event_location = primaryHotel.hotel.address || primaryHotel.hotel.name;
+  }
+
+  // trip_card_callout: best card to use (or sign up for) when booking this trip
+  let trip_card_callout: string | undefined;
+  {
+    const primaryHotel = [pkgA, pkgB, pkgC].find(
+      (p) => p.hotel && sorted[0].evidence_card_id === p.hotel.hotel.id
+    )?.hotel ?? pkgA.hotel;
+    const hotelUsd = primaryHotel?.hotel.total_price ?? (primaryHotel?.hotel.price_per_night ?? 0) * (config.nights ?? 1);
+    const bestCard = getBestCardForTrip({ hotel_usd: hotelUsd });
+    if (bestCard) {
+      const cardLang = lang === "zh" ? "zh" : "en";
+      trip_card_callout = buildTripCardCallout(bestCard, cardLang);
+    }
+  }
+
   return {
     id: config.planId,
     scenario: config.scenario,
@@ -121,7 +164,10 @@ export function runModularPlanner(params: {
     scenario_brief: config.briefLines,
     primary_plan: { ...primary, label: pickLanguageCopy(lang, "Main pick", "主方案"), fallback_reason: undefined },
     backup_plans: backups,
+    show_more_available: false,
     tradeoff_summary: config.tradeoff_summary,
+    ...eventFields,
+    ...(trip_card_callout ? { trip_card_callout } : {}),
     risks,
     next_actions: buildDefaultActions(lang),
     evidence_card_ids: evidenceCardIds,

@@ -111,3 +111,84 @@ describe("analyzeMultilingualQuery", () => {
     expect(result).toBeDefined();
   });
 });
+
+// ─── Preference injection (3d-1) ──────────────────────────────────────────────
+
+describe("analyzeMultilingualQuery — learned preference injection", () => {
+  it("English path: injects noise preference into constraints_hint", async () => {
+    const result = await analyzeMultilingualQuery(
+      "great restaurant for dinner in NYC",
+      undefined,
+      { noise_sensitivity: "high" }
+    );
+    expect(mockFetch).not.toHaveBeenCalled();
+    expect(result.constraints_hint).toContain("quiet venues preferred");
+  });
+
+  it("English path: injects budget preference into constraints_hint", async () => {
+    const result = await analyzeMultilingualQuery(
+      "dinner tonight",
+      undefined,
+      { budget_sensitivity: "high" }
+    );
+    expect(result.constraints_hint).toContain("budget-conscious options preferred");
+  });
+
+  it("English path: injects distance preference into constraints_hint", async () => {
+    const result = await analyzeMultilingualQuery(
+      "italian restaurant",
+      undefined,
+      { distance_tolerance: "low" }
+    );
+    expect(result.constraints_hint).toContain("nearby venues only");
+  });
+
+  it("English path: injects multiple preferences and preserves existing constraints", async () => {
+    const result = await analyzeMultilingualQuery(
+      "romantic restaurant",
+      undefined,
+      { noise_sensitivity: "high", budget_sensitivity: "high" }
+    );
+    expect(result.constraints_hint).toContain("quiet venues preferred");
+    expect(result.constraints_hint).toContain("budget-conscious options preferred");
+  });
+
+  it("English path: no preferences — constraints_hint unaffected", async () => {
+    const result = await analyzeMultilingualQuery("dinner in SF", undefined, {});
+    expect(mockFetch).not.toHaveBeenCalled();
+    // No extra constraints injected
+    expect(result.constraints_hint ?? []).toHaveLength(0);
+  });
+
+  it("Chinese path: injects preference hints into merged constraints_hint", async () => {
+    mockFetch.mockResolvedValueOnce(
+      makeMiniMaxResponse(
+        JSON.stringify({
+          input_language: "zh",
+          output_language: "zh",
+          normalized_query: "romantic dinner Shanghai",
+          intent_summary: "浪漫约会餐厅",
+          category_hint: "restaurant",
+          scenario_hint: "date_night",
+          location_hint: "Shanghai, China",
+          cuisine_hint: null,
+          purpose_hint: "date",
+          party_size_hint: 2,
+          budget_per_person_hint: null,
+          budget_total_hint: null,
+          date_text_hint: null,
+          time_hint: null,
+          constraints_hint: ["no smoking area"],
+        })
+      )
+    );
+
+    const result = await analyzeMultilingualQuery(
+      "浪漫的约会餐厅，上海",
+      undefined,
+      { noise_sensitivity: "high" }
+    );
+    expect(result.constraints_hint).toContain("no smoking area");
+    expect(result.constraints_hint).toContain("quiet venues preferred");
+  });
+});

@@ -131,6 +131,21 @@ export function buildPlanOptionFromPackage(
       url: bar.restaurant.url,
     });
   }
+  if (hotel && startDate) {
+    const checkinDate = new Date(`${startDate}T14:00:00`);
+    const checkoutDate = new Date(checkinDate.getTime() + nights * 24 * 60 * 60 * 1000);
+    const fmt = (d: Date) => d.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
+    const calUrl = new URL("https://calendar.google.com/calendar/render");
+    calUrl.searchParams.set("action", "TEMPLATE");
+    calUrl.searchParams.set("text", pickLanguageCopy(lang, `Check in at ${hotel.hotel.name}`, `入住 ${hotel.hotel.name}`));
+    calUrl.searchParams.set("dates", `${fmt(checkinDate)}/${fmt(checkoutDate)}`);
+    calUrl.searchParams.set("location", hotel.hotel.address || hotel.hotel.name);
+    secondaryActions.push({
+      id: `add-calendar-${hotel.hotel.id}`,
+      label: pickLanguageCopy(lang, "Add to calendar", "加入日历"),
+      url: calUrl.toString(),
+    });
+  }
 
   // ── Title & Subtitle ────────────────────────────────────────────────────────
   const titleParts: string[] = [];

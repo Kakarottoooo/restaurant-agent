@@ -194,6 +194,9 @@ export interface PlanAction {
   id: string;
   type:
     | "share_plan"
+    | "send_for_vote"
+    | "watch_price"
+    | "export_brief"
     | "refine"
     | "swap_backup"
     | "approve_plan"
@@ -251,6 +254,16 @@ export interface DecisionPlan {
   backup_plans: PlanOption[];
   /** Plan-level comparative summary: why primary beats the backups, and what each backup trades off. */
   tradeoff_summary?: string;
+  /** ISO 8601 datetime for the primary event (e.g. "2026-04-12T19:00:00"). Enables ICS export. */
+  event_datetime?: string;
+  /** Human-readable location for the primary event. Included in the ICS file. */
+  event_location?: string;
+  /** One-line credit card recommendation for trip scenarios (weekend_trip, city_trip). */
+  trip_card_callout?: string;
+  /** True when the planner found more than 2 backup options but capped the display at 2. */
+  show_more_available?: boolean;
+  /** True when this plan was shared in group-vote mode — enables vote UI on the share page. */
+  vote_mode?: boolean;
   risks: string[];
   next_actions: PlanAction[];
   evidence_card_ids: string[];
@@ -262,7 +275,18 @@ export type PlanOutcomeType =
   | "skipped"
   | "rated_positive"
   | "rated_negative"
-  | "partner_approved";
+  | "partner_approved"
+  | "post_experience_feedback"
+  | "price_drop_alert";
+
+export type FeedbackRating = "great" | "ok" | "did_not_go";
+export type FeedbackIssue = "too_noisy" | "too_expensive" | "too_far" | "bad_service" | "other";
+
+export interface PostExperienceFeedback {
+  rating: FeedbackRating;
+  issues?: FeedbackIssue[];
+  note?: string;
+}
 
 // ─── Big Purchase types ───────────────────────────────────────────────────────
 

@@ -26,6 +26,15 @@ import { runModularPlanner } from "./agent/planner-engine";
 import { ModuleResults } from "./agent/planner-engine/types";
 import { buildCityTripEngineConfig } from "./agent/scenario-configs/city-trip";
 import { mapLinksToOpenLinkActions } from "./agent/planners/utils";
+import {
+  getBestCardForTrip,
+  buildTripCardCallout,
+} from "./agent/planners/trip-card";
+import {
+  buildBookingComUrl,
+  buildGoogleFlightsUrl,
+  buildOpenTableUrl,
+} from "./agent/planners/booking-links";
 
 const DATE_NIGHT_REGEX =
   /\bdate night\b|\bfirst date\b|\banniversary\b|\bromantic\b|\bproposal\b|\bdating\b|\bdate\b|\bpartner\b|\bgirlfriend\b|\bboyfriend\b|\bwife\b|\bhusband\b|\bfiance\b/i;
@@ -214,7 +223,19 @@ export function runScenarioPlanner(params: {
     ),
     primary_plan: primaryPlan,
     backup_plans: backupPlans,
+    show_more_available: params.recommendations.length > 3,
     tradeoff_summary: buildDateNightTradeoffSummary(primaryCard, backupCards, params.outputLanguage),
+    ...(() => {
+      const eventDate = resolveDateContext(params.scenarioIntent.detected_date_text);
+      if (!eventDate) return {};
+      const { hours, minutes } = resolveTimeContext(params.scenarioIntent.time_hint);
+      const pad = (n: number) => String(n).padStart(2, "0");
+      const localISO = `${eventDate.getFullYear()}-${pad(eventDate.getMonth() + 1)}-${pad(eventDate.getDate())}T${pad(hours)}:${pad(minutes)}:00`;
+      return {
+        event_datetime: localISO,
+        event_location: primaryCard.restaurant.address,
+      };
+    })(),
     risks,
     next_actions: buildDateNightActions(
       primaryCard.suggested_refinements ?? [],
@@ -367,6 +388,7 @@ export function runWeekendTripPlanner(params: {
       fallback_reason: undefined,
     },
     backup_plans: backups,
+    show_more_available: false,
     tradeoff_summary: buildWeekendTripTradeoffSummary(
       ordered.map((opt) => ({
         label: opt.label,
@@ -376,6 +398,23 @@ export function runWeekendTripPlanner(params: {
       })),
       params.outputLanguage
     ),
+    ...(() => {
+      if (!params.scenarioIntent.start_date) return {};
+      const primaryPairKey = uniqueKeys[0] as "stable" | "value" | "experience";
+      const primaryHotelCard = { stable: stablePair.hotel, value: valuePair.hotel, experience: experiencePair.hotel }[primaryPairKey];
+      return {
+        event_datetime: `${params.scenarioIntent.start_date}T09:00:00`,
+        event_location: primaryHotelCard.hotel.address || primaryHotelCard.hotel.name,
+      };
+    })(),
+    ...(() => {
+      const primaryPairKey = uniqueKeys[0] as "stable" | "value" | "experience";
+      const primaryPair = { stable: stablePair, value: valuePair, experience: experiencePair }[primaryPairKey];
+      const card = getBestCardForTrip({ flight_usd: primaryPair.flight.flight.price, hotel_usd: primaryPair.hotel.hotel.total_price });
+      if (!card) return {};
+      const lang = params.outputLanguage === "zh" ? "zh" : "en";
+      return { trip_card_callout: buildTripCardCallout(card, lang) };
+    })(),
     risks: dedupeStrings([
       ...primary.risks,
       ...backups.flatMap((option) => option.risks.slice(0, 1)),
@@ -598,6 +637,16 @@ function buildDateNightActions(
       ),
     },
     {
+      id: "send-for-vote",
+      type: "send_for_vote",
+      label: pickLanguageCopy(language, "Send to friends", "发给朋友投票"),
+      description: pickLanguageCopy(
+        language,
+        "Let your group vote on the options.",
+        "让朋友们投票选出最喜欢的方案。"
+      ),
+    },
+    {
       id: "request-changes",
       type: "request_changes",
       label: pickLanguageCopy(language, "Needs tweaks", "需要调整"),
@@ -648,6 +697,17 @@ function buildDateNightOption(
       url: buildGoogleMapsUrl(card),
     },
   ];
+  // When there's no direct OpenTable booking link, add a pre-filled availability search
+  if (!card.opentable_url) {
+    secondaryActions.push({
+      id: "check-availability",
+      label: pickLanguageCopy(language, "Check availability on OpenTable", "在OpenTable查询可用性"),
+      url: buildOpenTableUrl({
+        restaurantName: card.restaurant.name,
+        covers: intent.party_size ?? 2,
+      }),
+    });
+  }
   const calendarUrl = buildGoogleCalendarUrl(card, intent, timingNote, userMessage, language);
   if (calendarUrl) {
     secondaryActions.push({
@@ -710,10 +770,28 @@ function buildWeekendTripActions(
   return [
     ...openLinkActions,
     {
+      id: "export-brief",
+      type: "export_brief",
+      label: pickLanguageCopy(language, "Export trip brief", "导出行程摘要"),
+      description: pickLanguageCopy(language, "Download a markdown summary of this trip package.", "下载这套旅行方案的 Markdown 摘要。"),
+    },
+    {
       id: "share-plan",
       type: "share_plan",
       label: pickLanguageCopy(language, "Share trip brief", "分享行程摘要"),
       description: pickLanguageCopy(language, "Copy a shareable link for this trip package.", "复制这套旅行方案的分享链接。"),
+    },
+    {
+      id: "send-for-vote",
+      type: "send_for_vote",
+      label: pickLanguageCopy(language, "Send to friends", "发给朋友投票"),
+      description: pickLanguageCopy(language, "Let your group vote on the trip options.", "让朋友们投票选出最喜欢的方案。"),
+    },
+    {
+      id: "watch-price",
+      type: "watch_price",
+      label: pickLanguageCopy(language, "Watch prices", "价格提醒"),
+      description: pickLanguageCopy(language, "Get notified if hotel or flight prices drop.", "当酒店或机票价格下降时提醒我。"),
     },
     {
       id: "refine-cheaper",
@@ -774,11 +852,46 @@ function buildWeekendTripOption(params: {
         "这套方案目前没有特别明显的用卡优势。"
       );
 
+  // 3b-1: Pre-filled booking URLs — land on filtered results, not homepages.
+  const hotelBookingUrl = (() => {
+    const intent = params.scenarioIntent;
+    if (intent.destination_city && intent.start_date) {
+      return buildBookingComUrl({
+        city: intent.destination_city,
+        checkin: intent.start_date,
+        checkout: intent.end_date,
+        adults: intent.travelers,
+      });
+    }
+    return params.hotel.hotel.booking_link;
+  })();
+
+  const flightBookingUrl = (() => {
+    const intent = params.scenarioIntent;
+    const origin =
+      intent.departure_city ??
+      params.flight.flight.departure_airport ??
+      params.flight.flight.departure_city;
+    const dest =
+      intent.destination_city ??
+      params.flight.flight.arrival_city ??
+      params.flight.flight.arrival_airport;
+    if (origin && dest) {
+      return buildGoogleFlightsUrl({
+        origin,
+        dest,
+        date: intent.start_date,
+        returnDate: intent.end_date,
+      });
+    }
+    return params.flight.flight.booking_link;
+  })();
+
   const secondaryActions: PlanLinkAction[] = [
     {
       id: "open-flight",
       label: pickLanguageCopy(params.outputLanguage, "Open flight", "查看航班"),
-      url: params.flight.flight.booking_link,
+      url: flightBookingUrl,
     },
   ];
   const calendarUrl = buildWeekendTripCalendarUrl(
@@ -858,7 +971,7 @@ function buildWeekendTripOption(params: {
     primary_action: {
       id: "open-hotel",
       label: pickLanguageCopy(params.outputLanguage, "Open hotel", "查看酒店"),
-      url: params.hotel.hotel.booking_link,
+      url: hotelBookingUrl,
     },
     secondary_actions: secondaryActions,
     evidence_card_id: params.flight.flight.id,
@@ -1211,19 +1324,65 @@ function describeWeekendTripAudience(
   return pickLanguageCopy(language, "Travelers who want the nicest-feeling weekend in the current budget range.", "适合想在当前预算里拿到最好整体体验的人。");
 }
 
+/** Standard hotel check-in time in minutes since midnight (15:00). */
+const STANDARD_CHECKIN_MINUTES = 15 * 60;
+
+/**
+ * Parse "HH:MM" or "H:MM" to minutes since midnight.
+ * Returns null if the format is unrecognisable.
+ */
+function parseTimeToMinutes(time: string): number | null {
+  const m = time.match(/^(\d{1,2}):(\d{2})/);
+  if (!m) return null;
+  return parseInt(m[1], 10) * 60 + parseInt(m[2], 10);
+}
+
 function buildWeekendTripTimingNote(
   flight: FlightRecommendationCard,
   hotel: HotelRecommendationCard,
   language: OutputLanguage
 ): string {
-  const hotelCheckIn =
+  const hotelAnchor =
     hotel.hotel.price_per_night > 0
       ? pickLanguageCopy(language, `${hotel.hotel.name} is the lodging anchor.`, `${hotel.hotel.name} 会作为这次入住的核心落点。`)
       : pickLanguageCopy(language, "Hotel timing should still be verified before booking.", "酒店的入住时间仍然需要在预订前再确认一次。");
+
+  const arrivalMinutes = parseTimeToMinutes(flight.flight.arrival_time);
+  if (arrivalMinutes !== null) {
+    const gapMinutes = STANDARD_CHECKIN_MINUTES - arrivalMinutes;
+    if (arrivalMinutes >= 22 * 60) {
+      // Late-night arrival
+      return pickLanguageCopy(
+        language,
+        `${flight.flight.departure_time} outbound, ${flight.flight.arrival_time} arrival — late-night landing. Confirm late check-in with the hotel. ${hotelAnchor}`,
+        `${flight.flight.departure_time} 出发、${flight.flight.arrival_time} 抵达 — 深夜到达，需提前和酒店确认深夜入住政策。${hotelAnchor}`
+      );
+    }
+    if (gapMinutes > 0) {
+      // Arriving before standard check-in
+      const gapH = Math.round(gapMinutes / 60);
+      const gapLabel = gapH >= 1
+        ? pickLanguageCopy(language, `${gapH}h before check-in`, `比标准入住时间早 ${gapH} 小时`)
+        : pickLanguageCopy(language, `${gapMinutes}min before check-in`, `比标准入住时间早 ${gapMinutes} 分钟`);
+      return pickLanguageCopy(
+        language,
+        `${flight.flight.departure_time} outbound, ${flight.flight.arrival_time} arrival — ${gapLabel}. ${hotelAnchor}`,
+        `${flight.flight.departure_time} 出发、${flight.flight.arrival_time} 抵达 — ${gapLabel}。${hotelAnchor}`
+      );
+    }
+    // Arrival after check-in time — clean handoff
+    return pickLanguageCopy(
+      language,
+      `${flight.flight.departure_time} outbound, ${flight.flight.arrival_time} arrival — after standard check-in, room should be ready on landing. ${hotelAnchor}`,
+      `${flight.flight.departure_time} 出发、${flight.flight.arrival_time} 抵达 — 正好在标准入住时间之后，落地即可入住。${hotelAnchor}`
+    );
+  }
+
+  // Fallback when arrival_time is unparseable
   return pickLanguageCopy(
     language,
-    `${flight.flight.departure_time} outbound and ${flight.flight.arrival_time} arrival keep the handoff into hotel check-in relatively clean. ${hotelCheckIn}`,
-    `${flight.flight.departure_time} 出发、${flight.flight.arrival_time} 抵达，这样衔接酒店入住会比较顺。${hotelCheckIn}`
+    `${flight.flight.departure_time} outbound and ${flight.flight.arrival_time} arrival keep the handoff into hotel check-in relatively clean. ${hotelAnchor}`,
+    `${flight.flight.departure_time} 出发、${flight.flight.arrival_time} 抵达，这样衔接酒店入住会比较顺。${hotelAnchor}`
   );
 }
 
@@ -1242,6 +1401,38 @@ function buildWeekendTripRisks(
       )
     );
   }
+
+  // Check-in gap feasibility (3a-3)
+  const arrivalMinutes = parseTimeToMinutes(flight.flight.arrival_time);
+  if (arrivalMinutes !== null) {
+    const gapMinutes = STANDARD_CHECKIN_MINUTES - arrivalMinutes;
+    if (arrivalMinutes >= 22 * 60) {
+      risks.add(
+        pickLanguageCopy(
+          language,
+          "Late-night arrival — confirm late check-in policy before booking.",
+          "深夜抵达，预订前需确认酒店深夜入住政策。"
+        )
+      );
+    } else if (gapMinutes > 3 * 60) {
+      risks.add(
+        pickLanguageCopy(
+          language,
+          "Early arrival — room won't be ready at landing. Use hotel luggage storage as the bridge.",
+          "抵达时间较早，房间不会立刻准备好，建议先寄存行李。"
+        )
+      );
+    } else if (gapMinutes > 0 && gapMinutes < 2 * 60) {
+      risks.add(
+        pickLanguageCopy(
+          language,
+          "Tight check-in window — room may not be ready right at arrival. Request early check-in in advance.",
+          "入住窗口偏紧，建议提前申请早入住。"
+        )
+      );
+    }
+  }
+
   if (hotel.watch_out) risks.add(hotel.watch_out);
   if (hotel.not_great_if) risks.add(hotel.not_great_if);
   if (flight.group === "cheapest") {

@@ -10,6 +10,7 @@ import LaptopCard from "@/components/LaptopCard";
 import SmartphoneCard from "@/components/SmartphoneCard";
 import HeadphoneCard from "@/components/HeadphoneCard";
 import ScenarioPlanView from "@/components/ScenarioPlanView";
+import FeedbackPromptCard from "@/components/FeedbackPromptCard";
 import DateRangePicker from "@/components/DateRangePicker";
 import { CITIES_SORTED } from "@/lib/cities";
 import { useChat, LOADING_STEPS } from "@/app/hooks/useChat";
@@ -22,7 +23,8 @@ import { useFavorites } from "@/app/hooks/useFavorites";
 import { usePreferences, formatProfileForPrompt } from "@/app/hooks/usePreferences";
 import { useVoiceInput } from "@/app/hooks/useVoiceInput";
 import { useAuth } from "@/app/hooks/useAuth";
-import { PlanAction, PlanLinkAction, RecommendationCard as CardType } from "@/lib/types";
+import { PlanAction, PlanLinkAction, RecommendationCard as CardType, PostExperienceFeedback } from "@/lib/types";
+import type { FeedbackPromptItem } from "@/app/api/feedback-prompts/route";
 
 // Leaflet is not SSR-compatible
 const MapView = dynamic(() => import("@/components/MapView"), { ssr: false });
@@ -99,6 +101,7 @@ export default function Home() {
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const [upgradePromptShown, setUpgradePromptShown] = useState(false);
   const [planFeedbackMessage, setPlanFeedbackMessage] = useState<string | null>(null);
+  const [pendingFeedbackPrompts, setPendingFeedbackPrompts] = useState<FeedbackPromptItem[]>([]);
 
   // Phase 5.2: Voice input
   const { isListening, isSupported: voiceSupported, startListening, stopListening } = useVoiceInput(
@@ -137,6 +140,20 @@ export default function Home() {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [auth.isSignedIn]);
+
+  // 3c-3: Check for pending post-experience feedback prompts on mount
+  useEffect(() => {
+    const sessionId = chat.getSessionId();
+    fetch(`/api/feedback-prompts?session_id=${encodeURIComponent(sessionId)}`)
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => {
+        if (data?.prompts?.length) {
+          setPendingFeedbackPrompts(data.prompts);
+        }
+      })
+      .catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -297,6 +314,109 @@ export default function Home() {
       return;
     }
 
+    if (action.type === "send_for_vote") {
+      chat.trackDecisionPlanEvent({
+        type: "action_clicked",
+        action_id: action.id,
+        option_id: chat.decisionPlan?.primary_plan.id,
+        query: lastUserQuery,
+      });
+
+      if (!chat.decisionPlan) throw new Error("No plan to share for vote");
+
+      // Mark vote_mode on the plan before saving
+      const voteModePlan = { ...chat.decisionPlan, vote_mode: true };
+      const res = await fetch("/api/plan/save", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          plan: voteModePlan,
+          session_id: chat.getSessionId(),
+          query_text: lastUserQuery,
+          parent_plan_id: refinedFromPlanIdRef.current ?? undefined,
+        }),
+      });
+      if (!res.ok) throw new Error(`Save failed: ${res.status}`);
+
+      const voteUrl = `${window.location.origin}/plan/${voteModePlan.id}?vote=true`;
+      await navigator.clipboard.writeText(voteUrl);
+
+      setPlanFeedbackMessage(
+        chat.decisionPlan.output_language === "zh"
+          ? "投票链接已复制 — 发给朋友吧！"
+          : "Vote link copied — send it to your friends!"
+      );
+      return;
+    }
+
+    if (action.type === "watch_price") {
+      if (!chat.decisionPlan) throw new Error("No plan to watch");
+
+      // Save the plan first so it persists
+      const saveRes = await fetch("/api/plan/save", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          plan: chat.decisionPlan,
+          session_id: chat.getSessionId(),
+          query_text: lastUserQuery,
+          parent_plan_id: refinedFromPlanIdRef.current ?? undefined,
+        }),
+      });
+      if (!saveRes.ok) throw new Error(`Save failed: ${saveRes.status}`);
+
+      // Build a price watch item from the primary plan's estimated total
+      const primary = chat.decisionPlan.primary_plan;
+      const rawTotal = primary.estimated_total ?? "";
+      const priceNum = parseFloat(rawTotal.replace(/[^0-9.]/g, "")) || 0;
+
+      if (priceNum > 0) {
+        const watchItem = {
+          item_type: chat.decisionPlan.scenario === "big_purchase" ? "hotel" : "hotel" as const,
+          item_key: primary.id,
+          item_label: primary.title,
+          last_known_price: priceNum,
+        };
+        // Fire-and-forget — don't block UI on this
+        fetch(`/api/plan/${chat.decisionPlan.id}/price-watch`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            session_id: chat.getSessionId(),
+            items: [watchItem],
+          }),
+        }).catch(() => {});
+      }
+
+      const lang = chat.decisionPlan.output_language;
+      setPlanFeedbackMessage(
+        lang === "zh"
+          ? "价格提醒已开启 — 价格下降超过 10% 时会通知你"
+          : "Watching prices — you'll be notified if prices drop more than 10%"
+      );
+      return;
+    }
+
+    if (action.type === "export_brief") {
+      if (!chat.decisionPlan) throw new Error("No plan to export");
+
+      // Save the plan so the brief route can read it from DB
+      const res = await fetch("/api/plan/save", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          plan: chat.decisionPlan,
+          session_id: chat.getSessionId(),
+          query_text: lastUserQuery,
+          parent_plan_id: refinedFromPlanIdRef.current ?? undefined,
+        }),
+      });
+      if (!res.ok) throw new Error(`Save failed: ${res.status}`);
+
+      window.open(`/api/plan/${chat.decisionPlan.id}/brief`, "_blank");
+      return;
+    }
+
     if (action.type === "swap_backup" && action.option_id) {
       chat.trackDecisionPlanEvent({
         type: "backup_promoted",
@@ -357,6 +477,24 @@ export default function Home() {
       learnFromSearch(action.prompt);
       chat.sendMessage(action.prompt);
     }
+  }
+
+  async function handleFeedbackResponse(
+    promptId: number,
+    planId: string,
+    feedback: PostExperienceFeedback
+  ) {
+    setPendingFeedbackPrompts((prev) => prev.filter((p) => p.id !== promptId));
+    fetch("/api/feedback-prompts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        prompt_id: promptId,
+        plan_id: planId,
+        session_id: chat.getSessionId(),
+        feedback,
+      }),
+    }).catch(() => {});
   }
 
   function handlePlanLinkClick(action: PlanLinkAction, optionId: string) {
@@ -1649,6 +1787,24 @@ export default function Home() {
 
                 {/* Filter / View Bar */}
                 {filterViewBar}
+
+                {/* 3c-3: Post-experience feedback prompts */}
+                {pendingFeedbackPrompts.map((prompt) => (
+                  <FeedbackPromptCard
+                    key={prompt.id}
+                    promptId={prompt.id}
+                    planId={prompt.plan_id}
+                    sessionId={chat.getSessionId()}
+                    venueName={prompt.venue_name}
+                    scenario={prompt.scenario}
+                    onDismiss={() =>
+                      setPendingFeedbackPrompts((prev) =>
+                        prev.filter((p) => p.id !== prompt.id)
+                      )
+                    }
+                    onRespond={handleFeedbackResponse}
+                  />
+                ))}
 
                 {/* Scenario Plan Results */}
                 {chat.resultMode === "scenario_plan" && chat.decisionPlan && (
