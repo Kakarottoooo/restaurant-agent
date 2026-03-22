@@ -17,18 +17,6 @@
 
 ## Phase 3a — Decision Compression (highest leverage)
 
-### 3a-3: Weekend Trip unified package assembly
-**Priority:** P0
-**What:** Currently weekend_trip returns flight cards + hotel cards as separate lists. Final output must be 3 complete trip packages: Safest, Cheapest, Best Experience — each pre-combining one flight + one hotel + estimated total cost + which credit card earns most points + time-gap check (flight lands → hotel check-in feasible?).
-**Why:** Users don't want to cross-reference 10 flights × 10 hotels. They want "here are 3 complete trips, pick one."
-**Pros:** Transforms weekend_trip from "two category searches" into a genuine trip planner. Huge UX leap.
-**Cons:** Combinatorial assembly is complex — need a pairing algorithm (best flight × best hotel by each optimization target). Total cost calculation requires summing flight + hotel + fees.
-**Context:** `lib/agent/planners/weekend-trip.ts` currently runs parallel `runFlightPipeline()` + `runHotelPipeline()` and returns results independently. Add a `assembleWeekendPackages()` function that takes top-3 flights × top-3 hotels and assembles 3 packages: (1) lowest total price, (2) best flight + hotel combo score, (3) most flexible/refundable. Each package gets: `flight_summary`, `hotel_summary`, `total_estimated_cost`, `best_card_for_this_trip` (cross-ref credit card rewards), `check_in_gap_hours` (time between flight landing and hotel check-in). New type: `WeekendTripPackage`. `DecisionPlan.primary` becomes the safest package, `backups` are the other two.
-**Depends on:** 3a-1.
-**Completed (partial):** v0.2.7.0 (2026-03-22) — package assembly was already complete from v0.2.1.0. This version adds real `check_in_gap_hours` computation: `buildWeekendTripTimingNote()` now parses `arrival_time` (HH:MM), computes gap vs standard 15:00 check-in, and generates contextual notes (early/late-night/clean-handoff). `buildWeekendTripRisks()` adds warnings for early arrival (>3h gap), tight window (<2h gap), and late-night (≥22:00) scenarios.
-
----
-
 ## Phase 3b — Execution Layer (transforms from recommender to agent)
 
 ### 3b-1: Pre-filled deep links for booking actions
@@ -141,13 +129,17 @@ Current `open_link` actions in `lib/types.ts` have a `url: string` field. The pl
 
 ## Completed
 
+### 3a-3: Weekend Trip unified package assembly
+**Completed:** v0.2.7.0 (2026-03-22)
+`runWeekendTripPlanner()` assembles 3 unified trip packages (stable/value/experience), each combining one flight + one hotel + estimated total + best credit card. `buildWeekendTripTimingNote()` parses `arrival_time` (HH:MM), computes gap vs 15:00 check-in, generates early/late-night/clean-handoff notes. `buildWeekendTripRisks()` adds warnings for early arrival (>3h gap), tight window (<2h gap), and late-night (≥22:00) arrivals. 6 tests in `scenario2.test.ts`.
+
 ### 4a-1: Decision language upgrade (PrimaryPlanCard)
 **Completed:** v0.2.17.0 (2026-03-22)
 `PrimaryPlanCard` detects `confidence === "high"` and switches to green border + "✓ Selected for you" label. `ScenarioBrief` shows "Your plan" (gold) for high-confidence plans. Confidence badge: green + checkmark for high, amber for medium, grey for low. `ScenarioPlanView` collapses backups by default when confidence is high, with a toggle showing "Show alternatives (N)".
 
 ### 3b-3b: Date Night multi-venue chaining (evening package)
 **Completed:** v0.2.17.0 (2026-03-22)
-`searchAfterDinnerVenue()` in `lib/tools.ts` queries Google Places for a cocktail bar / wine bar / dessert café within 1km of the primary restaurant. Walk time calculated via haversine at 80 m/min. `DecisionPlan.after_dinner_option?: AfterDinnerVenue` field added. `PrimaryPlanCard` renders "Then →" section with venue name, walk time, vibe, and Google Maps link (bilingual: EN + ZH). 3 new tests.
+`searchAfterDinnerVenue()` in `lib/tools.ts` queries Google Places for a cocktail bar / wine bar / dessert café within 1km of the primary restaurant. Walk time calculated via haversine at 80 m/min. `PlanOption.after_dinner_option?: AfterDinnerVenue` field added (stored on option so it survives backup promotion). Backup plans get no venue. Skips search for `follow_up_preference === "walk"` or `"none"`. `PrimaryPlanCard` renders "Then →" section with venue name, walk time, vibe, and Google Maps link (bilingual: EN + ZH). 4 new tests.
 
 ### SSE stream timeout for scenario planners
 **Completed:** v0.2.5.0 (2026-03-22)
