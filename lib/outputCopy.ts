@@ -13,19 +13,17 @@ export function formatConfidenceCopy(
   confidence: "high" | "medium" | "low"
 ): string {
   if (language === "zh") {
-    const labels = {
-      high: "高",
-      medium: "中",
-      low: "低",
-    } as const;
-    return `置信度：${labels[confidence]}`;
+    const labels = { high: "高置信度", medium: "中置信度", low: "低置信度" } as const;
+    return labels[confidence];
   }
-  return `Confidence: ${confidence}`;
+  const labels = { high: "High confidence", medium: "Medium confidence", low: "Low confidence" } as const;
+  return labels[confidence];
 }
 
 export function getScenarioUiCopy(language: OutputLanguage | undefined) {
   return {
     scenarioPlan: pickLanguageCopy(language, "Scenario plan", "场景方案"),
+    yourPlan: pickLanguageCopy(language, "Your plan", "你的方案"),
     estimatedSpend: pickLanguageCopy(language, "Estimated spend", "预计花费"),
     whyThisPlan: pickLanguageCopy(language, "Why this plan", "为什么推荐它"),
     timing: pickLanguageCopy(language, "Timing", "时间安排"),
@@ -43,6 +41,8 @@ export function getScenarioUiCopy(language: OutputLanguage | undefined) {
     backupOptions: pickLanguageCopy(language, "Backup options", "备选方案"),
     keepOnDeck: pickLanguageCopy(language, "Keep these on deck", "先留作备选"),
     makePrimary: pickLanguageCopy(language, "Make primary", "设为主方案"),
+    showAlternatives: pickLanguageCopy(language, "Show alternatives", "查看备选方案"),
+    hideAlternatives: pickLanguageCopy(language, "Hide alternatives", "收起备选方案"),
   };
 }
 

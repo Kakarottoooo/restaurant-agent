@@ -184,6 +184,14 @@ export interface MultilingualQueryContext {
   constraints_hint?: string[];
 }
 
+export interface AfterDinnerVenue {
+  name: string;
+  address: string;
+  walk_minutes: number;
+  vibe: string;
+  google_maps_url: string;
+}
+
 export interface PlanLinkAction {
   id: string;
   label: string;
@@ -232,6 +240,8 @@ export interface PlanOption {
   tradeoff_reason?: string;
   tradeoff_detail?: string;
   product_model?: string;
+  /** After-dinner venue for date_night primary plans. Travels with the option so backup promotion stays correct. */
+  after_dinner_option?: AfterDinnerVenue;
 }
 
 export interface DecisionEvidenceItem {

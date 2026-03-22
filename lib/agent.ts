@@ -1,7 +1,7 @@
 // import Anthropic from "@anthropic-ai/sdk";
 // const client = new Anthropic();
 
-import { googlePlacesSearch, tavilySearch, geocodeLocation, fetchReviewSignals, searchHotels, searchFlights, resolveMultiAirport, normalizeDate } from "./tools";
+import { googlePlacesSearch, tavilySearch, geocodeLocation, fetchReviewSignals, searchHotels, searchFlights, resolveMultiAirport, normalizeDate, searchAfterDinnerVenue } from "./tools";
 import { UserRequirements, Restaurant, RecommendationCard, SessionPreferences, ScoringDimensions, HotelIntent, RestaurantIntent, FlightIntent, CreditCardIntent, LaptopIntent, LaptopUseCase, ParsedIntent, HotelRecommendationCard, FlightRecommendationCard, CreditCardRecommendationCard, LaptopRecommendationCard, SpendingProfile, CategoryType, Flight, SubscriptionIntent, SmartphoneIntent, SmartphoneUseCase, SmartphoneRecommendationCard, HeadphoneIntent, HeadphoneUseCase, HeadphoneRecommendationCard, ScenarioIntent, DecisionPlan, ResultMode, WeekendTripIntent, CityTripIntent, DateNightIntent, MultilingualQueryContext } from "./types";
 import type { WatchCategory } from "./watchTypes";
 import { CITIES, DEFAULT_CITY } from "./cities";
@@ -501,6 +501,31 @@ export async function runAgent(
       : undefined,
   }));
 
+  // For date_night, search for an after-dinner venue near the primary restaurant.
+  const primaryRestaurantCoords =
+    scenarioIntent?.scenario === "date_night" && withOpenTable[0]?.restaurant
+      ? { lat: withOpenTable[0].restaurant.lat!, lng: withOpenTable[0].restaurant.lng! }
+      : undefined;
+  const _followUpPref = scenarioIntent?.scenario === "date_night"
+    ? (scenarioIntent as import("./types").DateNightIntent).follow_up_preference
+    : "none";
+  // Map follow_up_preference to venue type for filtered search ("cocktail" and "dessert" narrow the query).
+  const _venueType: "cocktail" | "dessert" | "open" =
+    _followUpPref === "cocktail" ? "cocktail"
+    : _followUpPref === "dessert" ? "dessert"
+    : "open";
+  const afterDinnerOption =
+    scenarioIntent?.scenario === "date_night" &&
+    _followUpPref !== "none" && _followUpPref !== "walk"
+      ? await searchAfterDinnerVenue(
+          restaurantCityLabel,
+          primaryRestaurantCoords?.lat !== undefined && primaryRestaurantCoords?.lng !== undefined
+            ? primaryRestaurantCoords
+            : undefined,
+          _venueType
+        )
+      : null;
+
   const decisionPlan =
     scenarioIntent?.scenario === "date_night"
     ? runScenarioPlanner({
@@ -509,6 +534,7 @@ export async function runAgent(
         userMessage,
         cityLabel: restaurantCityLabel,
         outputLanguage: queryContext.output_language,
+        afterDinnerOption,
       })
     : null;
 

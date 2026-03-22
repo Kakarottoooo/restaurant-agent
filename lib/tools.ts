@@ -1,4 +1,4 @@
-import { Restaurant, ReviewSignals, GoogleReview, Hotel, Flight } from "./types";
+import { Restaurant, ReviewSignals, GoogleReview, Hotel, Flight, AfterDinnerVenue } from "./types";
 
 // ─── Geocoding ────────────────────────────────────────────────────────────────
 
@@ -130,6 +130,82 @@ export async function googlePlacesSearch(params: {
   }
 
   return results;
+}
+
+// ─── After-Dinner Venue Search ────────────────────────────────────────────────
+
+/**
+ * Finds a cocktail bar, dessert spot, or wine bar near the given restaurant coords.
+ * Returns the best single option, or null if restaurant coords are unknown or nothing is found.
+ * @param venueType - filters the search by follow_up_preference: "cocktail", "dessert", or "open" (default)
+ */
+export async function searchAfterDinnerVenue(
+  city: string,
+  nearCoords: { lat: number; lng: number } | undefined,
+  venueType: "cocktail" | "dessert" | "open" = "open"
+): Promise<AfterDinnerVenue | null> {
+  // Without restaurant coords we cannot compute an accurate walk time — skip search.
+  if (!nearCoords) return null;
+  try {
+    const queryByType: Record<typeof venueType, string> = {
+      cocktail: `craft cocktail bar OR wine bar in ${city}`,
+      dessert: `dessert café OR ice cream shop OR dessert bar in ${city}`,
+      open: `cocktail bar OR wine bar OR dessert cafe in ${city}`,
+    };
+    const query = queryByType[venueType];
+    const radius = 1200;
+
+    const res = await fetch(
+      "https://places.googleapis.com/v1/places:searchText",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Goog-Api-Key": process.env.GOOGLE_PLACES_API_KEY!,
+          "X-Goog-FieldMask":
+            "places.id,places.displayName,places.formattedAddress,places.rating,places.userRatingCount,places.editorialSummary,places.location,places.googleMapsUri",
+        },
+        body: JSON.stringify({
+          textQuery: query,
+          maxResultCount: 5,
+          locationBias: {
+            circle: {
+              center: { latitude: nearCoords.lat, longitude: nearCoords.lng },
+              radius,
+            },
+          },
+        }),
+      }
+    );
+
+    if (!res.ok) return null;
+    const data = await res.json();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const places: any[] = data.places ?? [];
+    if (places.length === 0) return null;
+
+    // Pick the highest-rated place
+    const best = places.sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0))[0];
+
+    const venueLat: number | undefined = best.location?.latitude;
+    const venueLng: number | undefined = best.location?.longitude;
+    let walkMinutes = 10;
+    if (venueLat !== undefined && venueLng !== undefined) {
+      const meters = haversineDistance(nearCoords.lat, nearCoords.lng, venueLat, venueLng);
+      walkMinutes = Math.round(meters / 80); // ~80 m/min walking pace
+      if (walkMinutes < 1) walkMinutes = 1;
+    }
+
+    return {
+      name: best.displayName?.text ?? "",
+      address: best.formattedAddress ?? "",
+      walk_minutes: walkMinutes,
+      vibe: best.editorialSummary?.text ?? "Great spot for drinks or dessert",
+      google_maps_url: best.googleMapsUri ?? "",
+    };
+  } catch {
+    return null;
+  }
 }
 
 // ─── Review Signal Extraction ─────────────────────────────────────────────────

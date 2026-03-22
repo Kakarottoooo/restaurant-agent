@@ -35,11 +35,11 @@ export default function ScenarioBrief({ plan }: ScenarioBriefProps) {
               letterSpacing: "0.08em",
               textTransform: "uppercase",
               fontFamily: "var(--font-dm-sans)",
-              color: "var(--gold)",
+              color: plan.confidence === "high" ? "var(--gold)" : "var(--text-secondary)",
               marginBottom: "6px",
             }}
           >
-            {copy.scenarioPlan}
+            {plan.confidence === "high" ? copy.yourPlan : copy.scenarioPlan}
           </p>
           <h3
             style={{
@@ -55,16 +55,31 @@ export default function ScenarioBrief({ plan }: ScenarioBriefProps) {
         <span
           style={{
             borderRadius: "999px",
-            padding: "6px 10px",
+            padding: "5px 10px",
             fontSize: "11px",
             fontFamily: "var(--font-dm-sans)",
-            color: "var(--text-primary)",
-            backgroundColor: "var(--card-2)",
-            border: "0.5px solid var(--border)",
-            textTransform: "capitalize",
+            fontWeight: plan.confidence === "high" ? 600 : 400,
+            color:
+              plan.confidence === "high"
+                ? "#166534"
+                : plan.confidence === "medium"
+                ? "#92400e"
+                : "var(--text-secondary)",
+            backgroundColor:
+              plan.confidence === "high"
+                ? "rgba(22,163,74,0.1)"
+                : plan.confidence === "medium"
+                ? "rgba(217,119,6,0.1)"
+                : "var(--card-2)",
+            border:
+              plan.confidence === "high"
+                ? "0.5px solid rgba(22,163,74,0.3)"
+                : plan.confidence === "medium"
+                ? "0.5px solid rgba(217,119,6,0.3)"
+                : "0.5px solid var(--border)",
           }}
         >
-          {formatConfidenceCopy(plan.output_language, plan.confidence)}
+          {plan.confidence === "high" ? "✓ " : ""}{formatConfidenceCopy(plan.output_language, plan.confidence)}
         </span>
       </div>
 

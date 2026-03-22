@@ -168,11 +168,12 @@ export function runScenarioPlanner(params: {
   userMessage: string;
   cityLabel: string;
   outputLanguage: OutputLanguage;
+  afterDinnerOption?: import("./types").AfterDinnerVenue | null;
 }): DecisionPlan | null {
   if (params.recommendations.length === 0) return null;
   const primaryCard = params.recommendations[0];
   const backupCards = params.recommendations.slice(1, 3);
-  const primaryPlan = buildDateNightOption(
+  const primaryPlanBase = buildDateNightOption(
     primaryCard,
     params.scenarioIntent,
     undefined,
@@ -180,6 +181,10 @@ export function runScenarioPlanner(params: {
     params.userMessage,
     params.outputLanguage
   );
+  // Attach after_dinner_option to the primary plan so it travels with it during backup promotion.
+  const primaryPlan = params.afterDinnerOption
+    ? { ...primaryPlanBase, after_dinner_option: params.afterDinnerOption }
+    : primaryPlanBase;
   const backupPlans = backupCards.map((card, index) =>
     buildDateNightOption(
       card,

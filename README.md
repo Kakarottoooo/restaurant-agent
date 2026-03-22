@@ -35,6 +35,8 @@ Scenario decision engine (`lib/scenario2.ts`):
 - **Post-experience feedback** — 24h after an event, a dismissible prompt asks "How was it?" with structured options (Great / OK but [too noisy / too expensive / too far] / Didn't go)
 - **Preference learning** — negative feedback updates a per-session `user_preferences` store; next request automatically injects learned constraints into restaurant scoring
 - **Trip brief export** — "Export brief" generates a clean markdown summary (hotel, flight, dining, budget, risks)
+- **Date Night multi-venue chaining** — for `date_night` queries, automatically appends an after-dinner venue (cocktail bar / wine bar / dessert café) within 1km of the primary restaurant, with walk time and vibe description
+- **Decision language** — high-confidence plans display "✓ Selected for you" with a green badge; backup options collapse by default so users approve rather than compare
 - Save favorites (localStorage)
 - Dark mode (system preference)
 - PWA-installable with offline support
