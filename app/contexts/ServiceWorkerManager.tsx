@@ -2,19 +2,19 @@
 
 import { useEffect } from "react";
 
-const FOLIO_CACHE_PREFIX = "folio-";
+const ONEGENT_CACHE_PREFIX = "onegent-";
 
-function isFolioRegistration(registration: ServiceWorkerRegistration) {
+function isOnegentRegistration(registration: ServiceWorkerRegistration) {
   return registration.active?.scriptURL.includes("/sw.js") ?? false;
 }
 
-async function clearFolioCaches() {
+async function clearOnegentCaches() {
   if (typeof window === "undefined" || !("caches" in window)) return;
 
   const cacheKeys = await window.caches.keys();
   await Promise.all(
     cacheKeys
-      .filter((key) => key.startsWith(FOLIO_CACHE_PREFIX))
+      .filter((key) => key.startsWith(ONEGENT_CACHE_PREFIX))
       .map((key) => window.caches.delete(key))
   );
 }
@@ -31,13 +31,13 @@ export function ServiceWorkerManager() {
         .then((registrations) =>
           Promise.all(
             registrations
-              .filter(isFolioRegistration)
+              .filter(isOnegentRegistration)
               .map((registration) => registration.unregister())
           )
         )
         .catch(() => {});
 
-      clearFolioCaches().catch(() => {});
+      clearOnegentCaches().catch(() => {});
       return;
     }
 

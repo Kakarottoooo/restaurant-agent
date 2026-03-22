@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.2.22.0] - 2026-03-22
+
+### Added
+- **Phase 3.1 — Review semantic signal extraction**: `fetchReviewSignals()` in `lib/tools.ts` fetches structured signals from real user reviews for each restaurant candidate. For restaurants with Google reviews already attached, it skips the Tavily network call and uses them directly. For others, fetches Yelp/Reddit/TripAdvisor via Tavily (`search_depth: "advanced"`). MiniMax extracts `noise_level`, `wait_time`, `date_suitability` (1–10), `service_pace`, `notable_dishes`, `red_flags`, `best_for`, and `review_confidence`. Signals are injected into restaurant objects before `rankAndExplain`, making recommendation reasoning evidence-based.
+- **Phase 3.2 — Structured scoring framework**: `computeWeightedScore()` in `lib/agent/composer/scoring.ts` replaces free-form AI scores with deterministic 5-dimension weighted scoring: scene_match (30%), budget_match (25%), review_quality (20%), location_convenience (15%), preference_match (10%), minus red_flag_penalty (0–5). AI fills raw dimension scores; system computes `weighted_total` and re-sorts candidates. Custom weights injectable per request. Fallback path (`buildFallbackRestaurantCards`) also uses the same scorer. `RecommendationCard` shows a collapsible "综合评分" breakdown panel with gold progress bars per dimension.
+- **Test coverage for 3.1 and 3.2**: 28 new tests in `lib/__tests__/scoring-and-signals.test.ts` covering `computeWeightedScore` (edge cases, weight math, clamping, penalty), `ReviewSignalsSchema`, `ScoringDimensionsSchema`, `RankedItemArraySchema` with optional scoring, and `fetchReviewSignals` (empty list, JSON parse failure, valid signals, MiniMax error, Google reviews short-circuit).
+
 ## [0.2.21.0] - 2026-03-22
 
 ### Added
@@ -182,7 +189,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **Share page** (`/plan/[id]`): read-only plan view for sharing with a partner — renders primary plan, backup options, and a "This works for me" approval button
 - **Partner approval API** (`POST /api/plan/[id]/outcome`): records `partner_approved` outcome to `plan_outcomes` table; GET variant supports calendar deep-link outcomes (`?type=went`)
 - **Plan save/fetch API** (`POST /api/plan/save`, `GET /api/plan/[id]`): persists `DecisionPlan` to `decision_plans` table; share action in the main UI saves plan and copies shareable URL
-- **Refinement lineage** (`parent_plan_id`): when you refine a plan, Folio now tracks which plan it came from — enabling full refinement chains and future analysis of whether refining led to better outcomes
+- **Refinement lineage** (`parent_plan_id`): when you refine a plan, Onegent now tracks which plan it came from — enabling full refinement chains and future analysis of whether refining led to better outcomes
 - **Venue intelligence** (`getScoreAdjustments`): real user outcomes now power a recency-weighted venue ranking model (30-day decay); activate with `ENABLE_SCORE_ADJUSTMENTS=true` once ≥30 days + ≥100 outcomes have been recorded
 
 ### Fixed

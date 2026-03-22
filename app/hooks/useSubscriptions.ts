@@ -8,8 +8,8 @@ import {
 } from "@/lib/watchTypes";
 import { SubscriptionIntent } from "@/lib/types";
 
-const SUBS_KEY = "folio_subscriptions";
-const SEEN_KEY = "folio_seen_product_ids";
+const SUBS_KEY = "onegent_subscriptions";
+const SEEN_KEY = "onegent_seen_product_ids";
 
 function loadFromStorage<T>(key: string, fallback: T): T {
   if (typeof window === "undefined") return fallback;

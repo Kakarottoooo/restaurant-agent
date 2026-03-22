@@ -21,7 +21,7 @@ const dmSans = DM_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "Folio. — Restaurant Recommendations",
+  title: "Onegent — Restaurant Recommendations",
   description: "AI-powered restaurant discovery",
   manifest: "/manifest.json",
 };

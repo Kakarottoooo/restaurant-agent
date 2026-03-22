@@ -670,8 +670,8 @@ function buildDateNightActions(
       label: prompt,
       description: pickLanguageCopy(
         language,
-        "Ask Folio to rerun the plan with this refinement.",
-        "让 Folio 按这个方向重新跑一版。"
+        "Ask Onegent to rerun the plan with this refinement.",
+        "让 Onegent 按这个方向重新跑一版。"
       ),
       prompt,
     });

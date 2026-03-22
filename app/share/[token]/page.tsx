@@ -82,7 +82,7 @@ export default function SharePage() {
               color: "var(--text-primary)",
             }}
           >
-            Folio<span style={{ color: "var(--gold)" }}>.</span>
+            Onegent<span style={{ color: "var(--gold)" }}>.</span>
           </h1>
           <p
             style={{
@@ -201,7 +201,7 @@ export default function SharePage() {
           }}
         >
           <a href="/" style={{ color: "var(--gold)", textDecoration: "none" }}>
-            Try Folio. for yourself →
+            Try Onegent for yourself →
           </a>
         </div>
       </div>

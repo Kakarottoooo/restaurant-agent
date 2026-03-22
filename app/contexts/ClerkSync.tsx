@@ -7,7 +7,7 @@ import { useAuthUpdater } from "./AuthContext";
 /** Read the stable session ID from localStorage (same key used by useChat). */
 function getStoredSessionId(): string | null {
   if (typeof window === "undefined") return null;
-  return window.localStorage.getItem("folio_scenario_session_id");
+  return window.localStorage.getItem("onegent_scenario_session_id");
 }
 
 /**

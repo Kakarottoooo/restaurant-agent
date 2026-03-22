@@ -26,7 +26,7 @@ export async function GET(
 
     const plan: DecisionPlan = result.rows[0].plan_json;
     const brief = buildPlanBrief(plan);
-    const filename = `folio-plan-${id}.md`;
+    const filename = `onegent-plan-${id}.md`;
 
     return new NextResponse(brief, {
       headers: {

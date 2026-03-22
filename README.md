@@ -1,4 +1,6 @@
-# Folio.
+# Onegent
+
+**Live:** [onegent.one](https://onegent.one/)
 
 AI-powered decision engine for dining, travel, and lifestyle. Tell it what you're planning in natural language — occasion, budget, vibe, dates — and it returns a curated plan with personalized options and direct booking links.
 
@@ -6,17 +8,19 @@ AI-powered decision engine for dining, travel, and lifestyle. Tell it what you'r
 
 Two modes depending on your query:
 
-### Category cards (restaurant, hotel, flight, laptop)
-Three-layer AI pipeline:
+### Category cards (restaurant, hotel, flight, laptop, smartphone, headphone, credit card)
+Five-layer AI pipeline:
 1. **Intent parsing** (MiniMax) — extracts structured requirements from your message
 2. **Parallel data gathering** — Google Places / SerpAPI for real data + Tavily editorial context, run concurrently
-3. **Ranking & explanation** (MiniMax) — scores candidates and generates personalized explanations, watch-outs, and "skip if" notes
+3. **Review signal extraction** — MiniMax parses real user reviews (Google Maps + Yelp/Reddit via Tavily) into structured signals: noise level, wait time, date suitability score, service pace, notable dishes, red flags
+4. **Structured scoring** — `computeWeightedScore()` ranks candidates on 5 weighted dimensions (scene match 30%, budget match 25%, review quality 20%, location convenience 15%, preference match 10%) minus red-flag penalty; system-computed rather than free-form AI guess
+5. **Ranking & explanation** (MiniMax) — fills dimension scores, writes personalized explanations, watch-outs, and "skip if" notes; result re-sorted by `weighted_total`
 
 ### Scenario plan (date_night, weekend_trip, city_trip, big_purchase, concert_event, gift, fitness)
 Scenario decision engine (`lib/scenario2.ts`):
 1. **NLU analysis** (`lib/nlu.ts`) — multilingual query understanding; English fast-path skips the API (~300ms saved)
 2. **Scenario detection** — routes to `date_night`, `weekend_trip`, `city_trip`, `big_purchase`, `concert_event`, `gift`, or `fitness` planner
-3. **Plan generation** — produces a `DecisionPlan` with primary + ranked backup options + a plan-level `tradeoff_summary` (1–2 sentences explaining why the primary is the default and what each backup trades off); weekend_trip runs parallel hotel + flight searches; city_trip runs parallel hotel + restaurant + bar searches and produces 3 tiered packages (Upscale / Trendy / Local vibe); big_purchase routes to the appropriate device pipeline (laptop/headphone/smartphone) and returns 1 clear pick + up to 2 backup alternatives with price-delta tradeoff labels
+3. **Plan generation** — produces a `DecisionPlan` with primary + ranked backup options + a plan-level `tradeoff_summary` explaining why the primary is the default and what each backup trades off
 4. **Modular planner engine** (`lib/agent/planner-engine/`) — generic tiered-package engine shared by all trip scenarios; new scenarios only need an `EngineConfig` factory
 5. **SSE streaming** — streams plan chunks to the client in real time
 
@@ -27,21 +31,24 @@ Scenario decision engine (`lib/scenario2.ts`):
 - 27 US cities + GPS-based "Near Me" mode + custom landmark search
 - List view and full-screen interactive map view
 - Filter chips by price and cuisine
-- Scenario plan UI: `ScenarioPlanView` (consolidates `ScenarioBrief` + `PrimaryPlanCard` + `BackupPlanCard` + `ActionRail` + evidence panel) with booking links
-- Share plans via a persistent URL (`/plan/[id]`) — partner sees a read-only view and can click "This works for me" to confirm (records `partner_approved` outcome for the learning loop)
+- Scenario plan UI: primary plan + backup options + action rail with booking links
+- Share plans via a persistent URL (`/plan/[id]`) — partner sees a read-only view and can click "This works for me" to confirm
 - **Group voting** — share a plan in vote mode (`?vote=true`); friends tap their preferred option and see live vote tallies
 - **Add to Calendar** — download a `.ics` file or open a Google Calendar event pre-filled with event date, time, and location
 - **Price drop alerts** — "Watch prices" registers a SerpAPI price watch; daily cron notifies when price drops ≥10%
 - **Post-experience feedback** — 24h after an event, a dismissible prompt asks "How was it?" with structured options (Great / OK but [too noisy / too expensive / too far] / Didn't go)
+- **Session preference memory (3.3a)** — after each restaurant query, MiniMax extracts preference signals (noise, budget, chains, excluded cuisines) from the message and accumulates them in-session; injected into all subsequent ranking prompts
+- **Persistent preference profile (3.3b)** — session preferences promote into a persistent `UserPreferenceProfile` (localStorage + cloud for signed-in users); survives across sessions so the system remembers "no chains" without the user repeating it
 - **Preference learning** — negative feedback updates a per-session `user_preferences` store; next request automatically injects learned constraints into restaurant scoring
 - **Trip brief export** — "Export brief" generates a clean markdown summary (hotel, flight, dining, budget, risks)
-- **Date Night multi-venue chaining** — for `date_night` queries, automatically appends an after-dinner venue (cocktail bar / wine bar / dessert café) within 1km of the primary restaurant, with walk time and vibe description
+- **Date Night multi-venue chaining** — automatically appends an after-dinner venue (cocktail bar / wine bar / dessert café) within 1km of the primary restaurant, with walk time and vibe description
 - **Decision language** — high-confidence plans display "✓ Selected for you" with a green badge; backup options collapse by default so users approve rather than compare
 - **User accounts + cross-device preference sync** — Clerk sign-in merges session preferences into the user account; learned constraints follow you across devices
 - **Push notifications** — "Watch prices" requests browser permission and delivers a Web Push notification when the price drops, even when the app is closed
-- **Concert & event ticket OS** — "find me a Taylor Swift concert in NYC" returns up to 3 events from Ticketmaster with direct buy-ticket links, venue info, price ranges, and Google Maps links; supports concerts, festivals, theater, sports, and comedy
-- **Gift recommendation OS** — "find me a birthday gift for my girlfriend who loves hiking under $80" returns 3 curated options (Safe pick / Most thoughtful / Most creative) sourced from SerpAPI Google Shopping with direct purchase links
-- **Fitness/wellness OS** — "find me a vinyasa yoga class in Brooklyn on Saturday morning under $25" returns 3 studio options (Top rated / Most popular / Best value) sourced from Google Places with ClassPass + Mindbody + Google Maps booking links; covers yoga, pilates, spin, HIIT, CrossFit, boxing, barre, dance, meditation, swimming, running, martial arts
+- **Concert & event ticket OS** — returns up to 3 events from Ticketmaster with direct buy-ticket links, venue info, price ranges, and Google Maps links
+- **Gift recommendation OS** — returns 3 curated options (Safe pick / Most thoughtful / Most creative) sourced from SerpAPI Google Shopping with direct purchase links
+- **Fitness/wellness OS** — returns 3 studio options (Top rated / Most popular / Best value) sourced from Google Places with ClassPass + Mindbody + Google Maps booking links; covers yoga, pilates, spin, HIIT, CrossFit, boxing, barre, dance, meditation, swimming, running, martial arts
+- **Structured scoring** — restaurant ranking uses 5 weighted dimensions computed deterministically; collapsible score breakdown panel on each card
 - Save favorites (localStorage)
 - Dark mode (system preference)
 - PWA-installable with offline support
@@ -57,7 +64,7 @@ Scenario decision engine (`lib/scenario2.ts`):
   - `SERPAPI_KEY` — SerpAPI (hotel + flight search + price watches)
   - `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` + `CLERK_SECRET_KEY` — Clerk (optional; enables internal analytics auth and cross-device preference sync)
   - `POSTGRES_URL` (or `DATABASE_URL`) — Neon PostgreSQL (required for share page, plan outcomes, and learning loop)
-  - `CRON_SECRET` — shared secret for cron routes (`/api/cron/feedback-prompts`, `/api/cron/price-check`); set in Vercel Cron config
+  - `CRON_SECRET` — shared secret for cron routes; set in Vercel Cron config
   - `NEXT_PUBLIC_VAPID_PUBLIC_KEY` + `VAPID_PRIVATE_KEY` — Web Push VAPID key pair (optional; enables push notifications for price drops)
   - `TICKETMASTER_API_KEY` + `TICKETMASTER_SECRET` — Ticketmaster Discovery API (optional; required for `concert_event` scenario)
 
@@ -94,8 +101,8 @@ Open [http://localhost:3000](http://localhost:3000).
 app/
   api/
     chat/route.ts                    # SSE endpoint — scenario vs category routing
+    session-preferences/extract/     # POST — AI-powered session preference extraction (3.3a)
     telemetry/route.ts               # plan_approved, option_swap, action_rail_click events
-    internal/scenario-events/        # Analytics API (GET, Clerk-gated)
     plan/
       save/route.ts                  # POST — persist DecisionPlan to decision_plans table
       [id]/route.ts                  # GET — fetch plan by ID (cached 24h)
@@ -108,17 +115,19 @@ app/
     notifications/
       subscribe/route.ts             # GET (VAPID public key) / POST (store push subscription)
     user/
+      profile/route.ts              # GET/PATCH — persistent preference profile (cloud sync)
       preferences/merge/route.ts    # POST — merge session preferences into user account on sign-in
     cron/
       feedback-prompts/route.ts      # GET — daily cron: create prompts for plans 20–28h ago
-      price-check/route.ts           # GET — daily cron: re-query SerpAPI, record price drops; fires push notifications on confirmed drops
+      price-check/route.ts           # GET — daily cron: re-query SerpAPI, record price drops; fires push notifications
   internal/scenario-events/          # Analytics UI (Clerk-gated)
   plan/[id]/                         # Shared plan view (read-only, partner approval button)
   hooks/
     useChat.ts          # AI pipeline state, sendMessage, scenario/category SSE handling
+    usePreferences.ts   # Persistent preference profile (localStorage + cloud sync)
     useLocation.ts      # City selection, GPS, near-location, SW registration
-    useFavorites.ts     # Favorites with localStorage persistence
-    usePushSubscribe.ts # Web Push subscription — requests permission, stores subscription server-side
+    useFavorites.ts     # Favorites with localStorage persistence + preference signal learning
+    usePushSubscribe.ts # Web Push subscription
   contexts/
     ChunkErrorRecovery.tsx    # SSE error recovery context
     ServiceWorkerManager.tsx  # SW lifecycle management
@@ -134,40 +143,32 @@ lib/
     planners/           # Scenario planners (weekend-trip, date-night, city-trip, big-purchase, concert-event, gift, fitness) + shared utils
     planner-engine/     # Generic modular planner engine (selectors, plan-option-builder, types)
     scenario-configs/   # EngineConfig factories per scenario (city-trip, …)
-    composer/           # Scoring + refinement helpers
-  scenario2.ts          # Scenario decision engine (detectScenario, runScenarioPlanner, runWeekendTripPlanner, runCityTripPlanner, getScoreAdjustments)
+    composer/           # Scoring (computeWeightedScore) + session preference extraction (extractRefinements)
+  scenario2.ts          # Scenario decision engine (detectScenario, planners, getScoreAdjustments)
   nlu.ts                # Multilingual query analysis (MiniMax + English fast-path + learned preference injection)
   minimax.ts            # Shared MiniMax chat helper with configurable timeout
-  scenarioEvents.ts     # Internal analytics query parsing + Clerk access guard
-  scenario.ts           # Scenario type definitions
   tools.ts              # Google Places, SerpAPI, Tavily, Geocoding API wrappers
   schemas.ts            # Zod schemas for request/response validation
-  types.ts              # TypeScript interfaces (DecisionPlan, ScenarioContext, etc.)
-  db.ts                 # Neon DB helpers (8 tables: scenario_events, decision_plans, plan_outcomes, feedback_prompts, plan_votes, price_watches, user_preferences, user_notifications)
-  push.ts               # Web Push helper — wraps web-push with VAPID setup, expired-subscription handling
-  ticketmaster.ts       # Ticketmaster Discovery API client — event search, venue/price/genre parsing
-  serpapi-shopping.ts   # SerpAPI Google Shopping client — product search for gift recommendations
+  types.ts              # TypeScript interfaces (DecisionPlan, SessionPreferences, UserPreferenceProfile, etc.)
+  db.ts                 # Neon DB helpers (8 tables)
+  push.ts               # Web Push helper — wraps web-push with VAPID setup
+  ticketmaster.ts       # Ticketmaster Discovery API client
+  serpapi-shopping.ts   # SerpAPI Google Shopping client
   cities.ts             # 27 US cities config
   outputCopy.ts         # Output language copy helpers
 
 components/
   ScenarioPlanView.tsx     # Scenario plan composite (Brief + Primary + Backups + ActionRail + Evidence)
-  ScenarioBrief.tsx        # Query summary card for scenario_plan mode
   PrimaryPlanCard.tsx      # Primary plan display with swap + approve actions
   BackupPlanCard.tsx       # Backup option cards
   ActionRail.tsx           # Plan action buttons (share, vote, watch price, export brief, calendar, refine, open_link)
-  FeedbackPromptCard.tsx   # Post-experience feedback prompt (dismissible card, 3-option rating)
-  ScenarioEvidencePanel.tsx # Supporting evidence panel
-  RecommendationCard.tsx   # Category card (restaurant, hotel, flight, laptop)
+  FeedbackPromptCard.tsx   # Post-experience feedback prompt
+  RecommendationCard.tsx   # Category card (restaurant, hotel, flight, laptop) with score breakdown
   MapView.tsx              # Leaflet map with interactive markers
 
 public/
   sw.js                 # Service worker (cache name versioned on build)
   manifest.json         # PWA manifest
-
-scripts/
-  inject-sw-version.mjs  # Postbuild: injects BUILD_ID into sw.js cache name
-  generate-icons.mjs     # Generates PWA icons (192px, 512px)
 ```
 
 ## Deployment

@@ -55,11 +55,11 @@ export async function GET(
     const ics = [
       "BEGIN:VCALENDAR",
       "VERSION:2.0",
-      "PRODID:-//Folio//Folio//EN",
+      "PRODID:-//Onegent//Onegent//EN",
       "CALSCALE:GREGORIAN",
       "METHOD:PUBLISH",
       "BEGIN:VEVENT",
-      `UID:${id}@folio.app`,
+      `UID:${id}@onegent.one`,
       `DTSTAMP:${now}`,
       `DTSTART:${dtstart}`,
       `DTEND:${dtend}`,
@@ -73,7 +73,7 @@ export async function GET(
     return new NextResponse(ics, {
       headers: {
         "Content-Type": "text/calendar; charset=utf-8",
-        "Content-Disposition": `attachment; filename="folio-plan-${id}.ics"`,
+        "Content-Disposition": `attachment; filename="onegent-plan-${id}.ics"`,
         "Cache-Control": "public, max-age=86400",
       },
     });
