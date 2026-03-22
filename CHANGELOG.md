@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.2.4.0] - 2026-03-22
+
+### Added
+- **Big Purchase OS** (`big_purchase` scenario): routes laptop, headphone, and smartphone queries through a new decision planner that produces one clear primary recommendation + up to 2 backup alternatives — no more comparing specs across 10 cards
+- **Execution Deep Links** (`open_link` PlanAction type): surfaces Amazon purchase links and other secondary actions (Maps, Calendar, hotel/flight booking) from all scenario planners into the ActionRail as clickable buttons — first link gets solid gold background, others get gold outline
+- **`parseBigPurchaseIntent`** + **`runBigPurchasePlanner`**: new planners in `lib/agent/planners/big-purchase.ts` that extract product category, budget, OS preference, and use case from natural language, then build a `DecisionPlan` reusing existing laptop/headphone/smartphone pipelines
+- **`mapLinksToOpenLinkActions`** utility (`lib/agent/planners/utils.ts`): shared helper that converts `PlanLinkAction[]` to `PlanAction[type="open_link"][]` with outcome tracking
+- **BackupPlanCard tradeoff rendering**: when `tradeoff_reason` is set, it replaces the label; `tradeoff_detail` replaces the summary — backup cards now explain the trade-off instead of showing a generic "Backup 1" label
+- **20 new tests** covering `detectScenarioFromMessage` big_purchase detection, `parseBigPurchaseIntent`, and `runBigPurchasePlanner` across null/valid/budget/category/language/tradeoff scenarios
+
+### Changed
+- **ActionRail** now owns execution deep links exclusively — `PrimaryPlanCard` no longer renders `secondary_actions`, preventing duplicate link rendering
+- `detectScenarioFromMessage`: big_purchase detection added at lowest priority (after city_trip, weekend_trip, date_night), triggered by product category keyword + budget signal or purchase intent verb
+
 ## [0.2.3.0] - 2026-03-22
 
 ### Added
