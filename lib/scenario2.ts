@@ -776,6 +776,12 @@ function buildWeekendTripActions(
       description: pickLanguageCopy(language, "Let your group vote on the trip options.", "让朋友们投票选出最喜欢的方案。"),
     },
     {
+      id: "watch-price",
+      type: "watch_price",
+      label: pickLanguageCopy(language, "Watch prices", "价格提醒"),
+      description: pickLanguageCopy(language, "Get notified if hotel or flight prices drop.", "当酒店或机票价格下降时提醒我。"),
+    },
+    {
       id: "refine-cheaper",
       type: "refine",
       label: pickLanguageCopy(language, "Make it cheaper", "再便宜一点"),

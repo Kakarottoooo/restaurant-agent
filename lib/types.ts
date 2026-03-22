@@ -195,6 +195,7 @@ export interface PlanAction {
   type:
     | "share_plan"
     | "send_for_vote"
+    | "watch_price"
     | "export_brief"
     | "refine"
     | "swap_backup"
@@ -275,7 +276,8 @@ export type PlanOutcomeType =
   | "rated_positive"
   | "rated_negative"
   | "partner_approved"
-  | "post_experience_feedback";
+  | "post_experience_feedback"
+  | "price_drop_alert";
 
 export type FeedbackRating = "great" | "ok" | "did_not_go";
 export type FeedbackIssue = "too_noisy" | "too_expensive" | "too_far" | "bad_service" | "other";

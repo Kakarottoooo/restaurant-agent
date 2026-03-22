@@ -7,6 +7,7 @@ let decisionPlansTableReady: Promise<void> | null = null;
 let planOutcomesTableReady: Promise<void> | null = null;
 let feedbackPromptsTableReady: Promise<void> | null = null;
 let planVotesTableReady: Promise<void> | null = null;
+let priceWatchesTableReady: Promise<void> | null = null;
 
 /**
  * Initialize the database tables if they don't exist.
@@ -50,6 +51,7 @@ export async function initDb() {
   await ensurePlanOutcomesTable();
   await ensureFeedbackPromptsTable();
   await ensurePlanVotesTable();
+  await ensurePriceWatchesTable();
 }
 
 export async function ensureScenarioEventsTable() {
@@ -178,4 +180,32 @@ export async function ensurePlanVotesTable() {
     });
   }
   await planVotesTableReady;
+}
+
+export async function ensurePriceWatchesTable() {
+  if (!priceWatchesTableReady) {
+    priceWatchesTableReady = (async () => {
+      await sql`
+        CREATE TABLE IF NOT EXISTS price_watches (
+          id                BIGSERIAL PRIMARY KEY,
+          plan_id           TEXT NOT NULL,
+          session_id        TEXT NOT NULL,
+          item_type         TEXT NOT NULL,
+          item_key          TEXT NOT NULL,
+          item_label        TEXT NOT NULL,
+          last_known_price  NUMERIC(10,2) NOT NULL,
+          threshold_pct     NUMERIC(5,2) NOT NULL DEFAULT 10,
+          search_params     JSONB,
+          created_at        TIMESTAMPTZ DEFAULT NOW(),
+          last_checked_at   TIMESTAMPTZ
+        )
+      `;
+      await sql`CREATE INDEX IF NOT EXISTS price_watches_plan_idx ON price_watches (plan_id)`;
+      await sql`CREATE INDEX IF NOT EXISTS price_watches_session_idx ON price_watches (session_id)`;
+    })().catch((err) => {
+      priceWatchesTableReady = null;
+      throw err;
+    });
+  }
+  await priceWatchesTableReady;
 }

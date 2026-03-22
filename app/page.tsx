@@ -349,6 +349,54 @@ export default function Home() {
       return;
     }
 
+    if (action.type === "watch_price") {
+      if (!chat.decisionPlan) throw new Error("No plan to watch");
+
+      // Save the plan first so it persists
+      const saveRes = await fetch("/api/plan/save", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          plan: chat.decisionPlan,
+          session_id: chat.getSessionId(),
+          query_text: lastUserQuery,
+          parent_plan_id: refinedFromPlanIdRef.current ?? undefined,
+        }),
+      });
+      if (!saveRes.ok) throw new Error(`Save failed: ${saveRes.status}`);
+
+      // Build a price watch item from the primary plan's estimated total
+      const primary = chat.decisionPlan.primary_plan;
+      const rawTotal = primary.estimated_total ?? "";
+      const priceNum = parseFloat(rawTotal.replace(/[^0-9.]/g, "")) || 0;
+
+      if (priceNum > 0) {
+        const watchItem = {
+          item_type: chat.decisionPlan.scenario === "big_purchase" ? "hotel" : "hotel" as const,
+          item_key: primary.id,
+          item_label: primary.title,
+          last_known_price: priceNum,
+        };
+        // Fire-and-forget — don't block UI on this
+        fetch(`/api/plan/${chat.decisionPlan.id}/price-watch`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            session_id: chat.getSessionId(),
+            items: [watchItem],
+          }),
+        }).catch(() => {});
+      }
+
+      const lang = chat.decisionPlan.output_language;
+      setPlanFeedbackMessage(
+        lang === "zh"
+          ? "价格提醒已开启 — 价格下降超过 10% 时会通知你"
+          : "Watching prices — you'll be notified if prices drop more than 10%"
+      );
+      return;
+    }
+
     if (action.type === "export_brief") {
       if (!chat.decisionPlan) throw new Error("No plan to export");
 

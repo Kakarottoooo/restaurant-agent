@@ -36,6 +36,12 @@ function buildDefaultActions(lang: OutputLanguage): PlanAction[] {
       description: pickLanguageCopy(lang, "Let your group vote on the trip options.", "让朋友们投票选出最喜欢的方案。"),
     },
     {
+      id: "watch-price",
+      type: "watch_price",
+      label: pickLanguageCopy(lang, "Watch prices", "价格提醒"),
+      description: pickLanguageCopy(lang, "Get notified if hotel prices drop.", "当酒店价格下降时提醒我。"),
+    },
+    {
       id: "swap-backup",
       type: "swap_backup",
       label: pickLanguageCopy(lang, "Try a different package", "换一套方案"),

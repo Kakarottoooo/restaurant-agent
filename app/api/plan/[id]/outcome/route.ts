@@ -10,6 +10,7 @@ const VALID_OUTCOME_TYPES = new Set<PlanOutcomeType>([
   "rated_negative",
   "partner_approved",
   "post_experience_feedback",
+  "price_drop_alert",
 ]);
 
 export async function POST(

@@ -86,17 +86,6 @@ Current `open_link` actions in `lib/types.ts` have a `url: string` field. The pl
 
 ## Phase 3c — Monitoring Layer (creates real moat)
 
-### 3c-1: Price drop alert for saved plans
-**Priority:** P1
-**What:** After a user saves or shares a weekend_trip plan, monitor the hotel/flight prices daily. If price drops >10%, send an in-app notification (and optionally email). User can re-open the plan and re-book at the lower price.
-**Why:** Prices change constantly. Users lose money by booking at the wrong time or not knowing when to re-book. This is a "the app is working for me even when I'm not using it" moment.
-**Pros:** Creates a reason to return to the app daily. Directly saves users money.
-**Cons:** Requires background polling (cron job). SerpAPI calls have cost per query — need rate limiting.
-**Context:** New DB table: `price_watches (id, plan_id, item_type, item_key, last_known_price, threshold_pct, created_at, last_checked_at)`. New cron route `GET /api/cron/price-check` (protected by `CRON_SECRET` header) runs daily, re-queries SerpAPI for watched items, compares to `last_known_price`, records drop in `plan_outcomes` with `outcome_type: "price_drop_alert"`. Notification: in-app badge on saved plan card + optional email via Resend/SendGrid. Add `watch_price?: boolean` flag to ActionRail save action.
-**Depends on:** Existing plan save infrastructure.
-
----
-
 ### 3c-2: Restaurant availability monitoring
 **Priority:** P2
 **What:** For date_night plans, monitor whether the primary recommended restaurant is bookable at the target time. If OpenTable/Resy shows no availability for the user's requested slot, proactively suggest the backup.
@@ -153,6 +142,10 @@ Current `open_link` actions in `lib/types.ts` have a `url: string` field. The pl
 ### SSE stream timeout for scenario planners
 **Completed:** v0.2.5.0 (2026-03-22)
 Server-side 45s `Promise.race` timeout wraps `runAgent()` in `app/api/chat/route.ts`. Client-side `AbortController` stall watchdog (50s) in `app/hooks/useChat.ts` cancels hung streams with a clear user-facing retry message.
+
+### 3c-1: Price drop alert for saved plans
+**Completed:** v0.2.14.0 (2026-03-22)
+`price_watches` table + `POST /api/plan/[id]/price-watch` (register) + `GET /api/cron/price-check` (daily SerpAPI re-query, records `price_drop_alert` in `plan_outcomes` when drop ≥10%). `watch_price` ActionRail action on weekend_trip and city_trip. 12 new tests.
 
 ### 3b-3: Send plan to friends (group voting)
 **Completed:** v0.2.13.0 (2026-03-22)

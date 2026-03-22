@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.2.14.0] - 2026-03-22
+
+### Added
+- **Price drop alerts** (`price_watches` DB table + `POST /api/plan/[id]/price-watch` + `GET /api/cron/price-check`): "Watch prices" ActionRail button (weekend_trip and city_trip) saves the plan and registers the primary option's price as a watch. Daily cron re-queries SerpAPI for each watch and records a `price_drop_alert` in `plan_outcomes` when price drops ≥10%, then updates `last_known_price`. One watch per `item_key` per plan; upsert-on-change.
+- **`watch_price` action type** (`PlanAction`): added to `lib/types.ts`, weekend trip and city_trip planner actions, and handled in `page.tsx` (fire-and-forget registration, optimistic toast).
+- **`price_drop_alert`** added to `PlanOutcomeType`; validated in `/api/plan/[id]/outcome` allowlist.
+- **12 new tests** in `price-watch.test.ts`: POST missing fields (×3), POST zero price, POST creates watch, POST skips existing; GET empty/populated; cron 401 (×2), cron no watches, cron skips null search_params.
+
 ## [0.2.13.0] - 2026-03-22
 
 ### Added
