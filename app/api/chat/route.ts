@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@clerk/nextjs/server";
 import { runAgent } from "@/lib/agent";
 import { ChatRequestSchema } from "@/lib/schemas";
 
@@ -70,7 +71,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid request." }, { status: 400 });
   }
 
-  const { message, history, city, gpsCoords, nearLocation, sessionPreferences, profileContext, customWeights, session_id, user_id } = body.data;
+  const { message, history, city, gpsCoords, nearLocation, sessionPreferences, profileContext, customWeights, session_id } = body.data;
+  // Derive userId from Clerk server-side auth — never trust client-supplied user_id
+  const { userId: user_id } = await auth().catch(() => ({ userId: null }));
   const request_id = crypto.randomUUID();
 
   console.log(JSON.stringify({
