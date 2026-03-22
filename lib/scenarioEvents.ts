@@ -9,6 +9,7 @@ const MAX_LIMIT = 100;
 const VALID_SCENARIOS = new Set<ScenarioType>([
   "date_night",
   "weekend_trip",
+  "city_trip",
   "big_purchase",
 ]);
 

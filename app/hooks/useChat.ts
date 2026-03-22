@@ -9,6 +9,7 @@ import {
   buildHotelFoundCopy,
   buildNoFlightCopy,
   buildNoHotelCopy,
+  buildCityTripFollowupCopy,
   buildWeekendTripFollowupCopy,
   pickLanguageCopy,
 } from "@/lib/outputCopy";
@@ -316,6 +317,28 @@ export function useChat({
                       category: "trip" as const,
                       result_mode: "followup_refinement",
                       scenario: "weekend_trip",
+                      output_language: outputLanguage,
+                    },
+                  ]);
+                  continue;
+                }
+
+                if (mode === "followup_refinement" && event.scenarioIntent?.scenario === "city_trip") {
+                  const missingFields: string[] = event.scenarioIntent?.missing_fields ?? [];
+                  const assumptions: string[] = event.scenarioIntent?.planning_assumptions ?? [];
+
+                  setMessages((prev) => [
+                    ...prev,
+                    {
+                      role: "assistant",
+                      content: buildCityTripFollowupCopy(
+                        outputLanguage,
+                        missingFields,
+                        assumptions[0]
+                      ),
+                      category: "trip" as const,
+                      result_mode: "followup_refinement",
+                      scenario: "city_trip",
                       output_language: outputLanguage,
                     },
                   ]);
