@@ -826,6 +826,7 @@ export function useChat({
     suggestedRefinements,
     swapDecisionPlanOption,
     trackDecisionPlanEvent,
+    getSessionId: getTelemetrySessionId,
     latestRequestId: latestRequestIdRef.current,
   };
 }

@@ -90,6 +90,8 @@ export default function Home() {
   const bottomRef = useRef<HTMLDivElement>(null);
   const chatInputRef = useRef("");
   const isComposingRef = useRef(false);
+  // Tracks the plan ID that triggered a refine action, for parent_plan_id lineage
+  const refinedFromPlanIdRef = useRef<string | null>(null);
   const [prefModalOpen, setPrefModalOpen] = useState(false);
 
   // Phase 5.3: Auth
@@ -262,7 +264,7 @@ export default function Home() {
     }
   }
 
-  function handlePlanAction(action: PlanAction) {
+  async function handlePlanAction(action: PlanAction) {
     if (action.type === "share_plan") {
       chat.trackDecisionPlanEvent({
         type: "action_clicked",
@@ -270,7 +272,25 @@ export default function Home() {
         option_id: chat.decisionPlan?.primary_plan.id,
         query: lastUserQuery,
       });
-      handleShare();
+
+      if (!chat.decisionPlan) throw new Error("No plan to share");
+
+      const res = await fetch("/api/plan/save", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          plan: chat.decisionPlan,
+          session_id: chat.getSessionId(),
+          query_text: lastUserQuery,
+          parent_plan_id: refinedFromPlanIdRef.current ?? undefined,
+        }),
+      });
+      if (!res.ok) throw new Error(`Save failed: ${res.status}`);
+      refinedFromPlanIdRef.current = null;
+
+      const shareUrl = `${window.location.origin}/plan/${chat.decisionPlan.id}`;
+      await navigator.clipboard.writeText(shareUrl);
+
       setPlanFeedbackMessage(
         buildPlanFeedbackCopy(chat.decisionPlan?.output_language, "shared")
       );
@@ -325,6 +345,8 @@ export default function Home() {
         query: lastUserQuery,
         metadata: { prompt: action.prompt },
       });
+      // Store current plan ID so it can be passed as parent_plan_id when the refined plan is saved
+      refinedFromPlanIdRef.current = chat.decisionPlan?.id ?? null;
       setPlanFeedbackMessage(
         buildPlanFeedbackCopy(
           chat.decisionPlan?.output_language,
