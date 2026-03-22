@@ -36,6 +36,7 @@ interface UseChatParams {
   profileContext?: string;
   learnedWeights?: LearnedWeights | null;
   onSubscriptionIntent?: (intent: SubscriptionIntent) => void;
+  userId?: string | null;
 }
 
 export function useChat({
@@ -46,6 +47,7 @@ export function useChat({
   profileContext,
   learnedWeights,
   onSubscriptionIntent,
+  userId,
 }: UseChatParams) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -262,6 +264,8 @@ export function useChat({
                 : undefined,
             profileContext: profileContext || undefined,
             customWeights,
+            session_id: getTelemetrySessionId(),
+            user_id: userId ?? undefined,
           }),
         });
 
@@ -716,7 +720,7 @@ export function useChat({
         setLoadingStep(-1);
       }
     },
-    [loading, isNearMe, cityId, gpsCoords, nearLocation, profileContext, sessionPreferences, learnedWeights, onSubscriptionIntent, trackScenarioEvent]
+    [loading, isNearMe, cityId, gpsCoords, nearLocation, profileContext, sessionPreferences, learnedWeights, onSubscriptionIntent, trackScenarioEvent, userId, getTelemetrySessionId]
   );
 
   const autoSearchFired = useRef(false);

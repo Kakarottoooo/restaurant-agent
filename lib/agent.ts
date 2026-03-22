@@ -52,7 +52,8 @@ export async function runAgent(
   profileContext?: string,
   streamCallbacks?: StreamCallbacks,
   customWeights?: Partial<typeof DEFAULT_WEIGHTS>,
-  sessionId?: string
+  sessionId?: string,
+  userId?: string
 ): Promise<{
   requirements:
     | UserRequirements
@@ -87,9 +88,10 @@ export async function runAgent(
   const city = CITIES[cityId] ?? CITIES[DEFAULT_CITY];
   const cityFullName = gpsCoords ? "your current location" : city.fullName;
 
-  const userPreferences = sessionId
-    ? await getUserPreferences(sessionId).catch(() => ({}))
-    : {};
+  const userPreferences =
+    userId || sessionId
+      ? await getUserPreferences(sessionId ?? "", userId).catch(() => ({}))
+      : {};
   const queryContext = await analyzeMultilingualQuery(userMessage, cityFullName, userPreferences);
 
   function buildBaseResult(

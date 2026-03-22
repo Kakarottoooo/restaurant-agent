@@ -70,7 +70,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid request." }, { status: 400 });
   }
 
-  const { message, history, city, gpsCoords, nearLocation, sessionPreferences, profileContext, customWeights, session_id } = body.data;
+  const { message, history, city, gpsCoords, nearLocation, sessionPreferences, profileContext, customWeights, session_id, user_id } = body.data;
   const request_id = crypto.randomUUID();
 
   console.log(JSON.stringify({
@@ -105,7 +105,8 @@ export async function POST(req: NextRequest) {
               },
             },
             customWeights ?? undefined,
-            session_id ?? undefined
+            session_id ?? undefined,
+            user_id ?? undefined
           ),
           AGENT_TIMEOUT_MS
         );
