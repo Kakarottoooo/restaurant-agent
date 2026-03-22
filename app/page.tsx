@@ -10,6 +10,7 @@ import LaptopCard from "@/components/LaptopCard";
 import SmartphoneCard from "@/components/SmartphoneCard";
 import HeadphoneCard from "@/components/HeadphoneCard";
 import ScenarioPlanView from "@/components/ScenarioPlanView";
+import FeedbackPromptCard from "@/components/FeedbackPromptCard";
 import DateRangePicker from "@/components/DateRangePicker";
 import { CITIES_SORTED } from "@/lib/cities";
 import { useChat, LOADING_STEPS } from "@/app/hooks/useChat";
@@ -22,7 +23,8 @@ import { useFavorites } from "@/app/hooks/useFavorites";
 import { usePreferences, formatProfileForPrompt } from "@/app/hooks/usePreferences";
 import { useVoiceInput } from "@/app/hooks/useVoiceInput";
 import { useAuth } from "@/app/hooks/useAuth";
-import { PlanAction, PlanLinkAction, RecommendationCard as CardType } from "@/lib/types";
+import { PlanAction, PlanLinkAction, RecommendationCard as CardType, PostExperienceFeedback } from "@/lib/types";
+import type { FeedbackPromptItem } from "@/app/api/feedback-prompts/route";
 
 // Leaflet is not SSR-compatible
 const MapView = dynamic(() => import("@/components/MapView"), { ssr: false });
@@ -99,6 +101,7 @@ export default function Home() {
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const [upgradePromptShown, setUpgradePromptShown] = useState(false);
   const [planFeedbackMessage, setPlanFeedbackMessage] = useState<string | null>(null);
+  const [pendingFeedbackPrompts, setPendingFeedbackPrompts] = useState<FeedbackPromptItem[]>([]);
 
   // Phase 5.2: Voice input
   const { isListening, isSupported: voiceSupported, startListening, stopListening } = useVoiceInput(
@@ -137,6 +140,20 @@ export default function Home() {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [auth.isSignedIn]);
+
+  // 3c-3: Check for pending post-experience feedback prompts on mount
+  useEffect(() => {
+    const sessionId = chat.getSessionId();
+    fetch(`/api/feedback-prompts?session_id=${encodeURIComponent(sessionId)}`)
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => {
+        if (data?.prompts?.length) {
+          setPendingFeedbackPrompts(data.prompts);
+        }
+      })
+      .catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -377,6 +394,24 @@ export default function Home() {
       learnFromSearch(action.prompt);
       chat.sendMessage(action.prompt);
     }
+  }
+
+  async function handleFeedbackResponse(
+    promptId: number,
+    planId: string,
+    feedback: PostExperienceFeedback
+  ) {
+    setPendingFeedbackPrompts((prev) => prev.filter((p) => p.id !== promptId));
+    fetch("/api/feedback-prompts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        prompt_id: promptId,
+        plan_id: planId,
+        session_id: chat.getSessionId(),
+        feedback,
+      }),
+    }).catch(() => {});
   }
 
   function handlePlanLinkClick(action: PlanLinkAction, optionId: string) {
@@ -1669,6 +1704,24 @@ export default function Home() {
 
                 {/* Filter / View Bar */}
                 {filterViewBar}
+
+                {/* 3c-3: Post-experience feedback prompts */}
+                {pendingFeedbackPrompts.map((prompt) => (
+                  <FeedbackPromptCard
+                    key={prompt.id}
+                    promptId={prompt.id}
+                    planId={prompt.plan_id}
+                    sessionId={chat.getSessionId()}
+                    venueName={prompt.venue_name}
+                    scenario={prompt.scenario}
+                    onDismiss={() =>
+                      setPendingFeedbackPrompts((prev) =>
+                        prev.filter((p) => p.id !== prompt.id)
+                      )
+                    }
+                    onRespond={handleFeedbackResponse}
+                  />
+                ))}
 
                 {/* Scenario Plan Results */}
                 {chat.resultMode === "scenario_plan" && chat.decisionPlan && (

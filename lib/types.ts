@@ -269,7 +269,17 @@ export type PlanOutcomeType =
   | "skipped"
   | "rated_positive"
   | "rated_negative"
-  | "partner_approved";
+  | "partner_approved"
+  | "post_experience_feedback";
+
+export type FeedbackRating = "great" | "ok" | "did_not_go";
+export type FeedbackIssue = "too_noisy" | "too_expensive" | "too_far" | "bad_service" | "other";
+
+export interface PostExperienceFeedback {
+  rating: FeedbackRating;
+  issues?: FeedbackIssue[];
+  note?: string;
+}
 
 // ─── Big Purchase types ───────────────────────────────────────────────────────
 

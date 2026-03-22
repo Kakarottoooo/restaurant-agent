@@ -140,6 +140,7 @@ Current `open_link` actions in `lib/types.ts` have a `url: string` field. The pl
 **Cons:** Requires a scheduler to send the prompt at the right time. UX must be frictionless (1-2 taps max).
 **Context:** New DB table: `feedback_prompts (id, plan_id, user_session, scheduled_for, sent_at, responded_at, response_json)`. New cron route `GET /api/cron/feedback-prompts` checks for plans where `event_datetime` was 24h ago and no feedback exists. In-app: a dismissible card at the top of the chat feed saying "How was your dinner at X?" with 3-4 quick-tap options. Response stored in `plan_outcomes` with `outcome_type: "post_experience_feedback"` and structured `metadata`.
 **Depends on:** 3b-2 (event_datetime in DecisionPlan enables scheduling).
+**Completed:** v0.2.11.0 (2026-03-22)
 
 ---
 

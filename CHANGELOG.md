@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.2.11.0] - 2026-03-22
+
+### Added
+- **Post-experience feedback capture** (`feedback_prompts` table + cron + in-app card): 24h after a plan's event date, users see a dismissible card — "How was your dinner at X?" — with quick-tap options (✅ Great / ⚠️ OK but… / ❌ Didn't go). "OK" expands to structured issue tags (too noisy, too expensive, too far, bad service). Responses are stored in `plan_outcomes` with `outcome_type: "post_experience_feedback"` and structured metadata for the learning loop.
+- **`feedback_prompts` DB table** (`ensureFeedbackPromptsTable` in `lib/db.ts`): tracks scheduled, sent, and responded state per plan per session — prevents duplicate prompts
+- **`GET /api/cron/feedback-prompts`**: CRON_SECRET-protected route that finds `decision_plans` with `event_datetime` 20–28h ago and inserts `feedback_prompts` rows for plans that haven't been prompted yet
+- **`GET /api/feedback-prompts`** + **`POST /api/feedback-prompts`**: in-app endpoints for fetching pending prompts by session and recording responses (marks prompt as responded + inserts `plan_outcomes` row)
+- **`FeedbackPromptCard` component** (`components/FeedbackPromptCard.tsx`): two-step dismissible card — rating step (3 buttons) → optional issues step (tag pills) → auto-dismisses on response
+- **`post_experience_feedback`** added to `PlanOutcomeType`; also added `FeedbackRating`, `FeedbackIssue`, `PostExperienceFeedback` types to `lib/types.ts`
+- **14 new tests** covering cron route (401/created/skipped), GET prompts (400/empty/venue_name/fallback), POST response (400-invalid/great/ok+issues/did_not_go)
+
 ## [0.2.10.0] - 2026-03-22
 
 ### Added

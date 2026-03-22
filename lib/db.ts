@@ -5,6 +5,7 @@ export { sql };
 let scenarioEventsTableReady: Promise<void> | null = null;
 let decisionPlansTableReady: Promise<void> | null = null;
 let planOutcomesTableReady: Promise<void> | null = null;
+let feedbackPromptsTableReady: Promise<void> | null = null;
 
 /**
  * Initialize the database tables if they don't exist.
@@ -46,6 +47,7 @@ export async function initDb() {
   await ensureScenarioEventsTable();
   await ensureDecisionPlansTable();
   await ensurePlanOutcomesTable();
+  await ensureFeedbackPromptsTable();
 }
 
 export async function ensureScenarioEventsTable() {
@@ -126,4 +128,30 @@ export async function ensurePlanOutcomesTable() {
   }
 
   await planOutcomesTableReady;
+}
+
+export async function ensureFeedbackPromptsTable() {
+  if (!feedbackPromptsTableReady) {
+    feedbackPromptsTableReady = (async () => {
+      await sql`
+        CREATE TABLE IF NOT EXISTS feedback_prompts (
+          id            BIGSERIAL PRIMARY KEY,
+          plan_id       TEXT NOT NULL,
+          user_session  TEXT NOT NULL,
+          scheduled_for TIMESTAMPTZ NOT NULL,
+          sent_at       TIMESTAMPTZ,
+          responded_at  TIMESTAMPTZ,
+          response_json JSONB,
+          created_at    TIMESTAMPTZ DEFAULT NOW()
+        )
+      `;
+      await sql`CREATE INDEX IF NOT EXISTS feedback_prompts_plan_idx ON feedback_prompts (plan_id)`;
+      await sql`CREATE INDEX IF NOT EXISTS feedback_prompts_session_idx ON feedback_prompts (user_session)`;
+    })().catch((err) => {
+      feedbackPromptsTableReady = null;
+      throw err;
+    });
+  }
+
+  await feedbackPromptsTableReady;
 }
