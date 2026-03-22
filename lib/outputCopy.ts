@@ -376,6 +376,18 @@ export function buildSubscriptionUnknownCopy(
   );
 }
 
+export function buildFitnessNoResultsCopy(
+  language: OutputLanguage | undefined,
+  activityLabel?: string
+): string {
+  const activity = activityLabel ?? "fitness class";
+  return pickLanguageCopy(
+    language,
+    `I couldn't find ${activity} studios matching your search. Try a different neighborhood, activity type, or drop the budget constraint.`,
+    `没有找到符合条件的${activity}工作室。可以试试换个区域、换个运动类型，或者放宽预算限制。`
+  );
+}
+
 export function buildGenericErrorCopy(
   language: OutputLanguage | undefined
 ): string {
