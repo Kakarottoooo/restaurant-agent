@@ -304,19 +304,11 @@ export default function PrimaryPlanCard({
         </div>
       )}
 
-      <div className="flex flex-wrap gap-2" style={{ alignItems: "center" }}>
-        {option.primary_action && (
+      {option.primary_action && (
+        <div className="flex flex-wrap gap-2" style={{ alignItems: "center" }}>
           <ActionLink action={option.primary_action} onClick={onLinkClick} />
-        )}
-        {(option.secondary_actions ?? []).map((action) => (
-          <ActionLink
-            key={action.id}
-            action={action}
-            subtle
-            onClick={onLinkClick}
-          />
-        ))}
-      </div>
+        </div>
+      )}
     </div>
   );
 }

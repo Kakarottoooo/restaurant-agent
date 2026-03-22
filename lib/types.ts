@@ -197,11 +197,14 @@ export interface PlanAction {
     | "refine"
     | "swap_backup"
     | "approve_plan"
-    | "request_changes";
+    | "request_changes"
+    | "open_link";
   label: string;
   description: string;
   prompt?: string;
   option_id?: string;
+  url?: string;
+  outcome_action?: string;
 }
 
 export interface PlanOption {
@@ -223,6 +226,9 @@ export interface PlanOption {
   evidence_card_id?: string;
   score: number;
   fallback_reason?: string;
+  tradeoff_reason?: string;
+  tradeoff_detail?: string;
+  product_model?: string;
 }
 
 export interface DecisionEvidenceItem {
@@ -256,9 +262,24 @@ export type PlanOutcomeType =
   | "rated_negative"
   | "partner_approved";
 
+// ─── Big Purchase types ───────────────────────────────────────────────────────
+
+export type BigPurchaseCategory = "laptop" | "headphone" | "smartphone" | "tablet" | "camera" | "tv" | "appliance" | "other";
+
+export interface BigPurchaseIntent extends BaseIntent {
+  category: "unknown";
+  scenario: "big_purchase";
+  product_category: BigPurchaseCategory;
+  query: string;
+  budget_usd_max: number | null;
+  os_preference?: string;
+  use_case?: string;
+  constraints?: string[];
+}
+
 // ─── Phase 7: Multi-category types ───────────────────────────────────────────
 
-export type CategoryType = "restaurant" | "hotel" | "flight" | "credit_card" | "laptop" | "smartphone" | "headphone" | "subscription" | "trip" | "unknown";
+export type CategoryType = "restaurant" | "hotel" | "flight" | "credit_card" | "laptop" | "smartphone" | "headphone" | "subscription" | "trip" | "big_purchase" | "unknown";
 
 export interface BaseIntent {
   category: CategoryType;
@@ -399,7 +420,7 @@ export interface CityTripIntent extends BaseIntent {
   missing_fields: string[];
 }
 
-export type ScenarioIntent = DateNightIntent | WeekendTripIntent | CityTripIntent;
+export type ScenarioIntent = DateNightIntent | WeekendTripIntent | CityTripIntent | BigPurchaseIntent;
 
 export type ScenarioTelemetryEventType =
   | "plan_viewed"

@@ -7,6 +7,10 @@ import {
   runWeekendTripPlanner,
   runCityTripPlanner,
 } from "../scenario2";
+import {
+  parseBigPurchaseIntent,
+  runBigPurchasePlanner,
+} from "../agent/planners/big-purchase";
 import type {
   CityTripIntent,
   CreditCardRecommendationCard,
@@ -15,6 +19,8 @@ import type {
   FlightRecommendationCard,
   Hotel,
   HotelRecommendationCard,
+  LaptopRecommendationCard,
+  MultilingualQueryContext,
   RecommendationCard,
   Restaurant,
   RestaurantIntent,
@@ -730,5 +736,183 @@ describe("runCityTripPlanner", () => {
     });
     expect(result).not.toBeNull();
     expect(result?.scenario).toBe("city_trip");
+  });
+});
+
+// ─── detectScenarioFromMessage — big_purchase ────────────────────────────────
+
+describe("detectScenarioFromMessage — big_purchase", () => {
+  it("detects laptop with budget signal", () => {
+    expect(detectScenarioFromMessage("help me pick a laptop ~$1800")).toBe("big_purchase");
+  });
+
+  it("detects headphones with explicit budget", () => {
+    expect(detectScenarioFromMessage("best headphones under $300")).toBe("big_purchase");
+  });
+
+  it("detects smartphone with buy intent", () => {
+    expect(detectScenarioFromMessage("I want to buy a new iPhone")).toBe("big_purchase");
+  });
+
+  it("city_trip takes priority when travel+hotel+dining signals present (even with laptop word)", () => {
+    // city_trip requires: traveling + hotel + dining. This message triggers city_trip, not big_purchase.
+    expect(detectScenarioFromMessage("traveling to Tokyo, need a hotel and restaurants for my trip")).toBe("city_trip");
+  });
+
+  it("returns null for bare product name with no budget or intent", () => {
+    expect(detectScenarioFromMessage("laptop comparison")).toBeNull();
+  });
+
+  it("returns null for generic message with no product category", () => {
+    expect(detectScenarioFromMessage("I want to buy something")).toBeNull();
+  });
+});
+
+// ─── parseBigPurchaseIntent ───────────────────────────────────────────────────
+
+const baseQueryContext = (): MultilingualQueryContext => ({
+  detected_language: "en",
+  output_language: "en",
+  constraints_hint: [],
+});
+
+describe("parseBigPurchaseIntent", () => {
+  it("detects laptop category", () => {
+    const intent = parseBigPurchaseIntent("help me pick a laptop ~$1800", baseQueryContext());
+    expect(intent.scenario).toBe("big_purchase");
+    expect(intent.product_category).toBe("laptop");
+  });
+
+  it("extracts dollar budget", () => {
+    const intent = parseBigPurchaseIntent("best laptop under $1500 for dev", baseQueryContext());
+    expect(intent.budget_usd_max).toBe(1500);
+  });
+
+  it("extracts os_preference for mac", () => {
+    const intent = parseBigPurchaseIntent("macbook for programming", baseQueryContext());
+    expect(intent.os_preference).toBe("mac");
+  });
+
+  it("extracts use_case for development", () => {
+    const intent = parseBigPurchaseIntent("laptop for coding and development", baseQueryContext());
+    expect(intent.use_case).toBe("development");
+  });
+
+  it("defaults budget_usd_max to null when no price found", () => {
+    const intent = parseBigPurchaseIntent("buy me a smartphone", baseQueryContext());
+    expect(intent.budget_usd_max).toBeNull();
+  });
+
+  it("defaults product_category to other for unknown category", () => {
+    const intent = parseBigPurchaseIntent("buy me a fridge", baseQueryContext());
+    expect(intent.product_category).toBe("other");
+  });
+
+  it("sets category: unknown and scenario: big_purchase on the returned intent", () => {
+    const intent = parseBigPurchaseIntent("laptop $999", baseQueryContext());
+    expect(intent.category).toBe("unknown");
+    expect(intent.scenario).toBe("big_purchase");
+  });
+});
+
+// ─── runBigPurchasePlanner ────────────────────────────────────────────────────
+
+const makeLaptopCard = (overrides: Partial<LaptopRecommendationCard["device"]> = {}): LaptopRecommendationCard => ({
+  device: {
+    id: "laptop-1",
+    name: "TestBook Pro",
+    brand: "TestBrand",
+    os: "macOS",
+    display_size: 14,
+    cpu: "M3 Pro",
+    ram_gb: 16,
+    storage_gb: 512,
+    weight_kg: 1.4,
+    price_usd: 1999,
+    skus: [{ ram_gb: 16, storage_gb: 512, price_usd: 1999 }],
+    ...overrides,
+  } as LaptopRecommendationCard["device"],
+  why_recommended: "Great for development with excellent performance.",
+  watch_out: ["Battery degrades over time"],
+  final_score: 9.1,
+});
+
+const baseBigPurchaseIntent = () =>
+  parseBigPurchaseIntent("help me pick a laptop $1800", baseQueryContext());
+
+describe("runBigPurchasePlanner", () => {
+  it("returns null when recommendations is empty", () => {
+    const result = runBigPurchasePlanner({
+      intent: baseBigPurchaseIntent(),
+      recommendations: [],
+      outputLanguage: "en",
+    });
+    expect(result).toBeNull();
+  });
+
+  it("returns a DecisionPlan with scenario big_purchase", () => {
+    const result = runBigPurchasePlanner({
+      intent: baseBigPurchaseIntent(),
+      recommendations: [makeLaptopCard()],
+      outputLanguage: "en",
+    });
+    expect(result).not.toBeNull();
+    expect(result?.scenario).toBe("big_purchase");
+  });
+
+  it("sets primary_plan from first recommendation", () => {
+    const result = runBigPurchasePlanner({
+      intent: baseBigPurchaseIntent(),
+      recommendations: [makeLaptopCard()],
+      outputLanguage: "en",
+    });
+    expect(result?.primary_plan.title).toBe("TestBook Pro");
+  });
+
+  it("includes Amazon open_link action in next_actions", () => {
+    const result = runBigPurchasePlanner({
+      intent: baseBigPurchaseIntent(),
+      recommendations: [makeLaptopCard()],
+      outputLanguage: "en",
+    });
+    const amazonAction = result?.next_actions.find((a) => a.type === "open_link");
+    expect(amazonAction).toBeDefined();
+    expect(amazonAction?.url).toContain("amazon.com");
+  });
+
+  it("creates up to 2 backup_plans from remaining recommendations", () => {
+    const result = runBigPurchasePlanner({
+      intent: baseBigPurchaseIntent(),
+      recommendations: [
+        makeLaptopCard({ id: "l1", name: "Primary", price_usd: 1999 }),
+        makeLaptopCard({ id: "l2", name: "Backup1", price_usd: 1499 }),
+        makeLaptopCard({ id: "l3", name: "Backup2", price_usd: 2299 }),
+        makeLaptopCard({ id: "l4", name: "ShouldBeIgnored", price_usd: 999 }),
+      ],
+      outputLanguage: "en",
+    });
+    expect(result?.backup_plans).toHaveLength(2);
+  });
+
+  it("sets tradeoff_reason on backup options", () => {
+    const result = runBigPurchasePlanner({
+      intent: baseBigPurchaseIntent(),
+      recommendations: [
+        makeLaptopCard({ id: "l1", name: "Primary", price_usd: 1999 }),
+        makeLaptopCard({ id: "l2", name: "Cheaper", price_usd: 999 }),
+      ],
+      outputLanguage: "en",
+    });
+    expect(result?.backup_plans[0].tradeoff_reason).toBeDefined();
+  });
+
+  it("outputs zh language copy when outputLanguage is zh", () => {
+    const result = runBigPurchasePlanner({
+      intent: parseBigPurchaseIntent("推荐一款笔记本电脑 $1500", baseQueryContext()),
+      recommendations: [makeLaptopCard()],
+      outputLanguage: "zh",
+    });
+    expect(result?.output_language).toBe("zh");
+    expect(result?.primary_plan.label).toContain("主推");
   });
 });

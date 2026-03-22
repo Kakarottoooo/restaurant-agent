@@ -25,6 +25,7 @@ import { pickLanguageCopy } from "./outputCopy";
 import { runModularPlanner } from "./agent/planner-engine";
 import { ModuleResults } from "./agent/planner-engine/types";
 import { buildCityTripEngineConfig } from "./agent/scenario-configs/city-trip";
+import { mapLinksToOpenLinkActions } from "./agent/planners/utils";
 
 const DATE_NIGHT_REGEX =
   /\bdate night\b|\bfirst date\b|\banniversary\b|\bromantic\b|\bproposal\b|\bdating\b|\bdate\b|\bpartner\b|\bgirlfriend\b|\bboyfriend\b|\bwife\b|\bhusband\b|\bfiance\b/i;
@@ -60,6 +61,13 @@ const CHINESE_WEEKDAY_ALIASES: Array<{ english: string; aliases: string[] }> = [
   { english: "sunday", aliases: ["周日", "周天", "星期日", "星期天", "礼拜日", "礼拜天"] },
 ];
 
+// Big purchase: product category keyword + (budget signal OR purchase intent verb)
+// Priority: city_trip/weekend_trip take precedence when both would match.
+const BIG_PURCHASE_CATEGORY_REGEX =
+  /\blaptop\b|\bnotebook\b|\bmacbook\b|\bheadphones?\b|\bairpods?\b|\bbuds?\b|\bsmartphone\b|\biphone\b|\bandroid phone\b|\bpixel\b|\bgalaxy\b|\btablet\b|\bipad\b|\bcamera\b|\bdslr\b|\bmirrorless\b|\btv\b|\btelevision\b|\bappliance\b|\bwasher\b|\bdryer\b|\brefrigerator\b/i;
+const BIG_PURCHASE_BUDGET_REGEX = /\$\d+|\bunder\b|\baround\b|\babout\b|\bbudget\b|\bmax\b|\bless than\b|\bup to\b/i;
+const BIG_PURCHASE_INTENT_REGEX = /\bbuy\b|\bpurchase\b|\bpick\b|\bget\b|\bshould i get\b|\bhelp me (?:pick|choose|find|get|buy)\b|\bwhich (?:one|laptop|phone|headphone)\b|\bbest \w+ (?:under|for|around)\b|\brecommend\b/i;
+
 export function detectScenarioFromMessage(message: string): ScenarioType | null {
   const lower = message.toLowerCase();
   // Exclude common false positives: "round trip", "business trip", "day trip"
@@ -88,6 +96,15 @@ export function detectScenarioFromMessage(message: string): ScenarioType | null 
   if (DATE_NIGHT_REGEX.test(lower) || DATE_NIGHT_ZH_REGEX.test(message)) {
     return "date_night";
   }
+
+  // Big purchase: product category + budget signal OR explicit purchase intent verb
+  if (
+    BIG_PURCHASE_CATEGORY_REGEX.test(lower) &&
+    (BIG_PURCHASE_BUDGET_REGEX.test(lower) || BIG_PURCHASE_INTENT_REGEX.test(lower))
+  ) {
+    return "big_purchase";
+  }
+
   return null;
 }
 
@@ -200,7 +217,8 @@ export function runScenarioPlanner(params: {
     risks,
     next_actions: buildDateNightActions(
       primaryCard.suggested_refinements ?? [],
-      params.outputLanguage
+      params.outputLanguage,
+      primaryPlan
     ),
     evidence_card_ids: params.recommendations.slice(0, 3).map((card) => card.restaurant.id),
     evidence_items: params.recommendations.slice(0, 3).map((card) => ({
@@ -352,7 +370,7 @@ export function runWeekendTripPlanner(params: {
       ...primary.risks,
       ...backups.flatMap((option) => option.risks.slice(0, 1)),
     ]).slice(0, 4),
-    next_actions: buildWeekendTripActions(params.scenarioIntent, params.outputLanguage),
+    next_actions: buildWeekendTripActions(params.scenarioIntent, params.outputLanguage, primary),
     evidence_card_ids: dedupeStrings([
       stablePair.flight.flight.id,
       stablePair.hotel.hotel.id,
@@ -458,19 +476,13 @@ function buildDateNightBrief(
 
 function buildDateNightActions(
   refinements: string[],
-  language: OutputLanguage
+  language: OutputLanguage,
+  primaryOption?: PlanOption
 ): PlanAction[] {
+  const openLinkActions = mapLinksToOpenLinkActions(primaryOption?.secondary_actions ?? []);
+
   const actions: PlanAction[] = [
-    {
-      id: "approve-plan",
-      type: "approve_plan",
-      label: pickLanguageCopy(language, "Approve main plan", "确认主方案"),
-      description: pickLanguageCopy(
-        language,
-        "Mark this as the default plan you want to move forward with.",
-        "把它标记成你准备继续推进的默认方案。"
-      ),
-    },
+    ...openLinkActions,
     {
       id: "share-plan",
       type: "share_plan",
@@ -582,19 +594,17 @@ function buildDateNightOption(
 
 function buildWeekendTripActions(
   intent: WeekendTripIntent,
-  language: OutputLanguage
+  language: OutputLanguage,
+  primaryOption?: PlanOption
 ): PlanAction[] {
   const budgetTarget = intent.budget_total
     ? `$${intent.budget_total}`
     : pickLanguageCopy(language, "the current package", "当前方案");
 
+  const openLinkActions = mapLinksToOpenLinkActions(primaryOption?.secondary_actions ?? []);
+
   return [
-    {
-      id: "approve-plan",
-      type: "approve_plan",
-      label: pickLanguageCopy(language, "Approve package", "确认方案"),
-      description: pickLanguageCopy(language, "Mark this trip package as the one you want to move forward with.", "把这套旅行方案标记成你准备继续推进的版本。"),
-    },
+    ...openLinkActions,
     {
       id: "share-plan",
       type: "share_plan",
