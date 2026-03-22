@@ -184,6 +184,14 @@ export interface MultilingualQueryContext {
   constraints_hint?: string[];
 }
 
+export interface AfterDinnerVenue {
+  name: string;
+  address: string;
+  walk_minutes: number;
+  vibe: string;
+  google_maps_url: string;
+}
+
 export interface PlanLinkAction {
   id: string;
   label: string;
@@ -264,6 +272,8 @@ export interface DecisionPlan {
   show_more_available?: boolean;
   /** True when this plan was shared in group-vote mode — enables vote UI on the share page. */
   vote_mode?: boolean;
+  /** After-dinner venue for date_night plans (cocktail bar, dessert spot, etc.). */
+  after_dinner_option?: AfterDinnerVenue;
   risks: string[];
   next_actions: PlanAction[];
   evidence_card_ids: string[];

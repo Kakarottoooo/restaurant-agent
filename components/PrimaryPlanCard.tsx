@@ -1,11 +1,13 @@
 "use client";
 
-import { OutputLanguage, PlanLinkAction, PlanOption } from "@/lib/types";
-import { getScenarioUiCopy } from "@/lib/outputCopy";
+import { AfterDinnerVenue, OutputLanguage, PlanLinkAction, PlanOption } from "@/lib/types";
+import { getScenarioUiCopy, pickLanguageCopy } from "@/lib/outputCopy";
 
 interface PrimaryPlanCardProps {
   option: PlanOption;
   language?: OutputLanguage;
+  confidence?: "high" | "medium" | "low";
+  afterDinnerOption?: AfterDinnerVenue | null;
   onLinkClick?: (action: PlanLinkAction) => void;
 }
 
@@ -43,16 +45,21 @@ function ActionLink({
 export default function PrimaryPlanCard({
   option,
   language,
+  confidence,
+  afterDinnerOption,
   onLinkClick,
 }: PrimaryPlanCardProps) {
   const copy = getScenarioUiCopy(language);
+  const isHighConfidence = confidence === "high";
   return (
     <div
       style={{
         background:
           "linear-gradient(180deg, rgba(212,163,75,0.12) 0%, rgba(255,255,255,0) 100%), var(--card)",
         borderRadius: "20px",
-        border: "0.5px solid rgba(212,163,75,0.35)",
+        border: isHighConfidence
+          ? "0.5px solid rgba(22,163,74,0.3)"
+          : "0.5px solid rgba(212,163,75,0.35)",
         padding: "20px",
       }}
     >
@@ -73,11 +80,13 @@ export default function PrimaryPlanCard({
               letterSpacing: "0.08em",
               textTransform: "uppercase",
               fontFamily: "var(--font-dm-sans)",
-              color: "var(--gold)",
+              color: isHighConfidence ? "rgba(22,163,74,0.9)" : "var(--gold)",
               marginBottom: "8px",
             }}
           >
-            {option.label}
+            {isHighConfidence
+              ? (language === "zh" ? "✓ 已为你选定" : "✓ Selected for you")
+              : option.label}
           </p>
           <h3
             style={{
@@ -301,6 +310,77 @@ export default function PrimaryPlanCard({
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {afterDinnerOption && (
+        <div
+          style={{
+            borderRadius: "14px",
+            border: "0.5px solid var(--border)",
+            padding: "14px",
+            marginBottom: "12px",
+          }}
+        >
+          <p
+            style={{
+              fontFamily: "var(--font-dm-sans)",
+              fontSize: "11px",
+              textTransform: "uppercase",
+              letterSpacing: "0.05em",
+              color: "var(--text-secondary)",
+              marginBottom: "6px",
+            }}
+          >
+            {pickLanguageCopy(language, "Then →", "然后 →")}
+          </p>
+          <p
+            style={{
+              fontFamily: "var(--font-dm-sans)",
+              fontSize: "14px",
+              fontWeight: 600,
+              color: "var(--text-primary)",
+              marginBottom: "4px",
+            }}
+          >
+            {afterDinnerOption.name}
+            <span
+              style={{
+                fontWeight: 400,
+                fontSize: "12px",
+                color: "var(--text-secondary)",
+                marginLeft: "8px",
+              }}
+            >
+              · {afterDinnerOption.walk_minutes} {pickLanguageCopy(language, "min walk", "分钟步行")}
+            </span>
+          </p>
+          <p
+            style={{
+              fontFamily: "var(--font-dm-sans)",
+              fontSize: "13px",
+              color: "var(--text-secondary)",
+              lineHeight: 1.5,
+              marginBottom: "6px",
+            }}
+          >
+            {afterDinnerOption.vibe}
+          </p>
+          {afterDinnerOption.google_maps_url && (
+            <a
+              href={afterDinnerOption.google_maps_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                fontFamily: "var(--font-dm-sans)",
+                fontSize: "12px",
+                color: "var(--gold)",
+                textDecoration: "none",
+              }}
+            >
+              {pickLanguageCopy(language, "View on Maps →", "在地图上查看 →")}
+            </a>
+          )}
         </div>
       )}
 

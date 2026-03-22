@@ -1,4 +1,4 @@
-import { Restaurant, ReviewSignals, GoogleReview, Hotel, Flight } from "./types";
+import { Restaurant, ReviewSignals, GoogleReview, Hotel, Flight, AfterDinnerVenue } from "./types";
 
 // ─── Geocoding ────────────────────────────────────────────────────────────────
 
@@ -130,6 +130,74 @@ export async function googlePlacesSearch(params: {
   }
 
   return results;
+}
+
+// ─── After-Dinner Venue Search ────────────────────────────────────────────────
+
+/**
+ * Finds a cocktail bar, dessert spot, or wine bar near the given restaurant coords.
+ * Returns the best single option, or null if nothing suitable is found.
+ */
+export async function searchAfterDinnerVenue(
+  city: string,
+  nearCoords?: { lat: number; lng: number }
+): Promise<AfterDinnerVenue | null> {
+  try {
+    const query = `cocktail bar OR wine bar OR dessert cafe in ${city}`;
+    const center = nearCoords ?? { lat: 37.7749, lng: -122.4194 };
+    const radius = nearCoords ? 1200 : 5000;
+
+    const res = await fetch(
+      "https://places.googleapis.com/v1/places:searchText",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Goog-Api-Key": process.env.GOOGLE_PLACES_API_KEY!,
+          "X-Goog-FieldMask":
+            "places.id,places.displayName,places.formattedAddress,places.rating,places.userRatingCount,places.editorialSummary,places.location,places.googleMapsUri",
+        },
+        body: JSON.stringify({
+          textQuery: query,
+          maxResultCount: 5,
+          locationBias: {
+            circle: {
+              center: { latitude: center.lat, longitude: center.lng },
+              radius,
+            },
+          },
+        }),
+      }
+    );
+
+    if (!res.ok) return null;
+    const data = await res.json();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const places: any[] = data.places ?? [];
+    if (places.length === 0) return null;
+
+    // Pick the highest-rated place
+    const best = places.sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0))[0];
+
+    const venueLat: number | undefined = best.location?.latitude;
+    const venueLng: number | undefined = best.location?.longitude;
+    let walkMinutes = 10;
+    if (nearCoords && venueLat !== undefined && venueLng !== undefined) {
+      const meters = haversineDistance(nearCoords.lat, nearCoords.lng, venueLat, venueLng);
+      walkMinutes = Math.round(meters / 80); // ~80 m/min walking pace
+      if (walkMinutes < 1) walkMinutes = 1;
+    }
+
+    return {
+      name: best.displayName?.text ?? "",
+      address: best.formattedAddress ?? "",
+      walk_minutes: walkMinutes,
+      vibe: best.editorialSummary?.text ?? "Great spot for drinks or dessert",
+      google_maps_url: best.googleMapsUri ?? "",
+    };
+  } catch {
+    return null;
+  }
 }
 
 // ─── Review Signal Extraction ─────────────────────────────────────────────────

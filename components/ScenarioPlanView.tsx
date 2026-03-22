@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import ScenarioBrief from "@/components/ScenarioBrief";
 import PrimaryPlanCard from "@/components/PrimaryPlanCard";
 import BackupPlanCard from "@/components/BackupPlanCard";
@@ -41,6 +42,8 @@ export default function ScenarioPlanView({
   lastUserQuery,
 }: Props) {
   const scenarioCopy = getScenarioUiCopy(plan.output_language);
+  // High-confidence plans start with backups collapsed — user approves the primary first.
+  const [showBackups, setShowBackups] = useState(plan.confidence !== "high");
 
   return (
     <div className="flex flex-col gap-4">
@@ -63,6 +66,8 @@ export default function ScenarioPlanView({
       <PrimaryPlanCard
         option={plan.primary_plan}
         language={plan.output_language}
+        confidence={plan.confidence}
+        afterDinnerOption={plan.after_dinner_option}
         onLinkClick={(action) => onLinkClick(action, plan.primary_plan.id)}
       />
 
@@ -144,68 +149,99 @@ export default function ScenarioPlanView({
 
       {plan.backup_plans.length > 0 && (
         <div className="flex flex-col gap-3">
-          <div>
-            <p
+          {/* Toggle row — always visible */}
+          <button
+            onClick={() => setShowBackups((v) => !v)}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+              background: "none",
+              border: "none",
+              cursor: "pointer",
+              padding: "0",
+              textAlign: "left",
+            }}
+          >
+            <span
               style={{
-                fontFamily: "var(--font-dm-sans)",
                 fontSize: "11px",
-                textTransform: "uppercase",
                 letterSpacing: "0.06em",
-                color: "var(--text-secondary)",
-                marginBottom: "6px",
-              }}
-            >
-              {scenarioCopy.backupOptions}
-            </p>
-            <h4
-              style={{
-                fontFamily: "var(--font-playfair)",
-                fontSize: "24px",
-                color: "var(--text-primary)",
-              }}
-            >
-              {scenarioCopy.keepOnDeck}
-            </h4>
-          </div>
-          <div className="grid gap-3 md:grid-cols-2">
-            {plan.backup_plans.map((backupPlan) => (
-              <BackupPlanCard
-                key={backupPlan.id}
-                option={backupPlan}
-                onPromote={() => {
-                  trackDecisionPlanEvent({
-                    type: "backup_promoted",
-                    option_id: backupPlan.id,
-                    query: lastUserQuery,
-                  });
-                  setPlanFeedbackMessage(
-                    buildPlanFeedbackCopy(
-                      plan.output_language,
-                      "promoted",
-                      backupPlan.title
-                    )
-                  );
-                  swapDecisionPlanOption(backupPlan.id);
-                }}
-                language={plan.output_language}
-                onLinkClick={(action) => onLinkClick(action, backupPlan.id)}
-              />
-            ))}
-          </div>
-          {plan.show_more_available && (
-            <p
-              style={{
+                textTransform: "uppercase",
                 fontFamily: "var(--font-dm-sans)",
-                fontSize: "12px",
                 color: "var(--text-secondary)",
-                textAlign: "center",
-                marginTop: "4px",
               }}
             >
-              {plan.output_language === "zh"
-                ? "还有更多选项可用 — 告诉我你的偏好，我可以为你精选更多方案"
-                : "More options available — tell me your preferences and I can surface more"}
-            </p>
+              {showBackups ? scenarioCopy.hideAlternatives : scenarioCopy.showAlternatives}
+              {" "}({plan.backup_plans.length})
+            </span>
+            <span
+              style={{
+                fontSize: "10px",
+                color: "var(--text-secondary)",
+                transition: "transform 0.2s",
+                display: "inline-block",
+                transform: showBackups ? "rotate(180deg)" : "rotate(0deg)",
+              }}
+            >
+              ▾
+            </span>
+          </button>
+
+          {showBackups && (
+            <>
+              <div>
+                <h4
+                  style={{
+                    fontFamily: "var(--font-playfair)",
+                    fontSize: "24px",
+                    color: "var(--text-primary)",
+                  }}
+                >
+                  {scenarioCopy.keepOnDeck}
+                </h4>
+              </div>
+              <div className="grid gap-3 md:grid-cols-2">
+                {plan.backup_plans.map((backupPlan) => (
+                  <BackupPlanCard
+                    key={backupPlan.id}
+                    option={backupPlan}
+                    onPromote={() => {
+                      trackDecisionPlanEvent({
+                        type: "backup_promoted",
+                        option_id: backupPlan.id,
+                        query: lastUserQuery,
+                      });
+                      setPlanFeedbackMessage(
+                        buildPlanFeedbackCopy(
+                          plan.output_language,
+                          "promoted",
+                          backupPlan.title
+                        )
+                      );
+                      swapDecisionPlanOption(backupPlan.id);
+                    }}
+                    language={plan.output_language}
+                    onLinkClick={(action) => onLinkClick(action, backupPlan.id)}
+                  />
+                ))}
+              </div>
+              {plan.show_more_available && (
+                <p
+                  style={{
+                    fontFamily: "var(--font-dm-sans)",
+                    fontSize: "12px",
+                    color: "var(--text-secondary)",
+                    textAlign: "center",
+                    marginTop: "4px",
+                  }}
+                >
+                  {plan.output_language === "zh"
+                    ? "还有更多选项可用 — 告诉我你的偏好，我可以为你精选更多方案"
+                    : "More options available — tell me your preferences and I can surface more"}
+                </p>
+              )}
+            </>
           )}
         </div>
       )}

@@ -168,6 +168,7 @@ export function runScenarioPlanner(params: {
   userMessage: string;
   cityLabel: string;
   outputLanguage: OutputLanguage;
+  afterDinnerOption?: import("./types").AfterDinnerVenue | null;
 }): DecisionPlan | null {
   if (params.recommendations.length === 0) return null;
   const primaryCard = params.recommendations[0];
@@ -242,6 +243,7 @@ export function runScenarioPlanner(params: {
       params.outputLanguage,
       primaryPlan
     ),
+    ...(params.afterDinnerOption ? { after_dinner_option: params.afterDinnerOption } : {}),
     evidence_card_ids: params.recommendations.slice(0, 3).map((card) => card.restaurant.id),
     evidence_items: params.recommendations.slice(0, 3).map((card) => ({
       id: card.restaurant.id,

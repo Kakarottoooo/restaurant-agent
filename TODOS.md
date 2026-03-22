@@ -141,6 +141,14 @@ Current `open_link` actions in `lib/types.ts` have a `url: string` field. The pl
 
 ## Completed
 
+### 4a-1: Decision language upgrade (PrimaryPlanCard)
+**Completed:** v0.2.17.0 (2026-03-22)
+`PrimaryPlanCard` detects `confidence === "high"` and switches to green border + "✓ Selected for you" label. `ScenarioBrief` shows "Your plan" (gold) for high-confidence plans. Confidence badge: green + checkmark for high, amber for medium, grey for low. `ScenarioPlanView` collapses backups by default when confidence is high, with a toggle showing "Show alternatives (N)".
+
+### 3b-3b: Date Night multi-venue chaining (evening package)
+**Completed:** v0.2.17.0 (2026-03-22)
+`searchAfterDinnerVenue()` in `lib/tools.ts` queries Google Places for a cocktail bar / wine bar / dessert café within 1km of the primary restaurant. Walk time calculated via haversine at 80 m/min. `DecisionPlan.after_dinner_option?: AfterDinnerVenue` field added. `PrimaryPlanCard` renders "Then →" section with venue name, walk time, vibe, and Google Maps link (bilingual: EN + ZH). 3 new tests.
+
 ### SSE stream timeout for scenario planners
 **Completed:** v0.2.5.0 (2026-03-22)
 Server-side 45s `Promise.race` timeout wraps `runAgent()` in `app/api/chat/route.ts`. Client-side `AbortController` stall watchdog (50s) in `app/hooks/useChat.ts` cancels hung streams with a clear user-facing retry message.

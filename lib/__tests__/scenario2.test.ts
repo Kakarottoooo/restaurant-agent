@@ -1428,3 +1428,52 @@ describe("restaurant availability deep links (3c-2)", () => {
     expect(availAction).toBeUndefined();
   });
 });
+
+// ─── after_dinner_option (3b-3b) ─────────────────────────────────────────────
+
+describe("after_dinner_option", () => {
+  const mockVenue = {
+    name: "Bar Califa",
+    address: "123 Mission St, San Francisco, CA",
+    walk_minutes: 8,
+    vibe: "Cozy cocktail bar with great natural wines",
+    google_maps_url: "https://maps.google.com/?cid=123",
+  };
+
+  it("attaches after_dinner_option when provided", () => {
+    const result = runScenarioPlanner({
+      scenarioIntent: { scenario: "date_night", category: "restaurant" },
+      recommendations: [makeCard()],
+      userMessage: "romantic dinner",
+      cityLabel: "SF",
+      outputLanguage: "en",
+      afterDinnerOption: mockVenue,
+    });
+    expect(result?.after_dinner_option).toBeDefined();
+    expect(result?.after_dinner_option?.name).toBe("Bar Califa");
+    expect(result?.after_dinner_option?.walk_minutes).toBe(8);
+  });
+
+  it("omits after_dinner_option when not provided", () => {
+    const result = runScenarioPlanner({
+      scenarioIntent: { scenario: "date_night", category: "restaurant" },
+      recommendations: [makeCard()],
+      userMessage: "romantic dinner",
+      cityLabel: "SF",
+      outputLanguage: "en",
+    });
+    expect(result?.after_dinner_option).toBeUndefined();
+  });
+
+  it("omits after_dinner_option when null", () => {
+    const result = runScenarioPlanner({
+      scenarioIntent: { scenario: "date_night", category: "restaurant" },
+      recommendations: [makeCard()],
+      userMessage: "romantic dinner",
+      cityLabel: "SF",
+      outputLanguage: "en",
+      afterDinnerOption: null,
+    });
+    expect(result?.after_dinner_option).toBeUndefined();
+  });
+});
