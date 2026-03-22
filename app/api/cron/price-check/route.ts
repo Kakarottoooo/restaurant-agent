@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { ensurePriceWatchesTable, ensurePlanOutcomesTable, sql } from "@/lib/db";
+import { ensurePriceWatchesTable, ensurePlanOutcomesTable, getPushSubscriptionsBySession, sql } from "@/lib/db";
+import { sendPushNotification } from "@/lib/push";
+import type { PushSubscription } from "web-push";
 
 interface PriceWatch {
   id: number;
@@ -96,6 +98,17 @@ export async function GET(req: NextRequest) {
           UPDATE price_watches SET last_known_price = ${currentPrice} WHERE id = ${watch.id}
         `;
         drops++;
+
+        // Send push notification to subscribed users for this session
+        const subs = await getPushSubscriptionsBySession(watch.session_id).catch(() => []);
+        const dropPercent = Math.round(dropPct * 100);
+        for (const sub of subs) {
+          sendPushNotification(sub.push_subscription as PushSubscription, {
+            title: `Price drop: ${watch.item_label}`,
+            body: `Down ${dropPercent}% — now $${currentPrice} (was $${lastPrice})`,
+            url: `/plan/${watch.plan_id}`,
+          }).catch(() => {}); // fire-and-forget; expired subscriptions silently ignored
+        }
       } else if (currentPrice < lastPrice) {
         // Smaller drop — just update the stored price silently
         await sql`

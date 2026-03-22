@@ -15,6 +15,7 @@ import DateRangePicker from "@/components/DateRangePicker";
 import { CITIES_SORTED } from "@/lib/cities";
 import { useChat, LOADING_STEPS } from "@/app/hooks/useChat";
 import { useSubscriptions } from "@/app/hooks/useSubscriptions";
+import { subscribeToPushNotifications } from "@/app/hooks/usePushSubscribe";
 import { WATCH_CATEGORY_META } from "@/lib/watchTypes";
 import { buildPlanFeedbackCopy } from "@/lib/outputCopy";
 import type { MapPin } from "@/components/MapView";
@@ -72,6 +73,7 @@ export default function Home() {
   const { profile, updateProfile, learnFromFavorite, learnFromSearch, resetProfile, learnedWeights, learnWeightsFromFeedback } =
     usePreferences();
   const profileContext = formatProfileForPrompt(profile);
+  const { userId } = useAuth();
 
   const location = useLocation();
   const subs = useSubscriptions();
@@ -82,6 +84,7 @@ export default function Home() {
     nearLocation: location.nearLocation,
     profileContext,
     learnedWeights,
+    userId,
     onSubscriptionIntent: (intent) => {
       if (intent.action === "subscribe") subs.addSubscription(intent);
       else if (intent.action === "unsubscribe") subs.removeSubscription(intent);
@@ -352,6 +355,9 @@ export default function Home() {
     if (action.type === "watch_price") {
       if (!chat.decisionPlan) throw new Error("No plan to watch");
 
+      // Request push notification permission to deliver price drop alerts
+      subscribeToPushNotifications(chat.getSessionId(), userId).catch(() => {});
+
       // Save the plan first so it persists
       const saveRes = await fetch("/api/plan/save", {
         method: "POST",
@@ -391,8 +397,8 @@ export default function Home() {
       const lang = chat.decisionPlan.output_language;
       setPlanFeedbackMessage(
         lang === "zh"
-          ? "价格提醒已开启 — 价格下降超过 10% 时会通知你"
-          : "Watching prices — you'll be notified if prices drop more than 10%"
+          ? "价格提醒已开启 — 价格下降超过 10% 时会推送通知"
+          : "Watching prices — you'll get a push notification if prices drop more than 10%"
       );
       return;
     }
