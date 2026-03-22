@@ -66,7 +66,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
     const plan = result.rows[0]?.plan_json;
     if (plan) {
       return {
-        title: `${plan.title} — Folio`,
+        title: `${plan.title} — Onegent`,
         description: plan.summary,
       };
     }
@@ -74,5 +74,5 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
     // ignore
   }
 
-  return { title: "Shared Plan — Folio" };
+  return { title: "Shared Plan — Onegent" };
 }

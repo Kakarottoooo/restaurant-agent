@@ -21,7 +21,7 @@
 **Priority:** P2
 **What:** Set `ENABLE_SCORE_ADJUSTMENTS=true` after ≥30 days AND ≥100 `plan_outcomes` rows.
 **Why:** Converts accumulated outcome signals into smarter venue rankings.
-**Pros:** Folio gets measurably better over time.
+**Pros:** Onegent gets measurably better over time.
 **Cons:** Risk of promoting noise if enabled too early.
 **Context:** SQL query implemented in `lib/scenario2.ts` `getScoreAdjustments()`. Query JOINs `decision_plans + plan_outcomes`, extracts stable venue IDs via `evidence_card_id`, computes recency-weighted (30-day decay) signed approval rates, requires ≥3 outcomes per venue. Enable by setting `ENABLE_SCORE_ADJUSTMENTS=true` in env. Monitor ranking quality after enabling.
 **Depends on:** ≥30 days of live user data after v0.2.2.0. Earliest activation: ~2026-04-22.

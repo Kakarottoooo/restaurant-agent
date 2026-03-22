@@ -1,6 +1,6 @@
 {
-  "name": "Folio. — Restaurant Recommendations",
-  "short_name": "Folio.",
+  "name": "Onegent — Restaurant Recommendations",
+  "short_name": "Onegent",
   "description": "AI-powered restaurant discovery",
   "start_url": "/",
   "display": "standalone",

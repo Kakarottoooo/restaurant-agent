@@ -73,7 +73,7 @@ export default function SharedPlanView({ plan, planId, outcomeRecorded, voteMode
     approving: lang === "zh" ? "记录中…" : "Recording…",
     approved: lang === "zh" ? "已确认 ✓" : "Confirmed ✓",
     backups: lang === "zh" ? "备选方案" : "Other options",
-    cta: lang === "zh" ? "用 Folio 制定你自己的方案 →" : "Make your own plan with Folio →",
+    cta: lang === "zh" ? "用 Onegent 制定你自己的方案 →" : "Make your own plan with Onegent →",
     addToCalendar: lang === "zh" ? "下载日历文件 (.ics)" : "Add to Calendar (.ics)",
     vote: lang === "zh" ? "投这个 ✓" : "Vote for this ✓",
     voted: lang === "zh" ? "已选 ✓" : "Voted ✓",
@@ -215,7 +215,7 @@ export default function SharedPlanView({ plan, planId, outcomeRecorded, voteMode
             <div style={{ margin: "8px 0 16px" }}>
               <a
                 href={`/api/plan/${planId}/calendar`}
-                download={`folio-plan-${planId}.ics`}
+                download={`onegent-plan-${planId}.ics`}
                 style={{
                   display: "block",
                   width: "100%",
@@ -293,7 +293,7 @@ export default function SharedPlanView({ plan, planId, outcomeRecorded, voteMode
 /** Per-browser voter session ID — stored in localStorage to allow returning voters to change their vote */
 function getOrCreateVoterSession(): string {
   try {
-    const key = "folio_voter_session";
+    const key = "onegent_voter_session";
     const existing = localStorage.getItem(key);
     if (existing) return existing;
     const id = `vs_${Math.random().toString(36).slice(2)}_${Date.now()}`;

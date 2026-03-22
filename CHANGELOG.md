@@ -189,7 +189,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **Share page** (`/plan/[id]`): read-only plan view for sharing with a partner — renders primary plan, backup options, and a "This works for me" approval button
 - **Partner approval API** (`POST /api/plan/[id]/outcome`): records `partner_approved` outcome to `plan_outcomes` table; GET variant supports calendar deep-link outcomes (`?type=went`)
 - **Plan save/fetch API** (`POST /api/plan/save`, `GET /api/plan/[id]`): persists `DecisionPlan` to `decision_plans` table; share action in the main UI saves plan and copies shareable URL
-- **Refinement lineage** (`parent_plan_id`): when you refine a plan, Folio now tracks which plan it came from — enabling full refinement chains and future analysis of whether refining led to better outcomes
+- **Refinement lineage** (`parent_plan_id`): when you refine a plan, Onegent now tracks which plan it came from — enabling full refinement chains and future analysis of whether refining led to better outcomes
 - **Venue intelligence** (`getScoreAdjustments`): real user outcomes now power a recency-weighted venue ranking model (30-day decay); activate with `ENABLE_SCORE_ADJUSTMENTS=true` once ≥30 days + ≥100 outcomes have been recorded
 
 ### Fixed

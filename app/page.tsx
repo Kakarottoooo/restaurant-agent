@@ -50,7 +50,7 @@ const HERO_TAGLINES = [
   },
   {
     headline: ["Every city has", "hidden gems."],
-    sub: "Folio. helps you find them.",
+    sub: "Onegent helps you find them.",
   },
 ];
 
@@ -143,6 +143,33 @@ export default function Home() {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [auth.isSignedIn]);
+
+  // Phase 3.3b: Promote extracted session preferences into persistent profile
+  // When 3.3a's AI extraction updates sessionPreferences, merge new signals
+  // into the persistent UserPreferenceProfile (localStorage + cloud) so they
+  // survive across sessions. Only writes fields not already explicitly set.
+  useEffect(() => {
+    const prefs = chat.sessionPreferences;
+    if (prefs.refined_from_query_count === 0) return;
+
+    const patch: Parameters<typeof updateProfile>[0] = {};
+    if (prefs.noise_preference && !profile.noise_preference)
+      patch.noise_preference = prefs.noise_preference;
+    if (prefs.budget_ceiling && !profile.typical_budget_per_person)
+      patch.typical_budget_per_person = prefs.budget_ceiling;
+    if (prefs.exclude_chains && !profile.always_exclude_chains)
+      patch.always_exclude_chains = true;
+    if (prefs.excluded_cuisines.length > 0) {
+      const newDislikes = prefs.excluded_cuisines.filter(
+        (c) => !profile.cuisine_dislikes.includes(c)
+      );
+      if (newDislikes.length > 0)
+        patch.cuisine_dislikes = [...profile.cuisine_dislikes, ...newDislikes];
+    }
+
+    if (Object.keys(patch).length > 0) updateProfile(patch);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chat.sessionPreferences]);
 
   // 3c-3: Check for pending post-experience feedback prompts on mount
   useEffect(() => {
@@ -1166,7 +1193,7 @@ export default function Home() {
               flexShrink: 0,
             }}
           >
-            Folio<span style={{ color: "var(--gold)" }}>.</span>
+            Onegent<span style={{ color: "var(--gold)" }}>.</span>
           </span>
 
           {/* Location Input with Dropdown */}

@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 
 const RECOVERY_WINDOW_MS = 15_000;
-const RECOVERY_STORAGE_KEY = "folio_chunk_recovery_ts";
+const RECOVERY_STORAGE_KEY = "onegent_chunk_recovery_ts";
 
 function isChunkLoadFailureMessage(message: string) {
   return (

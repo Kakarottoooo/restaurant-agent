@@ -1,4 +1,4 @@
-const CACHE_NAME = "folio-agT8UNLzj9cLIut8QbBnP";
+const CACHE_NAME = "onegent-agT8UNLzj9cLIut8QbBnP";
 const STATIC_ASSETS = ["/", "/manifest.json", "/icon-192.png", "/icon-512.png"];
 
 self.addEventListener("install", (event) => {
@@ -76,7 +76,7 @@ self.addEventListener("fetch", (event) => {
 // ─── Push Notifications ────────────────────────────────────────────────────────
 
 self.addEventListener("push", (event) => {
-  let payload = { title: "Folio.", body: "", url: "/" };
+  let payload = { title: "Onegent", body: "", url: "/" };
   try {
     if (event.data) {
       payload = { ...payload, ...event.data.json() };

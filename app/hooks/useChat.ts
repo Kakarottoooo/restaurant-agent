@@ -81,7 +81,7 @@ export function useChat({
 
   const getTelemetrySessionId = useCallback(() => {
     if (typeof window === "undefined") return "anonymous";
-    const key = "folio_scenario_session_id";
+    const key = "onegent_scenario_session_id";
     const existing = window.localStorage.getItem(key);
     if (existing) return existing;
     const created = window.crypto?.randomUUID?.() ?? `session-${Date.now()}`;
@@ -284,6 +284,8 @@ export function useChat({
         const decoder = new TextDecoder();
         let buffer = "";
         let finalRecommendations: CardType[] = [];
+        let finalResultCategory: CategoryType = "restaurant";
+        let finalResultMode: ResultMode = "category_cards";
 
         while (true) {
           const { done, value } = await reader.read();
@@ -308,6 +310,8 @@ export function useChat({
               } else if (event.type === "complete") {
                 const category: CategoryType = event.category ?? "restaurant";
                 const mode: ResultMode = event.result_mode ?? "category_cards";
+                finalResultCategory = category;
+                finalResultMode = mode;
                 const outputLanguage: OutputLanguage = event.output_language ?? "en";
                 if (event.request_id) {
                   latestRequestIdRef.current = String(event.request_id);
@@ -686,33 +690,18 @@ export function useChat({
           }
         }
 
-        // Phase 3.3a: update session preferences after each message
-        if (messagesRef.current.length > 0 && finalRecommendations.length > 0) {
-          // Client-side lightweight refinement detection
-          const lowerText = text.toLowerCase();
-          const updates: Partial<SessionPreferences> = {};
-          if (lowerText.includes("quiet") || lowerText.includes("quieter")) {
-            updates.noise_preference = "quiet";
-          } else if (lowerText.includes("lively") || lowerText.includes("energetic")) {
-            updates.noise_preference = "lively";
-          }
-          if (lowerText.includes("no chain") || lowerText.includes("not a chain")) {
-            updates.exclude_chains = true;
-          }
-          if (lowerText.includes("cheaper") || lowerText.includes("more affordable")) {
-            updates.budget_ceiling = currentSessionPrefs.budget_ceiling
-              ? Math.round(currentSessionPrefs.budget_ceiling * 0.7)
-              : undefined;
-          }
-          if (Object.keys(updates).length > 0) {
-            const updated: SessionPreferences = {
-              ...currentSessionPrefs,
-              ...updates,
-              refined_from_query_count:
-                currentSessionPrefs.refined_from_query_count + 1,
-            };
-            setSessionPreferences(updated);
-          }
+        // Phase 3.3a: AI-powered session preference extraction after restaurant queries
+        if (finalResultCategory === "restaurant" && finalResultMode === "category_cards") {
+          fetch("/api/session-preferences/extract", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ message: text, currentPreferences: currentSessionPrefs }),
+          })
+            .then((r) => r.json())
+            .then((data: { preferences?: SessionPreferences }) => {
+              if (data.preferences) setSessionPreferences(data.preferences);
+            })
+            .catch(() => {});
         }
       } catch (err) {
         const isStall =
