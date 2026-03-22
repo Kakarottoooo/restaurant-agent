@@ -162,7 +162,7 @@ export type ResultMode =
   | "followup_refinement"
   | "execution_actions";
 
-export type ScenarioType = "date_night" | "weekend_trip" | "city_trip" | "big_purchase";
+export type ScenarioType = "date_night" | "weekend_trip" | "city_trip" | "big_purchase" | "concert_event";
 export type InputLanguage = "en" | "zh" | "mixed" | "other" | "unknown";
 export type OutputLanguage = "en" | "zh";
 
@@ -456,7 +456,38 @@ export interface CityTripIntent extends BaseIntent {
   missing_fields: string[];
 }
 
-export type ScenarioIntent = DateNightIntent | WeekendTripIntent | CityTripIntent | BigPurchaseIntent;
+export interface TicketmasterEvent {
+  id: string;
+  name: string;
+  url: string;
+  date: string; // YYYY-MM-DD
+  time?: string; // HH:MM
+  venue_name: string;
+  venue_address: string;
+  city: string;
+  genre?: string;
+  price_min?: number;
+  price_max?: number;
+  image_url?: string;
+}
+
+export type ConcertEventType = "concert" | "festival" | "theater" | "sports" | "comedy" | "other";
+
+export interface ConcertEventIntent extends BaseIntent {
+  category: "trip";
+  scenario: "concert_event";
+  scenario_goal: string;
+  event_city: string;
+  keyword?: string;
+  event_date?: string; // YYYY-MM-DD
+  event_type: ConcertEventType;
+  travelers: number;
+  planning_assumptions: string[];
+  needs_clarification: boolean;
+  missing_fields: string[];
+}
+
+export type ScenarioIntent = DateNightIntent | WeekendTripIntent | CityTripIntent | BigPurchaseIntent | ConcertEventIntent;
 
 export type ScenarioTelemetryEventType =
   | "plan_viewed"

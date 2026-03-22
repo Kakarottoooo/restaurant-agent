@@ -36,6 +36,7 @@ const VALID_SCENARIOS: ScenarioType[] = [
   "weekend_trip",
   "city_trip",
   "big_purchase",
+  "concert_event",
 ];
 
 function inferInputLanguage(message: string): InputLanguage {
@@ -116,6 +117,12 @@ function buildFallbackContext(
     /\brestaurants?\b|\bbars?\b|\bnightlife\b|\bmusic\b|\bplan/i.test(lower)
   ) {
     scenarioHint = "city_trip";
+  } else if (
+    /\bconcert\b|\bgig\b|\blive music\b|\bfestival\b|\bmusical\b|\bcomedy show\b|\bstand.?up\b|\btickets?\b/i.test(lower) ||
+    (/\bshow\b|\bperformance\b|\bevent\b/i.test(lower) &&
+      /\bsee\b|\bwatch\b|\battend\b|\bgo to\b|\bgoing\b/i.test(lower))
+  ) {
+    scenarioHint = "concert_event";
   }
 
   return {
