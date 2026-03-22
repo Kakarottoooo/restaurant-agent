@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.2.17.0] - 2026-03-22
+
+### Added
+- **Date Night multi-venue chaining** (3b-3b): `searchAfterDinnerVenue()` in `lib/tools.ts` queries Google Places for a cocktail bar / wine bar / dessert café within 1km of the primary restaurant. Walk time is calculated via haversine at 80 m/min. `DecisionPlan` gains an optional `after_dinner_option?: AfterDinnerVenue` field. `runScenarioPlanner` accepts and attaches the result; `lib/agent.ts` runs the search in parallel and skips it when `follow_up_preference === "none"`.
+- **After-dinner venue rendering** in `PrimaryPlanCard`: a "Then →" section below the tradeoffs block shows the venue name, walk time, vibe description, and a Google Maps link. Supports English and Chinese (`然后 →`, `分钟步行`).
+- **Decision language upgrade** (4a-1): `PrimaryPlanCard` detects `confidence === "high"` and switches to green border + "✓ Selected for you" label. `ScenarioBrief` shows "Your plan" (gold) vs "Scenario plan" for high-confidence plans. Confidence badge: green with checkmark for high, amber for medium, grey for low.
+- **Collapsible backups** (4a-1): `ScenarioPlanView` starts with backups collapsed for high-confidence plans (`useState(plan.confidence !== "high")`). A toggle row shows "Show alternatives (N)" / "Hide alternatives (N)" with animated chevron.
+- **3 new tests** in `scenario2.test.ts` covering `after_dinner_option` attachment, omission when absent, and omission when null.
+
 ## [0.2.16.0] - 2026-03-22
 
 ### Added
