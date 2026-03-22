@@ -38,6 +38,7 @@ const VALID_SCENARIOS: ScenarioType[] = [
   "big_purchase",
   "concert_event",
   "gift",
+  "fitness",
 ];
 
 function inferInputLanguage(message: string): InputLanguage {
@@ -129,6 +130,11 @@ function buildFallbackContext(
     /\bfind\b|\bget\b|\bbuy\b|\bsuggest\b|\brecommend\b|\bidea\b|\bfor\b/i.test(lower)
   ) {
     scenarioHint = "gift";
+  } else if (
+    /\byoga\b|\bpilates\b|\bspin\b|\bhiit\b|\bcrossfit\b|\bbox(?:ing)?\s+class\b|\bdance\s+class\b|\bmeditation\b|\bbarre\b|\bfitness\s+class\b|\bworkout\s+class\b|\bexercise\s+class\b|\bvinyasa\b|\breformer\b|\bzumba\b/i.test(lower) &&
+    /\bfind\b|\bbook\b|\blook(?:ing)?\b|\bsign\s+up\b|\bjoin\b|\bclass\b|\bstudio\b|\bsession\b/i.test(lower)
+  ) {
+    scenarioHint = "fitness";
   }
 
   return {
@@ -275,8 +281,8 @@ Return ONLY valid JSON with this schema:
   "output_language": "en" | "zh",
   "normalized_query": "short internal canonical paraphrase in English",
   "intent_summary": "one sentence summary in the user's preferred output language",
-  "category_hint": "restaurant" | "hotel" | "flight" | "credit_card" | "laptop" | "smartphone" | "headphone" | "subscription" | "trip" | "unknown" | null,
-  "scenario_hint": "date_night" | "weekend_trip" | "city_trip" | "big_purchase" | null,
+  "category_hint": "restaurant" | "hotel" | "flight" | "credit_card" | "laptop" | "smartphone" | "headphone" | "subscription" | "trip" | "fitness" | "unknown" | null,
+  "scenario_hint": "date_night" | "weekend_trip" | "city_trip" | "big_purchase" | "concert_event" | "gift" | "fitness" | null,
   "location_hint": "canonical place name like New York, NY" | null,
   "cuisine_hint": "western|italian|french|japanese|..." | null,
   "purpose_hint": "date|business|family|friends|solo|group|..." | null,
