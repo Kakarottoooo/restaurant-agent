@@ -4,6 +4,36 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.2.20.0] - 2026-03-22
+
+### Added
+- **Gift recommendation OS (5a-1)**: New `gift` scenario powered by SerpAPI Google Shopping. Ask "find a birthday gift for my girlfriend who loves hiking under $80" — the agent parses recipient, relationship, occasion, interests, and budget, then runs three parallel Google Shopping searches to return a `DecisionPlan` with three gift angles: **Safe pick** (crowd-pleasing, well-reviewed), **Most thoughtful** (personalised to their interests), and **Most creative** (unique surprise they wouldn't buy themselves). Each option includes a direct buy link, price, retailer, and rating. Falls back to a Google Shopping search URL when no direct product link is available. Full bilingual (EN/ZH) support with appropriate copy for all three tiers.
+- **`lib/serpapi-shopping.ts`**: SerpAPI Google Shopping client — queries `engine=google_shopping`, parses product titles, prices, sources, links, images, ratings, and review counts. API key read inside the function (not at module level) for `vi.stubEnv` compatibility in tests.
+- **`lib/agent/parse/gift.ts`**: Gift intent parser — detects occasion (birthday, anniversary, Christmas, Valentine's, Mother's Day, etc.), relationship (partner, parent, sibling, friend, colleague, boss, child), interests (cooking, hiking, gaming, fitness, reading, music, etc.), and budget via regex. Marks missing fields for `needs_clarification`.
+- **`lib/agent/planners/gift.ts`**: Custom gift planner — builds three search queries (safe/thoughtful/creative) in parallel, maps the top result from each to a `PlanOption`, and assembles a `DecisionPlan` with tier-specific copy and refine actions.
+
+### Fixed
+- **Security: user_id trust boundary** (`app/api/chat/route.ts`): The `/api/chat` endpoint now derives `userId` from Clerk's server-side `auth()` instead of accepting it from the client JSON body, preventing privilege escalation via a spoofed user ID.
+- **GPS city placeholder filtering** (`lib/agent/parse/concert-event.ts`): "your current location" (the GPS fallback display label) was being passed as a literal city name to Ticketmaster. It's now treated as missing — the planner falls back to a safe default city instead.
+- **Date expression fallback for English queries** (`lib/agent/parse/concert-event.ts`): English fast-path queries skip MiniMax, leaving `date_text_hint` unpopulated. Expressions like "this weekend" or "tonight" now resolve correctly via a direct scan of the raw user message.
+
+## [0.2.19.0] - 2026-03-22
+
+### Added
+- **Concert & event ticket OS (5a-2)**: New `concert_event` scenario powered by the Ticketmaster Discovery API. Ask "find me a Taylor Swift concert in NYC" or "jazz shows this weekend in Chicago" — the agent parses the intent (artist, genre, city, date, event type), queries Ticketmaster, and returns up to 3 events as a `DecisionPlan` with direct buy-ticket links, venue info, price ranges, and Google Maps venue links. Supports concerts, festivals, theater, sports, and comedy. Gracefully degrades to a follow-up prompt when no events are found. Full bilingual (EN/ZH) support.
+- **`lib/ticketmaster.ts`**: Ticketmaster Discovery API client — searches by keyword, city, date range, and classification. Parses venues, price ranges, genres, and images from the API response. Handles API errors and network failures silently.
+- **`lib/agent/parse/concert-event.ts`**: Regex + NLU-based intent parser — extracts artist names via proper-noun patterns, falls back to genre keywords (jazz, rock, indie, hip-hop, etc.), detects event type, resolves "this weekend" to a real date.
+- **`lib/agent/planners/concert-event.ts`**: Custom planner that builds a `DecisionPlan` directly from Ticketmaster events — deduplicates by name, assigns tier labels (Top pick / Most exciting / Hidden gem), formats prices and datetimes, builds buy-ticket and venue map actions.
+
+## [0.2.18.0] - 2026-03-22
+
+### Added
+- **User accounts + cross-device preference sync (4b-2)**: Sign in with Clerk and your learned preferences (noise sensitivity, budget, distance) follow you across devices. On sign-in, session preferences are merged server-side into your account via `POST /api/user/preferences/merge` (server-side Clerk auth only — the API never trusts a client-supplied `user_id`). Subsequent requests read preferences by `user_id` first so logged-in users always get personalized results.
+- **Active push notifications (4b-3)**: You can now get a push notification when a watched price drops — even when the app is closed. Tapping "Watch prices" requests browser notification permission and stores a Web Push subscription server-side. The daily price-check cron fires a push to all subscribed sessions on confirmed drops. The service worker handles `push` events (shows the notification) and `notificationclick` events (focuses or opens the plan). Gracefully no-ops if VAPID keys are not configured or the subscription has expired.
+
+### Fixed
+- **`mergeSessionPreferences` unique constraint safety**: Signing in from two sessions that had the same preference key could violate the `(user_id, preference_key) WHERE user_id IS NOT NULL` unique index. Fixed by skipping keys the user already owns during the merge.
+
 ## [0.2.17.1] - 2026-03-22
 
 ### Fixed

@@ -39,6 +39,11 @@ import { buildWeekendTripFlightIntent, buildWeekendTripHotelIntent, buildWeekend
 import { buildCityTripHotelIntent, buildCityTripRestaurantRequirements, buildCityTripBarRequirements } from "./agent/planners/city-trip";
 import { buildDateNightFallbackIntent } from "./agent/planners/date-night";
 import { parseBigPurchaseIntent, runBigPurchasePlanner } from "./agent/planners/big-purchase";
+import { parseConcertEventIntent } from "./agent/parse/concert-event";
+import { runConcertEventPlanner } from "./agent/planners/concert-event";
+import { parseGiftIntent } from "./agent/parse/gift";
+import { runGiftPlanner } from "./agent/planners/gift";
+import { ConcertEventIntent, GiftIntent } from "./types";
 
 // ─── Main Agent Function ──────────────────────────────────────────────────────
 
@@ -52,7 +57,8 @@ export async function runAgent(
   profileContext?: string,
   streamCallbacks?: StreamCallbacks,
   customWeights?: Partial<typeof DEFAULT_WEIGHTS>,
-  sessionId?: string
+  sessionId?: string,
+  userId?: string
 ): Promise<{
   requirements:
     | UserRequirements
@@ -87,9 +93,10 @@ export async function runAgent(
   const city = CITIES[cityId] ?? CITIES[DEFAULT_CITY];
   const cityFullName = gpsCoords ? "your current location" : city.fullName;
 
-  const userPreferences = sessionId
-    ? await getUserPreferences(sessionId).catch(() => ({}))
-    : {};
+  const userPreferences =
+    userId || sessionId
+      ? await getUserPreferences(sessionId ?? "", userId).catch(() => ({}))
+      : {};
   const queryContext = await analyzeMultilingualQuery(userMessage, cityFullName, userPreferences);
 
   function buildBaseResult(
@@ -260,6 +267,60 @@ export async function runAgent(
       hotelRecommendations,
       recommendations: [...restaurantCards, ...barCards],
       result_mode: decisionPlan ? "scenario_plan" : "followup_refinement",
+    });
+  }
+
+  if (detectedScenario === "concert_event") {
+    const concertIntent = parseConcertEventIntent(userMessage, queryContext);
+    const decisionPlan = await runConcertEventPlanner({
+      intent: concertIntent,
+      outputLanguage: queryContext.output_language,
+    });
+
+    if (!decisionPlan) {
+      const noResults: ConcertEventIntent = {
+        ...concertIntent,
+        needs_clarification: true,
+        missing_fields: [...concertIntent.missing_fields, "no events found — try different dates or keywords"],
+      };
+      return buildBaseResult(noResults, "trip", {
+        scenarioIntent: noResults,
+        result_mode: "followup_refinement",
+      });
+    }
+
+    return buildBaseResult(concertIntent, "trip", {
+      scenarioIntent: concertIntent,
+      decisionPlan,
+      result_mode: "scenario_plan",
+      output_language: queryContext.output_language,
+    });
+  }
+
+  if (detectedScenario === "gift") {
+    const giftIntent = parseGiftIntent(userMessage, queryContext);
+    const decisionPlan = await runGiftPlanner({
+      intent: giftIntent,
+      outputLanguage: queryContext.output_language,
+    });
+
+    if (!decisionPlan) {
+      const noResults: GiftIntent = {
+        ...giftIntent,
+        needs_clarification: true,
+        missing_fields: [...giftIntent.missing_fields, "no products found — try different interests or budget"],
+      };
+      return buildBaseResult(noResults, "gift", {
+        scenarioIntent: noResults,
+        result_mode: "followup_refinement",
+      });
+    }
+
+    return buildBaseResult(giftIntent, "gift", {
+      scenarioIntent: giftIntent,
+      decisionPlan,
+      result_mode: "scenario_plan",
+      output_language: queryContext.output_language,
     });
   }
 

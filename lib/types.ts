@@ -162,7 +162,7 @@ export type ResultMode =
   | "followup_refinement"
   | "execution_actions";
 
-export type ScenarioType = "date_night" | "weekend_trip" | "city_trip" | "big_purchase";
+export type ScenarioType = "date_night" | "weekend_trip" | "city_trip" | "big_purchase" | "concert_event" | "gift";
 export type InputLanguage = "en" | "zh" | "mixed" | "other" | "unknown";
 export type OutputLanguage = "en" | "zh";
 
@@ -315,7 +315,7 @@ export interface BigPurchaseIntent extends BaseIntent {
 
 // ─── Phase 7: Multi-category types ───────────────────────────────────────────
 
-export type CategoryType = "restaurant" | "hotel" | "flight" | "credit_card" | "laptop" | "smartphone" | "headphone" | "subscription" | "trip" | "big_purchase" | "unknown";
+export type CategoryType = "restaurant" | "hotel" | "flight" | "credit_card" | "laptop" | "smartphone" | "headphone" | "subscription" | "trip" | "big_purchase" | "gift" | "unknown";
 
 export interface BaseIntent {
   category: CategoryType;
@@ -456,7 +456,87 @@ export interface CityTripIntent extends BaseIntent {
   missing_fields: string[];
 }
 
-export type ScenarioIntent = DateNightIntent | WeekendTripIntent | CityTripIntent | BigPurchaseIntent;
+export interface TicketmasterEvent {
+  id: string;
+  name: string;
+  url: string;
+  date: string; // YYYY-MM-DD
+  time?: string; // HH:MM
+  venue_name: string;
+  venue_address: string;
+  city: string;
+  genre?: string;
+  price_min?: number;
+  price_max?: number;
+  image_url?: string;
+}
+
+export type ConcertEventType = "concert" | "festival" | "theater" | "sports" | "comedy" | "other";
+
+export interface ConcertEventIntent extends BaseIntent {
+  category: "trip";
+  scenario: "concert_event";
+  scenario_goal: string;
+  event_city: string;
+  keyword?: string;
+  event_date?: string; // YYYY-MM-DD
+  event_type: ConcertEventType;
+  travelers: number;
+  planning_assumptions: string[];
+  needs_clarification: boolean;
+  missing_fields: string[];
+}
+
+// ─── Gift types ───────────────────────────────────────────────────────────────
+
+export type GiftOccasion =
+  | "birthday"
+  | "anniversary"
+  | "christmas"
+  | "valentines"
+  | "mothers_day"
+  | "fathers_day"
+  | "graduation"
+  | "wedding"
+  | "housewarming"
+  | "other";
+
+export type GiftRelationship =
+  | "partner"
+  | "parent"
+  | "friend"
+  | "sibling"
+  | "colleague"
+  | "boss"
+  | "child"
+  | "other";
+
+export interface GiftProduct {
+  title: string;
+  price?: number;
+  price_raw?: string;
+  source?: string;
+  link?: string;
+  image_url?: string;
+  rating?: number;
+  reviews?: number;
+}
+
+export interface GiftIntent extends BaseIntent {
+  category: "gift";
+  scenario: "gift";
+  scenario_goal: string;
+  recipient?: string; // e.g. "mom", "boyfriend"
+  relationship?: GiftRelationship;
+  occasion?: GiftOccasion;
+  interests?: string[]; // e.g. ["cooking", "hiking"]
+  budget_usd_max?: number;
+  planning_assumptions: string[];
+  needs_clarification: boolean;
+  missing_fields: string[];
+}
+
+export type ScenarioIntent = DateNightIntent | WeekendTripIntent | CityTripIntent | BigPurchaseIntent | ConcertEventIntent | GiftIntent;
 
 export type ScenarioTelemetryEventType =
   | "plan_viewed"
