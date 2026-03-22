@@ -29,6 +29,12 @@ Scenario decision engine (`lib/scenario2.ts`):
 - Filter chips by price and cuisine
 - Scenario plan UI: `ScenarioPlanView` (consolidates `ScenarioBrief` + `PrimaryPlanCard` + `BackupPlanCard` + `ActionRail` + evidence panel) with booking links
 - Share plans via a persistent URL (`/plan/[id]`) — partner sees a read-only view and can click "This works for me" to confirm (records `partner_approved` outcome for the learning loop)
+- **Group voting** — share a plan in vote mode (`?vote=true`); friends tap their preferred option and see live vote tallies
+- **Add to Calendar** — download a `.ics` file or open a Google Calendar event pre-filled with event date, time, and location
+- **Price drop alerts** — "Watch prices" registers a SerpAPI price watch; daily cron notifies when price drops ≥10%
+- **Post-experience feedback** — 24h after an event, a dismissible prompt asks "How was it?" with structured options (Great / OK but [too noisy / too expensive / too far] / Didn't go)
+- **Preference learning** — negative feedback updates a per-session `user_preferences` store; next request automatically injects learned constraints into restaurant scoring
+- **Trip brief export** — "Export brief" generates a clean markdown summary (hotel, flight, dining, budget, risks)
 - Save favorites (localStorage)
 - Dark mode (system preference)
 - PWA-installable with offline support
@@ -41,9 +47,10 @@ Scenario decision engine (`lib/scenario2.ts`):
   - `MINIMAX_API_KEY` — MiniMax platform
   - `GOOGLE_PLACES_API_KEY` — Google Cloud Console (Places API + Geocoding API enabled)
   - `TAVILY_API_KEY` — Tavily
-  - `SERPAPI_API_KEY` — SerpAPI (hotel + flight search)
+  - `SERPAPI_KEY` — SerpAPI (hotel + flight search + price watches)
   - `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` + `CLERK_SECRET_KEY` — Clerk (optional; enables internal analytics auth)
   - `POSTGRES_URL` (or `DATABASE_URL`) — Neon PostgreSQL (required for share page, plan outcomes, and learning loop)
+  - `CRON_SECRET` — shared secret for cron routes (`/api/cron/feedback-prompts`, `/api/cron/price-check`); set in Vercel Cron config
 
 ## Local setup
 
@@ -84,6 +91,14 @@ app/
       save/route.ts                  # POST — persist DecisionPlan to decision_plans table
       [id]/route.ts                  # GET — fetch plan by ID (cached 24h)
       [id]/outcome/route.ts          # POST/GET — record outcome (went, partner_approved, etc.)
+      [id]/calendar/route.ts         # GET — download .ics calendar file for the plan event
+      [id]/brief/route.ts            # GET — export trip brief as markdown
+      [id]/vote/route.ts             # POST/GET — group voting (upsert vote, tally)
+      [id]/price-watch/route.ts      # POST — register a price watch for this plan
+    feedback-prompts/route.ts        # GET (pending prompts) / POST (submit feedback response)
+    cron/
+      feedback-prompts/route.ts      # GET — daily cron: create prompts for plans 20–28h ago
+      price-check/route.ts           # GET — daily cron: re-query SerpAPI, record price drops
   internal/scenario-events/          # Analytics UI (Clerk-gated)
   plan/[id]/                         # Shared plan view (read-only, partner approval button)
   hooks/
@@ -107,14 +122,14 @@ lib/
     scenario-configs/   # EngineConfig factories per scenario (city-trip, …)
     composer/           # Scoring + refinement helpers
   scenario2.ts          # Scenario decision engine (detectScenario, runScenarioPlanner, runWeekendTripPlanner, runCityTripPlanner, getScoreAdjustments)
-  nlu.ts                # Multilingual query analysis (MiniMax + English fast-path)
+  nlu.ts                # Multilingual query analysis (MiniMax + English fast-path + learned preference injection)
   minimax.ts            # Shared MiniMax chat helper with configurable timeout
   scenarioEvents.ts     # Internal analytics query parsing + Clerk access guard
   scenario.ts           # Scenario type definitions
   tools.ts              # Google Places, SerpAPI, Tavily, Geocoding API wrappers
   schemas.ts            # Zod schemas for request/response validation
   types.ts              # TypeScript interfaces (DecisionPlan, ScenarioContext, etc.)
-  db.ts                 # Neon DB helpers (scenario_events, decision_plans, plan_outcomes tables)
+  db.ts                 # Neon DB helpers (7 tables: scenario_events, decision_plans, plan_outcomes, feedback_prompts, plan_votes, price_watches, user_preferences)
   cities.ts             # 27 US cities config
   outputCopy.ts         # Output language copy helpers
 
@@ -123,7 +138,8 @@ components/
   ScenarioBrief.tsx        # Query summary card for scenario_plan mode
   PrimaryPlanCard.tsx      # Primary plan display with swap + approve actions
   BackupPlanCard.tsx       # Backup option cards
-  ActionRail.tsx           # Plan action buttons (share, refine, swap backup, approve, open_link deep links)
+  ActionRail.tsx           # Plan action buttons (share, vote, watch price, export brief, calendar, refine, open_link)
+  FeedbackPromptCard.tsx   # Post-experience feedback prompt (dismissible card, 3-option rating)
   ScenarioEvidencePanel.tsx # Supporting evidence panel
   RecommendationCard.tsx   # Category card (restaurant, hotel, flight, laptop)
   MapView.tsx              # Leaflet map with interactive markers
