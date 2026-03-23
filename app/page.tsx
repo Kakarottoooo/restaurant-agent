@@ -225,7 +225,7 @@ export default function Home() {
     if (chat.resultMode !== "scenario_plan" || !chat.decisionPlan) return [];
     const plan = chat.decisionPlan;
     if (plan.scenario !== "concert_event") return [];
-    const opts = [plan.primary_plan, ...(plan.backup_options ?? [])].filter(Boolean);
+    const opts = [plan.primary_plan, ...(plan.backup_plans ?? [])].filter(Boolean);
     return opts
       .filter((o) => o.venue_lat != null && o.venue_lng != null)
       .map((o, i) => ({
