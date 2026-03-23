@@ -15,6 +15,7 @@ interface TmVenue {
   name?: string;
   address?: { line1?: string };
   city?: { name?: string };
+  location?: { latitude?: string; longitude?: string };
 }
 
 interface TmEvent {
@@ -47,6 +48,9 @@ function parseTmEvent(event: TmEvent, fallbackCity: string): TicketmasterEvent |
     event.images?.find((img) => img.ratio === "16_9" && (img.width ?? 0) >= 640)?.url ??
     event.images?.[0]?.url;
 
+  const venueLat = venue?.location?.latitude ? parseFloat(venue.location.latitude) : undefined;
+  const venueLng = venue?.location?.longitude ? parseFloat(venue.location.longitude) : undefined;
+
   return {
     id: event.id ?? event.url,
     name: event.name,
@@ -60,6 +64,8 @@ function parseTmEvent(event: TmEvent, fallbackCity: string): TicketmasterEvent |
     price_min: price?.min,
     price_max: price?.max,
     image_url: image,
+    venue_lat: Number.isFinite(venueLat) ? venueLat : undefined,
+    venue_lng: Number.isFinite(venueLng) ? venueLng : undefined,
   };
 }
 

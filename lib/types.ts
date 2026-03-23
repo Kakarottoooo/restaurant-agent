@@ -242,6 +242,9 @@ export interface PlanOption {
   product_model?: string;
   /** After-dinner venue for date_night primary plans. Travels with the option so backup promotion stays correct. */
   after_dinner_option?: AfterDinnerVenue;
+  /** Venue coordinates for map display (concert_event and city_trip). */
+  venue_lat?: number;
+  venue_lng?: number;
 }
 
 export interface DecisionEvidenceItem {
@@ -469,6 +472,8 @@ export interface TicketmasterEvent {
   price_min?: number;
   price_max?: number;
   image_url?: string;
+  venue_lat?: number;
+  venue_lng?: number;
 }
 
 export type ConcertEventType = "concert" | "festival" | "theater" | "sports" | "comedy" | "other";
