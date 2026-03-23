@@ -100,7 +100,7 @@ export async function runAgent(
     userId || sessionId
       ? await getUserPreferences(sessionId ?? "", userId).catch(() => ({}))
       : {};
-  const queryContext = await analyzeMultilingualQuery(userMessage, cityFullName, userPreferences, { pinned_plan_id });
+  const queryContext = await analyzeMultilingualQuery(userMessage, cityFullName, userPreferences, { pinned_plan_id, conversationHistory });
 
   function buildBaseResult(
     requirements:

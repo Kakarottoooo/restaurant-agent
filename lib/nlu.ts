@@ -93,7 +93,8 @@ function coerceScenario(value: unknown): ScenarioType | null {
 
 function buildFallbackContext(
   message: string,
-  fallbackLocation?: string
+  fallbackLocation?: string,
+  conversationHistory: Array<{ role: "user" | "assistant"; content: string }> = []
 ): MultilingualQueryContext {
   const lower = message.toLowerCase();
   const inputLanguage = inferInputLanguage(message);
@@ -149,6 +150,25 @@ function buildFallbackContext(
     /\bfind\b|\bbook\b|\blook(?:ing)?\b|\bsign\s+up\b|\bjoin\b|\bclass\b|\bstudio\b|\bsession\b|\bbest\b|\bgood\b|\brecommend\b|\bnear(?:by)?\b|\baround\b/i.test(lower)
   ) {
     scenarioHint = "fitness";
+  }
+
+  // Inherit scenario from conversation history when the current message is a short follow-up
+  // (e.g. user answering a clarification question like "yes, from Nashville")
+  if (!scenarioHint && conversationHistory.length > 0) {
+    const isShortFollowUp = message.trim().split(/\s+/).length <= 15;
+    if (isShortFollowUp) {
+      // Look at recent assistant + user messages for an active scenario
+      const recentText = conversationHistory.slice(-6).map(m => m.content).join(" ").toLowerCase();
+      if (/weekend.?trip|weekend getaway|city break|hotel.*flight|flight.*hotel/i.test(recentText)) {
+        scenarioHint = "weekend_trip";
+        // Don't let a solo "fly" in the follow-up override this
+        if (categoryHint === "flight") categoryHint = null;
+      } else if (/date.?night|romantic dinner|first date/i.test(recentText)) {
+        scenarioHint = "date_night";
+      } else if (/city.?trip|things to do|explore the city/i.test(recentText)) {
+        scenarioHint = "city_trip";
+      }
+    }
   }
 
   const refinementConstraints: string[] = [];
@@ -320,10 +340,11 @@ export async function analyzeMultilingualQuery(
   message: string,
   fallbackLocation?: string,
   userPreferences?: Record<string, string>,
-  options?: { pinned_plan_id?: string }
+  options?: { pinned_plan_id?: string; conversationHistory?: Array<{ role: "user" | "assistant"; content: string }> }
 ): Promise<MultilingualQueryContext> {
   const pinned_plan_id = options?.pinned_plan_id;
-  const fallback = buildFallbackContext(message, fallbackLocation);
+  const conversationHistory = options?.conversationHistory ?? [];
+  const fallback = buildFallbackContext(message, fallbackLocation, conversationHistory);
 
   // G-3: detect partial-refine intent when a pinned plan is provided
   const refine_module = pinned_plan_id ? detectRefineModule(message) : undefined;
