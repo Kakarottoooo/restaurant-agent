@@ -3,6 +3,59 @@ import { minimaxChat } from "../../minimax";
 import { normalizeDate } from "../../tools";
 import { resolveLocationHint } from "../../nlu";
 
+/**
+ * Detect the departure city (origin) from "fly back to X" / "return to X" / "fly home to X" patterns.
+ * These phrases indicate where the user lives, NOT the trip destination.
+ */
+function extractDepartureCityFromMessage(message: string): string | undefined {
+  const lower = message.toLowerCase();
+  // "fly back to X" / "fly home to X" / "return to X" / "back to X" after trip context
+  const returnPatterns = [
+    /\bfly(?:ing)?\s+back\s+to\s+([a-zA-Z\s,]+?)(?:\b|$)/i,
+    /\bfly(?:ing)?\s+home\s+to\s+([a-zA-Z\s,]+?)(?:\b|$)/i,
+    /\breturn(?:ing)?\s+to\s+([a-zA-Z\s,]+?)(?:\b|$)/i,
+    /\bback\s+to\s+([a-zA-Z\s,]+?)\s+(?:after|when|once|at the end)/i,
+    /\bhead(?:ing)?\s+back\s+to\s+([a-zA-Z\s,]+?)(?:\b|$)/i,
+  ];
+  for (const pattern of returnPatterns) {
+    const match = lower.match(pattern);
+    if (match) {
+      const cityName = match[1].trim().replace(/[,.\s]+$/, "");
+      // Normalize to known cities
+      const normalized = extractDestinationFromCityName(cityName);
+      if (normalized) return normalized;
+    }
+  }
+  return undefined;
+}
+
+function extractDestinationFromCityName(cityName: string): string | undefined {
+  const lower = cityName.toLowerCase().trim();
+  if (/^(ny|new york|nyc|manhattan)$/.test(lower)) return "New York, NY";
+  if (/^(la|los angeles|lax)$/.test(lower)) return "Los Angeles, CA";
+  if (/^(sf|san francisco|sfo)$/.test(lower)) return "San Francisco, CA";
+  if (/^(chicago|chi)$/.test(lower)) return "Chicago, IL";
+  if (/^(miami|mia)$/.test(lower)) return "Miami, FL";
+  if (/^(vegas|las vegas|lvs)$/.test(lower)) return "Las Vegas, NV";
+  if (/^(seattle|sea)$/.test(lower)) return "Seattle, WA";
+  if (/^(boston|bos)$/.test(lower)) return "Boston, MA";
+  if (/^(denver|den)$/.test(lower)) return "Denver, CO";
+  if (/^(austin|atx)$/.test(lower)) return "Austin, TX";
+  if (/^(dallas|dfw)$/.test(lower)) return "Dallas, TX";
+  if (/^(houston|hou)$/.test(lower)) return "Houston, TX";
+  if (/^(atlanta|atl)$/.test(lower)) return "Atlanta, GA";
+  if (/^(nashville|bna)$/.test(lower)) return "Nashville, TN";
+  if (/^(portland|pdx)$/.test(lower)) return "Portland, OR";
+  if (/^(phoenix|phx)$/.test(lower)) return "Phoenix, AZ";
+  if (/^(san diego|sdg)$/.test(lower)) return "San Diego, CA";
+  if (/^(new orleans|nola)$/.test(lower)) return "New Orleans, LA";
+  if (/^(washington\s*dc|dc|washington\s*d\.c\.?)$/.test(lower)) return "Washington, DC";
+  if (/^(philadelphia|philly|phl)$/.test(lower)) return "Philadelphia, PA";
+  if (/^(minneapolis|min)$/.test(lower)) return "Minneapolis, MN";
+  if (/^(detroit|det)$/.test(lower)) return "Detroit, MI";
+  return undefined;
+}
+
 function extractDestinationFromMessage(message: string): string | undefined {
   const lower = message.toLowerCase();
   // Common city abbreviations and names
@@ -72,6 +125,7 @@ export async function parseWeekendTripIntent(
   const today = new Date().toISOString().split("T")[0];
   const { dateHint } = resolveRelativeDates(userMessage);
   const preDestination = extractDestinationFromMessage(userMessage);
+  const preDepartureCity = extractDepartureCityFromMessage(userMessage);
   const resolvedStartDateForFallback = dateHint ? dateHint.match(/(\d{4}-\d{2}-\d{2})/)?.[1] : undefined;
   const text = await minimaxChat({
     messages: [
@@ -80,7 +134,7 @@ export async function parseWeekendTripIntent(
         content: `Extract a weekend trip planning intent from this request. Return ONLY valid JSON.
 
 Today: ${today}${dateHint ? `\nRESOLVED DATE HINT: ${dateHint} — use this as start_date, do NOT put travel dates in missing_fields` : ` (tomorrow = ${new Date(Date.now() + 86400000).toISOString().split("T")[0]})`}
-Default departure city (use if user does not specify): ${cityFullName}
+Default departure city (use if user does not specify): ${cityFullName}${preDepartureCity ? `\nPRE-EXTRACTED DEPARTURE CITY: "${preDepartureCity}" (detected from "fly back to" / "return to" / "fly home to" phrase — use this as departure_city)` : ""}${preDestination ? `\nPRE-EXTRACTED DESTINATION: "${preDestination}" (use this as destination_city)` : ""}
 User request: "${userMessage}"
 Canonical NLU hints: ${JSON.stringify({
   normalized_query: queryContext?.normalized_query,
@@ -118,6 +172,9 @@ Rules:
 - If the user gives a start date but no end date, default to a 2-night trip (end_date = start_date + nights).
 - If the user gives no traveler count, default to 2 for "we/us", otherwise 1.
 - If the user gives no departure city, use the default departure city.
+- CRITICAL: "fly back to X" / "fly home to X" / "return to X" / "heading back to X" means X is the departure_city (where the user is coming FROM), NOT the destination. The destination is where they are going TO visit.
+- CRITICAL: "make a plan to X" / "going to X" / "trip to X" → X is the destination_city.
+- departure_city and destination_city must NEVER be the same city.
 - Only put "destination" in missing_fields if the destination truly cannot be inferred.
 - Only put "travel dates" in missing_fields if no date or relative time word (tomorrow, this weekend, next week, etc.) is present.
 - missing_fields should be EMPTY when destination and start date are both known or inferable.
@@ -136,7 +193,7 @@ Rules:
     category: "trip",
     scenario: "weekend_trip",
     scenario_goal: `Plan a weekend trip to ${preDestination ?? "the destination"} with flight, hotel, and budget tradeoffs compressed into a few approval-ready packages.`,
-    departure_city: cityFullName,
+    departure_city: preDepartureCity ?? cityFullName,
     destination_city: preDestination,
     start_date: resolvedStartDateForFallback,
     end_date: resolvedStartDateForFallback
@@ -156,7 +213,7 @@ Rules:
     cabin_class: "economy",
     prefer_direct: null,
     planning_assumptions: [
-      `Using ${cityFullName} as the departure city.`,
+      `Using ${preDepartureCity ?? cityFullName} as the departure city.`,
       ...(preDestination ? [`Destination inferred as ${preDestination}.`] : []),
       ...(resolvedStartDateForFallback ? [`Start date resolved from message: ${resolvedStartDateForFallback}.`] : []),
     ],
@@ -188,12 +245,22 @@ Rules:
     const missing_fields = Array.isArray(parsed.missing_fields)
       ? parsed.missing_fields.filter((field): field is string => typeof field === "string")
       : [];
+    // Resolve departure and destination — apply safeguards against MiniMax confusion:
+    // 1. "fly back to X" phrase is a strong signal for departure city; prefer it over MiniMax
+    // 2. Regex-extracted preDestination is authoritative for destination
+    // 3. If MiniMax makes departure === destination, something went wrong — fall back
+    const resolvedDeparture = preDepartureCity ?? parsed.departure_city ?? cityFullName;
+    const resolvedDestination = preDestination ?? parsed.destination_city ?? undefined;
+    // Sanity check: departure and destination must differ
+    const finalDeparture = resolvedDeparture === resolvedDestination ? (preDepartureCity ?? cityFullName) : resolvedDeparture;
+    const finalDestination = resolvedDeparture === resolvedDestination ? (preDestination ?? parsed.destination_city ?? undefined) : resolvedDestination;
+
     return {
       category: "trip",
       scenario: "weekend_trip",
-      scenario_goal: `Plan a weekend trip to ${parsed.destination_city ?? "the destination"} with flight, hotel, and budget tradeoffs compressed into a few approval-ready packages.`,
-      departure_city: parsed.departure_city ?? cityFullName,
-      destination_city: parsed.destination_city ?? preDestination ?? undefined,
+      scenario_goal: `Plan a weekend trip to ${finalDestination ?? "the destination"} with flight, hotel, and budget tradeoffs compressed into a few approval-ready packages.`,
+      departure_city: finalDeparture,
+      destination_city: finalDestination,
       start_date: startDate,
       end_date: endDate,
       nights,
