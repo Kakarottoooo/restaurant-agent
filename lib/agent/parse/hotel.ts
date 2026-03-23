@@ -43,7 +43,9 @@ Return JSON with these fields (omit fields that aren't mentioned):
   "purpose": "business|leisure|romantic|family|null",
   "constraints": ["no chains", "quiet", "pet-friendly", etc],
   "priorities": ["price", "location", "amenities", etc],
-  "special_occasion": "honeymoon" if user says "honeymoon" / "蜜月", "anniversary" if "anniversary" / "结婚周年" / "纪念日", "birthday" if "birthday" / "生日" — else omit
+  "special_occasion": "honeymoon" if user says "honeymoon" / "蜜月", "anniversary" if "anniversary" / "结婚周年" / "纪念日", "birthday" if "birthday" / "生日" — else omit,
+  "has_children": true if user mentions kids, children, toddlers, 孩子, 小孩, 带娃 — else omit,
+  "children_count": number of children if mentioned — else omit
 }
 
 For relative dates: "tonight" = today, "tomorrow" = tomorrow, "next Friday" = nearest upcoming Friday, "2 nights" sets nights=2 and check_out = check_in + 2 days.`,
