@@ -37,13 +37,14 @@ export async function parseIntent(
     return parseFlightIntent(userMessage, cityFullName, queryContext);
   }
   if (category === "hotel") {
-    return parseHotelIntent(userMessage, cityFullName, queryContext);
+    return parseHotelIntent(userMessage, cityFullName, queryContext, conversationHistory);
   }
   return parseRestaurantIntent(
     userMessage,
     cityFullName,
     queryContext,
     sessionPreferences,
-    profileContext
+    profileContext,
+    conversationHistory
   );
 }

@@ -38,6 +38,14 @@ export async function runHotelPipeline(
   const nights = intent.nights ?? 1;
   const systemPrompt = `You are an expert hotel advisor. Pick the best hotels for the user's specific needs and explain exactly why each one fits.`;
 
+  const specialOccasionNote = intent.special_occasion
+    ? `\nSPECIAL OCCASION: User is celebrating a ${intent.special_occasion}. Heavily favour hotels with spa, ocean/city view rooms, suites, couples packages, and romantic reputation in reviews. In why_recommended, add a 'Special occasion tip' (e.g. "Call ahead to request turndown service or a room upgrade").`
+    : "";
+
+  const familyNote = intent.has_children
+    ? `\nFAMILY MODE: User is travelling with ${intent.children_count ?? "children"}. Heavily favour hotels with: pool, kids club, family rooms or connecting rooms, cribs/rollaway, on-site dining, and proximity to family attractions. Penalise adult-only or boutique-only properties. Include a family tip in why_recommended (e.g. "Request a connecting room when booking").`
+    : "";
+
   const text = await minimaxChat({
     system: systemPrompt,
     messages: [
@@ -48,7 +56,7 @@ export async function runHotelPipeline(
 
 Candidate hotels:
 ${hotelList}
-
+${specialOccasionNote}${familyNote}
 Pick the TOP 10 hotels that best match. For each, score honestly across dimensions, then explain.
 
 Also suggest 3-4 refinement queries (in Chinese) like "更便宜一点", "离市中心近一点", "带早餐的".

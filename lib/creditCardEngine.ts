@@ -473,6 +473,36 @@ export function recommendCreditCards(
     .map((card, i) => ({ ...card, rank: i + 1 }));
 }
 
+/**
+ * G-2: Portfolio gap analysis.
+ * Given a user's existing card IDs and spending profile, returns which spending
+ * categories are poorly covered (< 2x) and the effective rates per category.
+ */
+export function buildPortfolioGapAnalysis(
+  existingCardIds: string[],
+  spending: SpendingProfile
+): { uncovered_categories: string[]; effective_rates: Record<string, number> } {
+  const ownedCards = ALL_CARDS.filter((c) => existingCardIds.includes(c.id));
+
+  const categories = ["dining", "groceries", "travel", "gas", "online_shopping", "streaming", "entertainment", "pharmacy"] as const;
+
+  // Max earn rate across existing cards per category
+  const effective_rates: Record<string, number> = {};
+  for (const cat of categories) {
+    effective_rates[cat] = ownedCards.reduce((max, card) => {
+      const rate = card.category_rates[cat] ?? card.category_rates.other ?? 1;
+      return Math.max(max, rate);
+    }, 1);
+  }
+
+  // Categories where existing stack earns <2x AND user spends meaningfully (>$50/mo)
+  const uncovered_categories = categories.filter(
+    (cat) => effective_rates[cat] < 2 && (spending[cat] ?? 0) > 50
+  );
+
+  return { uncovered_categories, effective_rates };
+}
+
 /** Lookup a card by id (used for points linkage). */
 export function getCardById(id: string): CreditCard | undefined {
   return ALL_CARDS.find((c) => c.id === id);

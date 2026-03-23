@@ -297,9 +297,13 @@ export async function rankAndExplain(
     ? formatSessionPreferences(sessionPreferences)
     : "";
 
+  const fastServiceNote = requirements.service_pace_required === "fast"
+    ? `\nFAST SERVICE MODE: User needs quick in-and-out dining. Heavily favour restaurants whose review signals show service_pace containing "quick", "fast", or "efficient". Penalise any restaurant with wait_time indicating >20 minute waits. Score preference_match low for slow-service venues. Mention service speed in why_recommended.`
+    : "";
+
   const systemPrompt = `You are an expert ${cityFullName} restaurant advisor. Your job is to pick the best restaurants for the user's specific needs and explain exactly why each one fits or doesn't fit.
 
-Be honest about downsides. Don't recommend places that don't fit. Quality of matching matters more than quantity.`;
+Be honest about downsides. Don't recommend places that don't fit. Quality of matching matters more than quantity.${fastServiceNote}`;
 
   const messages = [
     ...conversationHistory,

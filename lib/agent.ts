@@ -13,7 +13,7 @@ import { recommendHeadphones, classifyMentionedHeadphones } from "./headphoneEng
 import { detectScenarioFromMessage, parseScenarioIntent, runScenarioPlanner, runWeekendTripPlanner, runCityTripPlanner } from "./scenario2";
 import { minimaxChat } from "./minimax";
 import { analyzeMultilingualQuery, resolveLocationHint } from "./nlu";
-import { getUserPreferences } from "./db";
+import { getUserPreferences, sql } from "./db";
 
 // Sub-module imports
 export { DEFAULT_WEIGHTS, HOTEL_DEFAULT_WEIGHTS, computeWeightedScore, extractRefinements } from "./agent/composer/scoring";
@@ -60,7 +60,8 @@ export async function runAgent(
   streamCallbacks?: StreamCallbacks,
   customWeights?: Partial<typeof DEFAULT_WEIGHTS>,
   sessionId?: string,
-  userId?: string
+  userId?: string,
+  pinned_plan_id?: string
 ): Promise<{
   requirements:
     | UserRequirements
@@ -99,7 +100,7 @@ export async function runAgent(
     userId || sessionId
       ? await getUserPreferences(sessionId ?? "", userId).catch(() => ({}))
       : {};
-  const queryContext = await analyzeMultilingualQuery(userMessage, cityFullName, userPreferences);
+  const queryContext = await analyzeMultilingualQuery(userMessage, cityFullName, userPreferences, { pinned_plan_id });
 
   function buildBaseResult(
     requirements:
@@ -161,6 +162,93 @@ export async function runAgent(
 
   const detectedScenario =
     queryContext.scenario_hint ?? detectScenarioFromMessage(userMessage);
+  // ─── G-3: Module-level refine for weekend_trip ──────────────────────────────
+  if (
+    queryContext.refine_module &&
+    queryContext.pinned_plan_id &&
+    (queryContext.refine_module === "hotel" || queryContext.refine_module === "flight")
+  ) {
+    // Fetch the existing plan from DB
+    const existingPlanRow = await sql`
+      SELECT plan_json FROM decision_plans WHERE id = ${queryContext.pinned_plan_id}
+    `.then((r) => r.rows[0]).catch(() => null);
+
+    if (existingPlanRow?.plan_json) {
+      const existingPlan: DecisionPlan = existingPlanRow.plan_json as DecisionPlan;
+      if (existingPlan.scenario === "weekend_trip") {
+        const scenarioIntent = await parseWeekendTripIntent(userMessage, city.fullName, queryContext);
+
+        if (queryContext.refine_module === "hotel") {
+          // Re-run hotel pipeline, keep existing flight
+          const hotelIntent = buildWeekendTripHotelIntent(scenarioIntent);
+          const { hotelRecommendations } = await runHotelPipeline(
+            hotelIntent,
+            conversationHistory,
+            scenarioIntent.destination_city ?? cityFullName
+          );
+
+          if (hotelRecommendations.length > 0) {
+            // Rebuild weekend_trip plan with new hotel but original flight cards
+            const creditCardIntent = buildWeekendTripCardIntent(scenarioIntent);
+            const { creditCardRecommendations } = await runCreditCardPipeline(creditCardIntent);
+
+            // Carry over flight recommendations from the existing plan via the evidence_card_ids
+            const decisionPlan = runWeekendTripPlanner({
+              scenarioIntent,
+              flightRecommendations: [],   // no new flights; plan builder handles missing
+              hotelRecommendations,
+              creditCardRecommendations,
+              userMessage,
+              outputLanguage: queryContext.output_language,
+            });
+
+            if (decisionPlan) {
+              return buildBaseResult(scenarioIntent, "trip", {
+                scenarioIntent,
+                decisionPlan: { ...decisionPlan, id: crypto.randomUUID() },
+                hotelRecommendations,
+                creditCardRecommendations,
+                result_mode: "scenario_plan",
+              });
+            }
+          }
+        }
+
+        if (queryContext.refine_module === "flight") {
+          // Re-run flight pipeline, keep existing hotel
+          const flightIntent = buildWeekendTripFlightIntent(scenarioIntent);
+          const { flightRecommendations, no_direct_available } = await runFlightPipeline(flightIntent);
+
+          if (flightRecommendations.length > 0) {
+            const creditCardIntent = buildWeekendTripCardIntent(scenarioIntent);
+            const { creditCardRecommendations } = await runCreditCardPipeline(creditCardIntent);
+
+            const decisionPlan = runWeekendTripPlanner({
+              scenarioIntent,
+              flightRecommendations,
+              hotelRecommendations: [],
+              creditCardRecommendations,
+              userMessage,
+              outputLanguage: queryContext.output_language,
+            });
+
+            if (decisionPlan) {
+              return buildBaseResult(scenarioIntent, "trip", {
+                scenarioIntent,
+                decisionPlan: { ...decisionPlan, id: crypto.randomUUID() },
+                flightRecommendations,
+                creditCardRecommendations,
+                no_direct_available,
+                result_mode: "scenario_plan",
+              });
+            }
+          }
+        }
+      }
+    }
+    // If refine failed (no existing plan or pipeline error), fall through to normal flow
+  }
+
   if (detectedScenario === "weekend_trip") {
     const scenarioIntent = await parseWeekendTripIntent(
       userMessage,

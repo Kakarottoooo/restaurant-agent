@@ -24,7 +24,7 @@ import { useFavorites } from "@/app/hooks/useFavorites";
 import { usePreferences, formatProfileForPrompt } from "@/app/hooks/usePreferences";
 import { useVoiceInput } from "@/app/hooks/useVoiceInput";
 import { useAuth } from "@/app/hooks/useAuth";
-import { PlanAction, PlanLinkAction, RecommendationCard as CardType, PostExperienceFeedback } from "@/lib/types";
+import { PlanAction, PlanLinkAction, RecommendationCard as CardType, PostExperienceFeedback, FeedbackRecord } from "@/lib/types";
 import type { FeedbackPromptItem } from "@/app/api/feedback-prompts/route";
 
 // Leaflet is not SSR-compatible
@@ -70,7 +70,7 @@ const WEIGHT_LABELS: Record<string, string> = {
 };
 
 export default function Home() {
-  const { profile, updateProfile, learnFromFavorite, learnFromSearch, resetProfile, learnedWeights, learnWeightsFromFeedback } =
+  const { profile, updateProfile, learnFromFavorite, learnFromSearch, resetProfile, learnedWeights, learnWeightsFromFeedback, learnFromFeedback } =
     usePreferences();
   const profileContext = formatProfileForPrompt(profile);
   const { userId } = useAuth();
@@ -135,6 +135,18 @@ export default function Home() {
     learnWeightsFromFeedback();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Phase 3.3c: Feedback loop — called when user rates a restaurant card
+  function handleCardFeedback(record: FeedbackRecord) {
+    // Update persistent profile (localStorage + cloud) immediately
+    learnFromFeedback(record);
+    // Persist to DB (fire-and-forget, session-scoped)
+    fetch("/api/feedback/inline", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ session_id: chat.getSessionId(), feedback: record }),
+    }).catch(() => {});
+  }
 
   // Phase 5.3: Migrate localStorage data to cloud after sign-in
   useEffect(() => {
@@ -213,7 +225,7 @@ export default function Home() {
     if (chat.resultMode !== "scenario_plan" || !chat.decisionPlan) return [];
     const plan = chat.decisionPlan;
     if (plan.scenario !== "concert_event") return [];
-    const opts = [plan.primary_plan, ...(plan.backup_options ?? [])].filter(Boolean);
+    const opts = [plan.primary_plan, ...(plan.backup_plans ?? [])].filter(Boolean);
     return opts
       .filter((o) => o.venue_lat != null && o.venue_lng != null)
       .map((o, i) => ({
@@ -533,7 +545,8 @@ export default function Home() {
         )
       );
       learnFromSearch(action.prompt);
-      chat.sendMessage(action.prompt);
+      // G-3: pass pinned_plan_id so agent can do module-level refine
+      chat.sendMessage(action.prompt, refinedFromPlanIdRef.current ?? undefined);
     }
   }
 
@@ -1927,6 +1940,7 @@ export default function Home() {
                           setCompareOpen(true);
                         }}
                         isComparing={isComparing(card)}
+                        onFeedback={handleCardFeedback}
                       />
                     ))}
                   </div>

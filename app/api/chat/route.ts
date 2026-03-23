@@ -71,7 +71,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid request." }, { status: 400 });
   }
 
-  const { message, history, city, gpsCoords, nearLocation, sessionPreferences, profileContext, customWeights, session_id } = body.data;
+  const { message, history, city, gpsCoords, nearLocation, sessionPreferences, profileContext, customWeights, session_id, pinned_plan_id } = body.data;
   // Derive userId from Clerk server-side auth — never trust client-supplied user_id
   const { userId: user_id } = await auth().catch(() => ({ userId: null }));
   const request_id = crypto.randomUUID();
@@ -109,7 +109,8 @@ export async function POST(req: NextRequest) {
             },
             customWeights ?? undefined,
             session_id ?? undefined,
-            user_id ?? undefined
+            user_id ?? undefined,
+            pinned_plan_id ?? undefined
           ),
           AGENT_TIMEOUT_MS
         );

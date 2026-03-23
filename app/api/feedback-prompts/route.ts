@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { ensureFeedbackPromptsTable, ensurePlanOutcomesTable, upsertUserPreference, sql } from "@/lib/db";
+import { ensureFeedbackPromptsTable, ensureDecisionPlansTable, ensurePlanOutcomesTable, upsertUserPreference, sql } from "@/lib/db";
 import type { FeedbackIssue, PostExperienceFeedback } from "@/lib/types";
 
 // Map structured feedback issues to learned preference keys
@@ -31,6 +31,7 @@ export async function GET(req: NextRequest) {
   }
 
   await ensureFeedbackPromptsTable();
+  await ensureDecisionPlansTable();
 
   const result = await sql<{
     id: number;

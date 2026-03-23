@@ -11,6 +11,7 @@ export interface UserRequirements {
   party_size?: number;
   constraints?: string[]; // no chains, no tourist traps, etc.
   priorities?: string[]; // what matters most
+  service_pace_required?: "fast" | "normal";
 }
 
 export interface ReviewSignals {
@@ -182,6 +183,10 @@ export interface MultilingualQueryContext {
   date_text_hint?: string;
   time_hint?: string;
   constraints_hint?: string[];
+  /** G-3: which module to replace in a partial-refine request */
+  refine_module?: "hotel" | "flight" | "restaurant" | "venue";
+  /** G-3: plan ID whose other modules should be kept unchanged */
+  pinned_plan_id?: string;
 }
 
 export interface AfterDinnerVenue {
@@ -412,6 +417,9 @@ export interface HotelIntent extends BaseIntent {
   room_type?: string;
   amenities?: string[];
   neighborhood?: string;
+  special_occasion?: "honeymoon" | "anniversary" | "birthday";
+  has_children?: boolean;
+  children_count?: number;
 }
 
 export interface FlightIntent extends BaseIntent {
@@ -427,6 +435,9 @@ export interface FlightIntent extends BaseIntent {
   cabin_class?: "economy" | "business" | "first";
   prefer_direct?: boolean;
   max_stops?: number | null; // null = no preference, 0 = nonstop only, 1 = max 1 stop
+  avoid_red_eye?: boolean;      // true = exclude departures 00:00–05:59
+  earliest_departure?: string;  // "HH:MM" e.g. "07:00"
+  latest_departure?: string;    // "HH:MM" e.g. "21:00"
 }
 
 import type { WatchCategory } from "./watchTypes";
@@ -723,6 +734,7 @@ export interface CreditCardIntent extends BaseIntent {
   prefer_no_annual_fee?: "hard" | "soft" | false; // hard=exclude, soft=show with note, false=no pref
   prefer_flat_rate?: boolean;          // "don't track categories, give me one card"
   needs_spending_info?: boolean;       // true = user didn't provide spending details, ask first
+  optimization_mode?: "first_card" | "add_to_stack" | "portfolio_review" | "signup_bonus";
 }
 
 export interface CreditCard {
@@ -772,6 +784,7 @@ export interface CreditCardRecommendationCard {
   reward_preference: "cash" | "travel";
   why_recommended: string;
   watch_out: string[];
+  portfolio_gap_note?: string;      // e.g. "Fills your 1× gap on dining — earns 4× with this card"
 }
 
 // ─── Phase 10: Laptop Recommendation types ───────────────────────────────────

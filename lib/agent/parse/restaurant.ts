@@ -9,7 +9,8 @@ export async function parseRestaurantIntent(
   cityFullName: string,
   queryContext?: MultilingualQueryContext,
   sessionPreferences?: SessionPreferences,
-  profileContext?: string
+  profileContext?: string,
+  conversationHistory?: Array<{ role: "user" | "assistant"; content: string }>
 ): Promise<RestaurantIntent> {
   const prefContext = sessionPreferences
     ? formatSessionPreferences(sessionPreferences)
@@ -17,6 +18,7 @@ export async function parseRestaurantIntent(
 
   const text = await minimaxChat({
     messages: [
+      ...(conversationHistory?.slice(-4) ?? []),
       {
         role: "user",
         content: `Extract structured requirements from this restaurant request. Return ONLY valid JSON.
@@ -52,7 +54,8 @@ Return JSON with these fields (omit fields that aren't mentioned):
   "near_location": "specific landmark, address, or area to search near (e.g. 'Union Square', 'Times Square'), or null",
   "party_size": number or null,
   "constraints": ["no chains", "no tourist traps", "no wait", etc],
-  "priorities": ["atmosphere", "food quality", "price", "service", etc]
+  "priorities": ["atmosphere", "food quality", "price", "service", etc],
+  "service_pace_required": "fast" if user says "quick lunch", "in and out", "no wait", "15 minutes", "fast service", "quick bite", "快速", "不想等", "不等位", "出餐快" — else omit this field
 }`,
       },
     ],

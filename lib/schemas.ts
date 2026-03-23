@@ -30,6 +30,8 @@ export const ChatRequestSchema = z.object({
     location_convenience: z.number().min(0).max(1),
     preference_match: z.number().min(0).max(1),
   }).optional(),
+  /** G-3: plan ID to use as reference when doing module-level refine */
+  pinned_plan_id: z.string().max(128).optional(),
 });
 
 // ─── AI Response Schemas ───────────────────────────────────────────────────────
