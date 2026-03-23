@@ -18,21 +18,30 @@ export async function POST(req: NextRequest) {
 
     const { userId } = await auth();
     const sessionId = nanoid(8);
+    const initiatorToken = nanoid(24); // server-side initiator identity token
     const partnerToken = nanoid(24);
 
-    const session = await createDecisionSession({
+    await createDecisionSession({
       id: sessionId,
       initiatorUserId: userId ?? null,
+      initiatorSessionToken: initiatorToken,
       partnerSessionToken: partnerToken,
       initiatorConstraints: initiatorConstraints.trim(),
-      cityId: cityId ?? "los-angeles",
+      cityId: cityId ?? "losangeles",
       decisionType: decisionType ?? "dinner_tonight",
     });
 
     const shareUrl = `${process.env.NEXT_PUBLIC_APP_URL ?? ""}/decide/${sessionId}`;
 
-    const response = NextResponse.json({ session, shareUrl });
-    // Set partner token as HttpOnly cookie on the initiator too (they vote as initiator, not via cookie)
+    const response = NextResponse.json({ sessionId, shareUrl });
+    // Set initiator identity cookie — HttpOnly, SameSite=Strict, 24h
+    // Used server-side to verify vote role without relying on client-supplied role field
+    response.cookies.set(`dr_init_${sessionId}`, initiatorToken, {
+      httpOnly: true,
+      sameSite: "strict",
+      maxAge: 60 * 60 * 24,
+      path: "/",
+    });
     return response;
   } catch (err) {
     console.error("[decision-session POST]", err);

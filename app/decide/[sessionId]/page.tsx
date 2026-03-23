@@ -86,7 +86,7 @@ export default function DecidePage() {
       const res = await fetch(`/api/decision-session/${sessionId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "vote", cardId, approved, role }),
+        body: JSON.stringify({ action: "vote", cardId, approved }),
       });
       if (!res.ok) return;
       const data = await res.json() as { session: DecisionSession };

@@ -1,4 +1,4 @@
-import { sql } from "@vercel/postgres";
+import { sql, db } from "@vercel/postgres";
 
 export { sql };
 
@@ -377,10 +377,11 @@ export async function ensureDecisionSessionsTable(): Promise<void> {
     decisionSessionsTableReady = (async () => {
       await sql`
         CREATE TABLE IF NOT EXISTS decision_sessions (
-          id                    TEXT PRIMARY KEY,
-          initiator_user_id     TEXT,
-          partner_session_token TEXT NOT NULL,
-          initiator_constraints TEXT NOT NULL,
+          id                      TEXT PRIMARY KEY,
+          initiator_user_id       TEXT,
+          initiator_session_token TEXT NOT NULL,
+          partner_session_token   TEXT NOT NULL,
+          initiator_constraints   TEXT NOT NULL,
           partner_constraints   TEXT,
           conflict              BOOLEAN NOT NULL DEFAULT FALSE,
           conflict_reason       TEXT,
@@ -393,7 +394,7 @@ export async function ensureDecisionSessionsTable(): Promise<void> {
           feedback_partner      TEXT,
           party_size            INT NOT NULL DEFAULT 2,
           decision_type         TEXT NOT NULL DEFAULT 'dinner_tonight',
-          city_id               TEXT NOT NULL DEFAULT 'los-angeles',
+          city_id               TEXT NOT NULL DEFAULT 'losangeles',
           created_at            TIMESTAMPTZ DEFAULT NOW(),
           expires_at            TIMESTAMPTZ NOT NULL,
           deleted_at            TIMESTAMPTZ
@@ -412,6 +413,7 @@ export async function ensureDecisionSessionsTable(): Promise<void> {
 export interface DecisionSession {
   id: string;
   initiator_user_id: string | null;
+  initiator_session_token: string;
   partner_session_token: string;
   initiator_constraints: string;
   partner_constraints: string | null;
@@ -435,6 +437,7 @@ export interface DecisionSession {
 export async function createDecisionSession(params: {
   id: string;
   initiatorUserId: string | null;
+  initiatorSessionToken: string;
   partnerSessionToken: string;
   initiatorConstraints: string;
   cityId: string;
@@ -444,9 +447,9 @@ export async function createDecisionSession(params: {
   const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
   const result = await sql<DecisionSession>`
     INSERT INTO decision_sessions
-      (id, initiator_user_id, partner_session_token, initiator_constraints, city_id, decision_type, expires_at)
+      (id, initiator_user_id, initiator_session_token, partner_session_token, initiator_constraints, city_id, decision_type, expires_at)
     VALUES
-      (${params.id}, ${params.initiatorUserId}, ${params.partnerSessionToken},
+      (${params.id}, ${params.initiatorUserId}, ${params.initiatorSessionToken}, ${params.partnerSessionToken},
        ${params.initiatorConstraints}, ${params.cityId}, ${params.decisionType ?? "dinner_tonight"}, ${expiresAt})
     RETURNING *
   `;
@@ -477,31 +480,27 @@ export async function updateDecisionSession(
   }>
 ): Promise<DecisionSession | null> {
   await ensureDecisionSessionsTable();
-  const existing = await sql<DecisionSession>`SELECT * FROM decision_sessions WHERE id = ${id} AND deleted_at IS NULL`;
-  if (!existing.rows[0]) return null;
 
-  if (updates.partner_constraints !== undefined)
-    await sql`UPDATE decision_sessions SET partner_constraints = ${updates.partner_constraints} WHERE id = ${id}`;
-  if (updates.conflict !== undefined)
-    await sql`UPDATE decision_sessions SET conflict = ${updates.conflict} WHERE id = ${id}`;
-  if (updates.conflict_reason !== undefined)
-    await sql`UPDATE decision_sessions SET conflict_reason = ${updates.conflict_reason} WHERE id = ${id}`;
-  if (updates.merged_options !== undefined)
-    await sql`UPDATE decision_sessions SET merged_options = ${JSON.stringify(updates.merged_options)} WHERE id = ${id}`;
-  if (updates.initiator_vote !== undefined)
-    await sql`UPDATE decision_sessions SET initiator_vote = ${JSON.stringify(updates.initiator_vote)} WHERE id = ${id}`;
-  if (updates.partner_vote !== undefined)
-    await sql`UPDATE decision_sessions SET partner_vote = ${JSON.stringify(updates.partner_vote)} WHERE id = ${id}`;
-  if (updates.status !== undefined)
-    await sql`UPDATE decision_sessions SET status = ${updates.status} WHERE id = ${id}`;
-  if (updates.decided_card_id !== undefined)
-    await sql`UPDATE decision_sessions SET decided_card_id = ${updates.decided_card_id} WHERE id = ${id}`;
-  if (updates.feedback_initiator !== undefined)
-    await sql`UPDATE decision_sessions SET feedback_initiator = ${updates.feedback_initiator} WHERE id = ${id}`;
-  if (updates.feedback_partner !== undefined)
-    await sql`UPDATE decision_sessions SET feedback_partner = ${updates.feedback_partner} WHERE id = ${id}`;
+  const setClauses: string[] = [];
+  const values: unknown[] = [];
+  let p = 1;
 
-  const result = await sql<DecisionSession>`SELECT * FROM decision_sessions WHERE id = ${id}`;
+  if (updates.partner_constraints !== undefined) { setClauses.push(`partner_constraints = $${p++}`); values.push(updates.partner_constraints); }
+  if (updates.conflict !== undefined) { setClauses.push(`conflict = $${p++}`); values.push(updates.conflict); }
+  if (updates.conflict_reason !== undefined) { setClauses.push(`conflict_reason = $${p++}`); values.push(updates.conflict_reason); }
+  if (updates.merged_options !== undefined) { setClauses.push(`merged_options = $${p++}`); values.push(JSON.stringify(updates.merged_options)); }
+  if (updates.initiator_vote !== undefined) { setClauses.push(`initiator_vote = $${p++}`); values.push(JSON.stringify(updates.initiator_vote)); }
+  if (updates.partner_vote !== undefined) { setClauses.push(`partner_vote = $${p++}`); values.push(JSON.stringify(updates.partner_vote)); }
+  if (updates.status !== undefined) { setClauses.push(`status = $${p++}`); values.push(updates.status); }
+  if (updates.decided_card_id !== undefined) { setClauses.push(`decided_card_id = $${p++}`); values.push(updates.decided_card_id); }
+  if (updates.feedback_initiator !== undefined) { setClauses.push(`feedback_initiator = $${p++}`); values.push(updates.feedback_initiator); }
+  if (updates.feedback_partner !== undefined) { setClauses.push(`feedback_partner = $${p++}`); values.push(updates.feedback_partner); }
+
+  if (setClauses.length === 0) return getDecisionSession(id);
+
+  values.push(id);
+  const query = `UPDATE decision_sessions SET ${setClauses.join(", ")} WHERE id = $${p} AND deleted_at IS NULL RETURNING *`;
+  const result = await db.query<DecisionSession>(query, values as string[]);
   return result.rows[0] ?? null;
 }
 
