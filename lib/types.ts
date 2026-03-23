@@ -417,6 +417,7 @@ export interface HotelIntent extends BaseIntent {
   room_type?: string;
   amenities?: string[];
   neighborhood?: string;
+  special_occasion?: "honeymoon" | "anniversary" | "birthday";
 }
 
 export interface FlightIntent extends BaseIntent {
