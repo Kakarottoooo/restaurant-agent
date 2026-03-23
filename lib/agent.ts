@@ -255,6 +255,7 @@ export async function runAgent(
       city.fullName,  // use real city name (not "your current location") for flight/hotel departure
       queryContext
     );
+    console.log(`[weekend_trip] intent parsed: ${scenarioIntent.departure_city} → ${scenarioIntent.destination_city}, ${scenarioIntent.start_date}–${scenarioIntent.end_date}, ${scenarioIntent.nights}n, hotel★${scenarioIntent.hotel_star_rating ?? "any"}, needs_clarification=${scenarioIntent.needs_clarification}, missing=${JSON.stringify(scenarioIntent.missing_fields)}`);
     if (scenarioIntent.needs_clarification) {
       return buildBaseResult(scenarioIntent, "trip", {
         scenarioIntent,
@@ -303,6 +304,47 @@ export async function runAgent(
         creditCardRecommendations,
         flightRecommendations,
         hotelRecommendations,
+      });
+    }
+
+    // Partial result: one pipeline succeeded but not both
+    if (flightRecommendations.length === 0 && hotelRecommendations.length > 0) {
+      console.warn(`[weekend_trip] No flights found for ${scenarioIntent.departure_city} → ${scenarioIntent.destination_city} on ${scenarioIntent.start_date}. Hotels found: ${hotelRecommendations.length}`);
+      const refinedIntent: WeekendTripIntent = {
+        ...scenarioIntent,
+        needs_clarification: true,
+        missing_fields: ["flight availability — no flights found for this route/date"],
+        planning_assumptions: [
+          ...scenarioIntent.planning_assumptions,
+          `No flights found from ${scenarioIntent.departure_city ?? "origin"} to ${scenarioIntent.destination_city ?? "destination"} on ${scenarioIntent.start_date ?? "this date"} — hotel results are ready. Try a different travel date or check Google Flights directly.`,
+        ],
+      };
+      return buildBaseResult(refinedIntent, "trip", {
+        scenarioIntent: refinedIntent,
+        result_mode: "followup_refinement",
+        creditCardRecommendations,
+        flightRecommendations: [],
+        hotelRecommendations,
+      });
+    }
+
+    if (hotelRecommendations.length === 0 && flightRecommendations.length > 0) {
+      console.warn(`[weekend_trip] No hotels found in ${scenarioIntent.destination_city} for ${scenarioIntent.start_date}–${scenarioIntent.end_date}. Flights found: ${flightRecommendations.length}`);
+      const refinedIntent: WeekendTripIntent = {
+        ...scenarioIntent,
+        needs_clarification: true,
+        missing_fields: ["hotel availability — no hotels found for this destination/date"],
+        planning_assumptions: [
+          ...scenarioIntent.planning_assumptions,
+          `No hotels found in ${scenarioIntent.destination_city ?? "this destination"} for ${scenarioIntent.start_date ?? "these dates"} — flight results are ready. Try adjusting hotel criteria.`,
+        ],
+      };
+      return buildBaseResult(refinedIntent, "trip", {
+        scenarioIntent: refinedIntent,
+        result_mode: "followup_refinement",
+        creditCardRecommendations,
+        flightRecommendations,
+        hotelRecommendations: [],
       });
     }
 
