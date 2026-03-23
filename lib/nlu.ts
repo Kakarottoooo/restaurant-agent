@@ -143,6 +143,20 @@ function buildFallbackContext(
     scenarioHint = "fitness";
   }
 
+  const refinementConstraints: string[] = [];
+  if (/\bcheaper\b|再便宜|便宜点|less expensive|lower price|lower budget/i.test(lower)) {
+    refinementConstraints.push("cheaper than previous results — tighten budget constraint");
+  }
+  if (/\bquieter\b|安静点|less noisy|more quiet/i.test(lower)) {
+    refinementConstraints.push("quieter than previous results — prefer low noise venues");
+  }
+  if (/\bcloser\b|近一点|更近|nearby only/i.test(lower)) {
+    refinementConstraints.push("closer location — prefer nearest options only");
+  }
+  if (/\bfaster\b|快一点|出餐快|quicker service/i.test(lower)) {
+    refinementConstraints.push("faster service than previous — prefer quick-service venues");
+  }
+
   return {
     input_language: inputLanguage,
     output_language: outputLanguage,
@@ -151,6 +165,7 @@ function buildFallbackContext(
     category_hint: categoryHint,
     scenario_hint: scenarioHint,
     location_hint: resolveLocationAlias(message) ?? fallbackLocation,
+    ...(refinementConstraints.length > 0 ? { constraints_hint: refinementConstraints } : {}),
   };
 }
 

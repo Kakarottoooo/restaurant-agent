@@ -5,10 +5,12 @@ import { resolveLocationHint } from "../../nlu";
 export async function parseHotelIntent(
   userMessage: string,
   cityFullName: string,
-  queryContext?: MultilingualQueryContext
+  queryContext?: MultilingualQueryContext,
+  conversationHistory?: Array<{ role: "user" | "assistant"; content: string }>
 ): Promise<HotelIntent> {
   const text = await minimaxChat({
     messages: [
+      ...(conversationHistory?.slice(-4) ?? []),
       {
         role: "user",
         content: `Extract hotel search requirements from this request. Return ONLY valid JSON.

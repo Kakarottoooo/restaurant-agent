@@ -9,7 +9,8 @@ export async function parseRestaurantIntent(
   cityFullName: string,
   queryContext?: MultilingualQueryContext,
   sessionPreferences?: SessionPreferences,
-  profileContext?: string
+  profileContext?: string,
+  conversationHistory?: Array<{ role: "user" | "assistant"; content: string }>
 ): Promise<RestaurantIntent> {
   const prefContext = sessionPreferences
     ? formatSessionPreferences(sessionPreferences)
@@ -17,6 +18,7 @@ export async function parseRestaurantIntent(
 
   const text = await minimaxChat({
     messages: [
+      ...(conversationHistory?.slice(-4) ?? []),
       {
         role: "user",
         content: `Extract structured requirements from this restaurant request. Return ONLY valid JSON.
