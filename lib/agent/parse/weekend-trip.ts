@@ -3,6 +3,43 @@ import { minimaxChat } from "../../minimax";
 import { normalizeDate } from "../../tools";
 import { resolveLocationHint } from "../../nlu";
 
+function extractDestinationFromMessage(message: string): string | undefined {
+  const lower = message.toLowerCase();
+  // Common city abbreviations and names
+  if (/\b(ny|new york|nyc|manhattan)\b/.test(lower)) return "New York, NY";
+  if (/\b(la|los angeles|lax)\b/.test(lower)) return "Los Angeles, CA";
+  if (/\b(sf|san francisco|sfo)\b/.test(lower)) return "San Francisco, CA";
+  if (/\b(chicago|chi)\b/.test(lower)) return "Chicago, IL";
+  if (/\b(miami|mia)\b/.test(lower)) return "Miami, FL";
+  if (/\b(vegas|las vegas|lvs)\b/.test(lower)) return "Las Vegas, NV";
+  if (/\b(seattle|sea)\b/.test(lower)) return "Seattle, WA";
+  if (/\b(boston|bos)\b/.test(lower)) return "Boston, MA";
+  if (/\b(denver|den)\b/.test(lower)) return "Denver, CO";
+  if (/\b(austin|atx)\b/.test(lower)) return "Austin, TX";
+  if (/\b(dallas|dfw)\b/.test(lower)) return "Dallas, TX";
+  if (/\b(houston|hou)\b/.test(lower)) return "Houston, TX";
+  if (/\b(atlanta|atl)\b/.test(lower)) return "Atlanta, GA";
+  if (/\b(nashville|bna)\b/.test(lower)) return "Nashville, TN";
+  if (/\b(portland|pdx)\b/.test(lower)) return "Portland, OR";
+  if (/\b(phoenix|phx)\b/.test(lower)) return "Phoenix, AZ";
+  if (/\b(san diego|san-diego|sdg)\b/.test(lower)) return "San Diego, CA";
+  if (/\b(new orleans|nola)\b/.test(lower)) return "New Orleans, LA";
+  if (/\b(washington\s*dc|dc|washington\s*d\.c\.?)\b/.test(lower)) return "Washington, DC";
+  if (/\b(philadelphia|philly|phl)\b/.test(lower)) return "Philadelphia, PA";
+  if (/\b(minneapolis|min)\b/.test(lower)) return "Minneapolis, MN";
+  if (/\b(detroit|det)\b/.test(lower)) return "Detroit, MI";
+  if (/\b(toronto|yyz)\b/.test(lower)) return "Toronto, Canada";
+  if (/\b(london|lhr)\b/.test(lower)) return "London, UK";
+  if (/\b(paris|cdg)\b/.test(lower)) return "Paris, France";
+  if (/\b(tokyo|tyo)\b/.test(lower)) return "Tokyo, Japan";
+  if (/\b(barcelona)\b/.test(lower)) return "Barcelona, Spain";
+  if (/\b(amsterdam|ams)\b/.test(lower)) return "Amsterdam, Netherlands";
+  if (/\b(rome|fco)\b/.test(lower)) return "Rome, Italy";
+  if (/\b(cancun|cun)\b/.test(lower)) return "Cancun, Mexico";
+  if (/\b(hawaii|honolulu|oahu|maui|hnl)\b/.test(lower)) return "Honolulu, HI";
+  return undefined;
+}
+
 function resolveRelativeDates(message: string): { resolvedMessage: string; dateHint: string } {
   const now = new Date();
   const pad = (n: number) => String(n).padStart(2, "0");
@@ -34,6 +71,8 @@ export async function parseWeekendTripIntent(
 ): Promise<WeekendTripIntent> {
   const today = new Date().toISOString().split("T")[0];
   const { dateHint } = resolveRelativeDates(userMessage);
+  const preDestination = extractDestinationFromMessage(userMessage);
+  const resolvedStartDateForFallback = dateHint ? dateHint.match(/(\d{4}-\d{2}-\d{2})/)?.[1] : undefined;
   const text = await minimaxChat({
     messages: [
       {
@@ -89,14 +128,24 @@ Rules:
     max_tokens: 1200,
   });
 
+  const fallbackMissingFields: string[] = [];
+  if (!preDestination) fallbackMissingFields.push("destination");
+  if (!resolvedStartDateForFallback) fallbackMissingFields.push("travel dates");
+
   const fallback: WeekendTripIntent = {
     category: "trip",
     scenario: "weekend_trip",
-    scenario_goal: `Plan a weekend trip from ${cityFullName} with one default package and backups the user can approve quickly.`,
+    scenario_goal: `Plan a weekend trip to ${preDestination ?? "the destination"} with flight, hotel, and budget tradeoffs compressed into a few approval-ready packages.`,
     departure_city: cityFullName,
-    destination_city: undefined,
-    start_date: undefined,
-    end_date: undefined,
+    destination_city: preDestination,
+    start_date: resolvedStartDateForFallback,
+    end_date: resolvedStartDateForFallback
+      ? (() => {
+          const d = new Date(`${resolvedStartDateForFallback}T00:00:00`);
+          d.setDate(d.getDate() + 2);
+          return d.toISOString().split("T")[0];
+        })()
+      : undefined,
     nights: 2,
     travelers: 1,
     budget_total: undefined,
@@ -106,9 +155,13 @@ Rules:
     hotel_neighborhood: undefined,
     cabin_class: "economy",
     prefer_direct: null,
-    planning_assumptions: [`Using ${cityFullName} as the departure city.`],
-    missing_fields: ["destination", "travel dates"],
-    needs_clarification: true,
+    planning_assumptions: [
+      `Using ${cityFullName} as the departure city.`,
+      ...(preDestination ? [`Destination inferred as ${preDestination}.`] : []),
+      ...(resolvedStartDateForFallback ? [`Start date resolved from message: ${resolvedStartDateForFallback}.`] : []),
+    ],
+    missing_fields: fallbackMissingFields,
+    needs_clarification: fallbackMissingFields.length > 0,
   };
 
   const jsonMatch = text.match(/\{[\s\S]*\}/);
@@ -140,7 +193,7 @@ Rules:
       scenario: "weekend_trip",
       scenario_goal: `Plan a weekend trip to ${parsed.destination_city ?? "the destination"} with flight, hotel, and budget tradeoffs compressed into a few approval-ready packages.`,
       departure_city: parsed.departure_city ?? cityFullName,
-      destination_city: parsed.destination_city ?? undefined,
+      destination_city: parsed.destination_city ?? preDestination ?? undefined,
       start_date: startDate,
       end_date: endDate,
       nights,
@@ -173,8 +226,9 @@ Rules:
       missing_fields,
       // Only ask for clarification when destination or dates are truly unknown
       // Never ask about dates when we pre-resolved a relative date hint
+      // Fall back to TypeScript-extracted destination before giving up
       needs_clarification:
-        !parsed.destination_city ||
+        (!parsed.destination_city && !preDestination) ||
         (!startDate && !dateHint && missing_fields.includes("travel dates")),
     };
   } catch {
