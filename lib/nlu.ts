@@ -99,9 +99,14 @@ function buildFallbackContext(
   const inputLanguage = inferInputLanguage(message);
   const outputLanguage = inferOutputLanguage(inputLanguage);
 
+  // Detect multi-component trip signals before assigning single-category hints
+  const _hasFlightSignal = /\bflight\b|\bflights\b|\bairport\b|\bfly\b|\bplane\b|\bairline\b/i.test(lower);
+  const _hasHotelSignal = /\bhotel\b|\bhotels\b|\bcheck.?in\b|\bcheck.?out\b|\bstay\b|\bnights?\b/i.test(lower);
+
   let categoryHint: CategoryType | null = null;
-  if (/\bflight\b|\bflights\b|\bairport\b|\bfly\b/.test(lower)) categoryHint = "flight";
-  else if (/\bhotel\b|\bhotels\b|\bcheck in\b|\bcheck out\b|\bstay\b/.test(lower)) categoryHint = "hotel";
+  // Only set flight/hotel categoryHint when the other component is absent (standalone search)
+  if (_hasFlightSignal && !_hasHotelSignal) categoryHint = "flight";
+  else if (_hasHotelSignal && !_hasFlightSignal) categoryHint = "hotel";
   else if (/\bcredit card\b|\bcash back\b|\brewards card\b/.test(lower)) categoryHint = "credit_card";
   else if (/\blaptop\b|\bmacbook\b|\bthinkpad\b/.test(lower)) categoryHint = "laptop";
   else if (/\bphone\b|\bsmartphone\b|\biphone\b|\bandroid\b/.test(lower)) categoryHint = "smartphone";
@@ -109,7 +114,10 @@ function buildFallbackContext(
   else if (/\brestaurant\b|\bdinner\b|\blunch\b|\bdate\b|\breservation\b/.test(lower)) categoryHint = "restaurant";
 
   let scenarioHint: ScenarioType | null = null;
-  if (/\bweekend\b.*\btrip\b|\bweekend getaway\b|\bcity break\b/.test(lower)) {
+  // Multi-component trip: flight + hotel together → weekend_trip regardless of keyword order
+  if (_hasFlightSignal && _hasHotelSignal) {
+    scenarioHint = "weekend_trip";
+  } else if (/\bweekend\b.*\btrip\b|\bweekend getaway\b|\bcity break\b/.test(lower)) {
     scenarioHint = "weekend_trip";
   } else if (/\bdate night\b|\bfirst date\b|\bromantic\b|\banniversary\b/.test(lower)) {
     scenarioHint = "date_night";
