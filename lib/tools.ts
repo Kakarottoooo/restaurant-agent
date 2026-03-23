@@ -435,14 +435,23 @@ export async function searchHotels(params: {
   url.searchParams.set("hl", "en");
   url.searchParams.set("api_key", apiKey);
 
+  const urlStr = url.toString();
+  console.log(`[searchHotels] ${params.location} ${checkIn}→${checkOut} class=${params.hotel_class ?? "any"} URL=${urlStr.replace(apiKey, "HIDDEN")}`);
+
   try {
-    const res = await fetch(url.toString(), { signal: AbortSignal.timeout(15_000) });
+    const res = await fetch(urlStr, { signal: AbortSignal.timeout(15_000) });
     if (!res.ok) {
       console.warn("SerpApi hotel search failed:", res.status);
       return [];
     }
     const data = await res.json();
+    if (data.error) {
+      console.warn("[searchHotels] SerpAPI error:", data.error);
+      return [];
+    }
     const properties: Array<Record<string, unknown>> = data.properties ?? [];
+    console.log(`[searchHotels] got ${properties.length} properties (keys: ${Object.keys(data).join(",")})`);
+
 
     return properties.slice(0, params.maxResults ?? 20).map((p, i): Hotel => {
       const prices = p.rate_per_night as Record<string, unknown> | undefined;

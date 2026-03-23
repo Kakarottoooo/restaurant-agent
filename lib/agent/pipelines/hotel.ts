@@ -10,7 +10,7 @@ export async function runHotelPipeline(
   conversationHistory: Array<{ role: "user" | "assistant"; content: string }>,
   cityFullName: string,
 ): Promise<{ hotelRecommendations: HotelRecommendationCard[]; suggested_refinements: string[] }> {
-  const hotels = await searchHotels({
+  let hotels = await searchHotels({
     location: intent.location ?? cityFullName,
     check_in: intent.check_in,
     check_out: intent.check_out,
@@ -18,6 +18,18 @@ export async function runHotelPipeline(
     hotel_class: intent.star_rating,
     maxResults: 20,
   });
+
+  // If star-class filter returned empty, retry without filter (SerpAPI hotel_class can be overly strict)
+  if (hotels.length === 0 && intent.star_rating) {
+    console.warn(`[runHotelPipeline] hotel_class=${intent.star_rating} returned 0 results — retrying without star filter`);
+    hotels = await searchHotels({
+      location: intent.location ?? cityFullName,
+      check_in: intent.check_in,
+      check_out: intent.check_out,
+      guests: intent.guests,
+      maxResults: 20,
+    });
+  }
 
   if (hotels.length === 0) {
     return { hotelRecommendations: [], suggested_refinements: [] };
