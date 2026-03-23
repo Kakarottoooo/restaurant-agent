@@ -1,5 +1,96 @@
 # TODOS
 
+## Scenario Coverage Gaps (identified 2026-03-23)
+
+### G-1: Flight time-of-day filtering (red-eye avoidance)
+**Priority:** P1
+**What:** "不要红眼航班" / "no early morning flights" / "not after 9pm" currently has no effect — `FlightIntent` has no time-of-day fields, and `runFlightPipeline` does no time filtering after fetching results.
+**Why:** Time-of-day preference is the second most common flight constraint after price. Silently ignoring it makes the recommendation feel broken.
+**How to fix:**
+1. Add fields to `FlightIntent` in `lib/types.ts`:
+   ```ts
+   avoid_red_eye?: boolean;        // true = exclude 00:00–06:00 departures
+   earliest_departure?: string;    // "HH:MM" e.g. "07:00"
+   latest_departure?: string;      // "HH:MM" e.g. "21:00"
+   ```
+2. Update `parseFlightIntent` prompt (`lib/agent/parse/flight.ts`) to extract these fields. Detection rules:
+   - "no red-eye / 不要凌晨 / not too early" → `avoid_red_eye: true`
+   - "not after 9pm / before 10am" → `latest_departure` / `earliest_departure` in HH:MM
+3. In `runFlightPipeline` (`lib/agent/pipelines/flight.ts`), after fetching flights, add a post-filter step before building cards. SerpAPI flight objects include a departure_time string — parse HH:MM and filter:
+   - If `avoid_red_eye`: exclude flights departing 00:00–05:59
+   - If `earliest_departure` / `latest_departure`: exclude flights outside the window
+   - If filtering removes all results, return the unfiltered set with a note (don't return zero results)
+**Depends on:** None. Fully contained in the flight parser + pipeline.
+
+---
+
+### G-2: Credit card portfolio optimization ("I already have CSP + Amex Gold, what's missing?")
+**Priority:** P1
+**What:** `existing_cards` is already parsed correctly from user messages. But the pipeline treats "I have CSP and Amex Gold" the same as a first-card search — it just filters out those cards. There is no "gap analysis" mode that identifies which spending categories are underserved and scores remaining cards by how well they fill the gap.
+**Why:** Portfolio optimization is the highest-value credit card use case (experienced users with 2–3 cards). Currently the output is a generic recommendation, not a gap analysis.
+**How to fix:**
+1. Add `optimization_mode?: "first_card" | "add_to_stack" | "portfolio_review"` to `CreditCardIntent` in `lib/types.ts`.
+2. Update `parseCreditCardIntent` prompt (`lib/agent/parse/credit-card.ts`) to detect:
+   - `portfolio_review`: user names 2+ specific cards + asks "what am I missing?" / "what should I add?" / "optimize my setup" / "还需要什么卡"
+   - `add_to_stack`: user has cards but is asking for the "next" card generically
+   - `first_card`: user has no cards or credit_score=0
+3. In `runCreditCardPipeline` (`lib/agent/pipelines/credit-card.ts`), when `optimization_mode === "portfolio_review"`:
+   - Compute effective earn rate per spending category across all `existing_cards` (use the card catalog in `lib/creditCardEngine.ts`)
+   - Identify `uncovered_categories`: categories where max earn rate across existing cards is <2×
+   - Score remaining cards (after filtering out owned cards) by: `gap_fill_score = weighted sum of earn rates in uncovered_categories`
+   - Return top 3 cards, each with a `portfolio_why` explanation: "Your existing cards earn only 1× on dining — this card covers that gap at 4×"
+4. Add `portfolio_gap_analysis?: { uncovered_categories: string[]; effective_rates: Record<string, number> }` to `CreditCardRecommendationCard` type (optional display field).
+**Depends on:** None. All card data is in `lib/creditCardEngine.ts` — no external API needed.
+
+---
+
+### G-3: Module-level Refine ("换个酒店，航班不变")
+**Priority:** P2
+**What:** Current refine re-runs the entire pipeline from scratch. Users who say "keep the flights, just find a different hotel" still get a fully regenerated plan including new flights — wasting latency and ignoring their explicit intent to pin one component.
+**Why:** Module-level refinement is the difference between a one-shot recommender and a collaborative planning agent. Without it, every "tweak" feels like starting over.
+**How to fix:**
+1. Add `refine_module?: "hotel" | "flight" | "restaurant" | "venue"` and `pinned_plan_id?: string` to `ScenarioIntent` / `DecisionPlan` types.
+2. In NLU (`lib/nlu.ts`), detect partial-refine intent: "换个酒店" / "find a different hotel" / "same flights but different hotel" → set `refine_module: "hotel"`, extract `pinned_plan_id` from chat context (the last saved plan ID).
+3. In `runAgent` (`lib/agent.ts`), when `refine_module` is set:
+   - Load the existing `DecisionPlan` from DB by `pinned_plan_id`
+   - Pin the non-replaced modules (copy their options directly from the stored plan)
+   - Re-run only the pipeline for the replaced module with updated constraints
+   - Reassemble the plan with pinned modules + new module, save as a new plan with `parent_plan_id`
+4. In `useChat.ts`, pass the current `decisionPlan.id` as `pinned_plan_id` when refine button is pressed (already tracked in `refinedFromPlanIdRef`).
+**Cons:** DB read on refine path adds ~50ms. Stale data risk if pinned plan is >24h old.
+**Depends on:** `decision_plans` table (already exists). Pinned plan ID already tracked in `refinedFromPlanIdRef`.
+
+---
+
+### G-4: Venue quality degradation alert
+**Priority:** P2
+**What:** When a user creates a plan for a future date, the recommended venue's quality (Google rating, review sentiment) could degrade before the event. Currently the system never re-checks. If a restaurant drops from 4.5★ to 3.8★ or gets a wave of bad reviews, the user still sees the original recommendation with no warning.
+**Why:** "Went and it was bad — it had been going downhill" is a failure mode that damages trust more than a wrong recommendation, because the system had time to warn but didn't.
+**How to fix:**
+1. Add `venue_baselines` table:
+   ```sql
+   CREATE TABLE IF NOT EXISTS venue_baselines (
+     id SERIAL PRIMARY KEY,
+     plan_id TEXT NOT NULL,
+     venue_id TEXT NOT NULL,         -- Google Places place_id
+     venue_name TEXT NOT NULL,
+     baseline_rating FLOAT NOT NULL,
+     baseline_review_count INT NOT NULL,
+     recorded_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+   );
+   ```
+2. After plan save (`POST /api/plan/save`), record baseline rating for the top venue(s) from the plan's `primary_plan.evidence_card_id`-linked restaurant.
+3. Add `GET /api/cron/venue-health-check` — weekly cron:
+   - Query `venue_baselines` for plans where `event_datetime > NOW()` (future events only)
+   - Re-query Google Places `getPlaceDetails()` for each venue_id
+   - If current_rating ≤ baseline_rating − 0.3 OR review_count_delta >50 with negative trend:
+     - Insert `plan_outcomes` row: `outcome_type: "venue_quality_alert"`, metadata: `{ baseline, current, delta }`
+     - Optionally fire a push notification to the session's registered subscription
+4. Surface in `SharedPlanView.tsx`: if the plan has a `venue_quality_alert` outcome, show a warning banner: "⚠ This venue's recent reviews have dropped since we recommended it. Consider checking current reviews before going."
+**Depends on:** `plan_outcomes` table (exists), `user_notifications` table (exists for push), Google Places API.
+
+---
+
 ## Phase 4 — Real-time Availability + Identity + Push
 
 ### 4b-1: Real-time restaurant availability
