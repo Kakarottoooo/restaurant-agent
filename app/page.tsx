@@ -26,6 +26,7 @@ import { useVoiceInput } from "@/app/hooks/useVoiceInput";
 import { useAuth } from "@/app/hooks/useAuth";
 import { PlanAction, PlanLinkAction, RecommendationCard as CardType, PostExperienceFeedback, FeedbackRecord } from "@/lib/types";
 import type { FeedbackPromptItem } from "@/app/api/feedback-prompts/route";
+import DecisionRoomModal from "@/components/DecisionRoomModal";
 
 // Leaflet is not SSR-compatible
 const MapView = dynamic(() => import("@/components/MapView"), { ssr: false });
@@ -129,6 +130,8 @@ export default function Home() {
   // Hero tagline rotation (start at 0 for SSR, randomize on mount to avoid hydration mismatch)
   const [heroIdx, setHeroIdx] = useState(0);
   const [heroVisible, setHeroVisible] = useState(true);
+  const [decisionRoomOpen, setDecisionRoomOpen] = useState(false);
+  const [decisionRoomQuery, setDecisionRoomQuery] = useState("");
 
   // Phase 4.6: Call learnWeightsFromFeedback on mount
   useEffect(() => {
@@ -1946,6 +1949,36 @@ export default function Home() {
                   </div>
                 )}
 
+                {/* Decision Room — "Plan with someone" button after restaurant results */}
+                {chat.resultMode === "category_cards" && chat.displayCards.length > 0 && (
+                  <button
+                    onClick={() => {
+                      setDecisionRoomQuery(lastUserQuery || chat.displayCards[0]?.restaurant?.name || "dinner tonight");
+                      setDecisionRoomOpen(true);
+                    }}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "6px",
+                      marginTop: "4px",
+                      padding: "9px 16px",
+                      borderRadius: "12px",
+                      border: "1.5px solid #e5e7eb",
+                      background: "#fff",
+                      color: "#374151",
+                      fontSize: "13px",
+                      fontWeight: 500,
+                      cursor: "pointer",
+                      width: "100%",
+                      justifyContent: "center",
+                      fontFamily: "var(--font-dm-sans, system-ui)",
+                    }}
+                  >
+                    <span style={{ fontSize: "15px" }}>🤝</span>
+                    Plan this with someone
+                  </button>
+                )}
+
                 {/* Hotel Results */}
                 {chat.resultCategory === "hotel" && chat.allHotelCards.length > 0 && (
                   <div className="flex flex-col gap-3">
@@ -2331,6 +2364,17 @@ export default function Home() {
             chat.sendMessage(dateText);
           }}
           onClose={() => setDatePickerOpen(false)}
+        />
+      )}
+
+      {/* Decision Room Modal */}
+      {decisionRoomOpen && (
+        <DecisionRoomModal
+          isOpen={decisionRoomOpen}
+          onClose={() => setDecisionRoomOpen(false)}
+          initiatorQuery={decisionRoomQuery}
+          cityId={location.cityId ?? "losangeles"}
+          userId={auth.userId}
         />
       )}
     </main>

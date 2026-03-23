@@ -368,6 +368,143 @@ export async function getAllPushSubscriptions(): Promise<PushSubscriptionRecord[
   return result.rows;
 }
 
+// ─── Phase 4 (Decision Room): Shared Decision Sessions ───────────────────────
+
+let decisionSessionsTableReady: Promise<void> | null = null;
+
+export async function ensureDecisionSessionsTable(): Promise<void> {
+  if (!decisionSessionsTableReady) {
+    decisionSessionsTableReady = (async () => {
+      await sql`
+        CREATE TABLE IF NOT EXISTS decision_sessions (
+          id                    TEXT PRIMARY KEY,
+          initiator_user_id     TEXT,
+          partner_session_token TEXT NOT NULL,
+          initiator_constraints TEXT NOT NULL,
+          partner_constraints   TEXT,
+          conflict              BOOLEAN NOT NULL DEFAULT FALSE,
+          conflict_reason       TEXT,
+          merged_options        JSONB,
+          initiator_vote        JSONB NOT NULL DEFAULT '[]',
+          partner_vote          JSONB NOT NULL DEFAULT '[]',
+          status                TEXT NOT NULL DEFAULT 'waiting_partner',
+          decided_card_id       TEXT,
+          feedback_initiator    TEXT,
+          feedback_partner      TEXT,
+          party_size            INT NOT NULL DEFAULT 2,
+          decision_type         TEXT NOT NULL DEFAULT 'dinner_tonight',
+          city_id               TEXT NOT NULL DEFAULT 'los-angeles',
+          created_at            TIMESTAMPTZ DEFAULT NOW(),
+          expires_at            TIMESTAMPTZ NOT NULL,
+          deleted_at            TIMESTAMPTZ
+        )
+      `;
+      await sql`CREATE INDEX IF NOT EXISTS decision_sessions_initiator_idx ON decision_sessions (initiator_user_id) WHERE initiator_user_id IS NOT NULL`;
+      await sql`CREATE INDEX IF NOT EXISTS decision_sessions_expires_idx ON decision_sessions (expires_at)`;
+    })().catch((err) => {
+      decisionSessionsTableReady = null;
+      throw err;
+    });
+  }
+  await decisionSessionsTableReady;
+}
+
+export interface DecisionSession {
+  id: string;
+  initiator_user_id: string | null;
+  partner_session_token: string;
+  initiator_constraints: string;
+  partner_constraints: string | null;
+  conflict: boolean;
+  conflict_reason: string | null;
+  merged_options: unknown[] | null;
+  initiator_vote: { card_id: string; approved: boolean }[];
+  partner_vote: { card_id: string; approved: boolean }[];
+  status: "waiting_partner" | "voting" | "decided" | "conflict" | "expired";
+  decided_card_id: string | null;
+  feedback_initiator: "loved" | "fine" | "never" | null;
+  feedback_partner: "loved" | "fine" | "never" | null;
+  party_size: number;
+  decision_type: string;
+  city_id: string;
+  created_at: string;
+  expires_at: string;
+  deleted_at: string | null;
+}
+
+export async function createDecisionSession(params: {
+  id: string;
+  initiatorUserId: string | null;
+  partnerSessionToken: string;
+  initiatorConstraints: string;
+  cityId: string;
+  decisionType?: string;
+}): Promise<DecisionSession> {
+  await ensureDecisionSessionsTable();
+  const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+  const result = await sql<DecisionSession>`
+    INSERT INTO decision_sessions
+      (id, initiator_user_id, partner_session_token, initiator_constraints, city_id, decision_type, expires_at)
+    VALUES
+      (${params.id}, ${params.initiatorUserId}, ${params.partnerSessionToken},
+       ${params.initiatorConstraints}, ${params.cityId}, ${params.decisionType ?? "dinner_tonight"}, ${expiresAt})
+    RETURNING *
+  `;
+  return result.rows[0];
+}
+
+export async function getDecisionSession(id: string): Promise<DecisionSession | null> {
+  await ensureDecisionSessionsTable();
+  const result = await sql<DecisionSession>`
+    SELECT * FROM decision_sessions WHERE id = ${id} AND deleted_at IS NULL
+  `;
+  return result.rows[0] ?? null;
+}
+
+export async function updateDecisionSession(
+  id: string,
+  updates: Partial<{
+    partner_constraints: string;
+    conflict: boolean;
+    conflict_reason: string;
+    merged_options: unknown[];
+    initiator_vote: { card_id: string; approved: boolean }[];
+    partner_vote: { card_id: string; approved: boolean }[];
+    status: string;
+    decided_card_id: string;
+    feedback_initiator: string;
+    feedback_partner: string;
+  }>
+): Promise<DecisionSession | null> {
+  await ensureDecisionSessionsTable();
+  const existing = await sql<DecisionSession>`SELECT * FROM decision_sessions WHERE id = ${id} AND deleted_at IS NULL`;
+  if (!existing.rows[0]) return null;
+
+  if (updates.partner_constraints !== undefined)
+    await sql`UPDATE decision_sessions SET partner_constraints = ${updates.partner_constraints} WHERE id = ${id}`;
+  if (updates.conflict !== undefined)
+    await sql`UPDATE decision_sessions SET conflict = ${updates.conflict} WHERE id = ${id}`;
+  if (updates.conflict_reason !== undefined)
+    await sql`UPDATE decision_sessions SET conflict_reason = ${updates.conflict_reason} WHERE id = ${id}`;
+  if (updates.merged_options !== undefined)
+    await sql`UPDATE decision_sessions SET merged_options = ${JSON.stringify(updates.merged_options)} WHERE id = ${id}`;
+  if (updates.initiator_vote !== undefined)
+    await sql`UPDATE decision_sessions SET initiator_vote = ${JSON.stringify(updates.initiator_vote)} WHERE id = ${id}`;
+  if (updates.partner_vote !== undefined)
+    await sql`UPDATE decision_sessions SET partner_vote = ${JSON.stringify(updates.partner_vote)} WHERE id = ${id}`;
+  if (updates.status !== undefined)
+    await sql`UPDATE decision_sessions SET status = ${updates.status} WHERE id = ${id}`;
+  if (updates.decided_card_id !== undefined)
+    await sql`UPDATE decision_sessions SET decided_card_id = ${updates.decided_card_id} WHERE id = ${id}`;
+  if (updates.feedback_initiator !== undefined)
+    await sql`UPDATE decision_sessions SET feedback_initiator = ${updates.feedback_initiator} WHERE id = ${id}`;
+  if (updates.feedback_partner !== undefined)
+    await sql`UPDATE decision_sessions SET feedback_partner = ${updates.feedback_partner} WHERE id = ${id}`;
+
+  const result = await sql<DecisionSession>`SELECT * FROM decision_sessions WHERE id = ${id}`;
+  return result.rows[0] ?? null;
+}
+
 // ─── G-4: Venue quality degradation tracking ──────────────────────────────────
 
 let venueBaselinesTableReady: Promise<void> | null = null;
