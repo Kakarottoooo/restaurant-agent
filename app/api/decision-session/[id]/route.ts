@@ -8,7 +8,7 @@ import type { DecisionSession } from "@/lib/db";
 export const maxDuration = 60;
 
 /** Determine the caller's role from server-side signals, not client-supplied field. */
-function deriveRole(
+export function deriveRole(
   req: NextRequest,
   session: DecisionSession,
   userId: string | null

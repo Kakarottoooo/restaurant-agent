@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 
 interface DecisionRoomModalProps {
   isOpen: boolean;
@@ -19,9 +19,28 @@ export default function DecisionRoomModal({
 }: DecisionRoomModalProps) {
   const [step, setStep] = useState<"share" | "waiting">("share");
   const [shareUrl, setShareUrl] = useState<string | null>(null);
+  const [sessionId, setSessionId] = useState<string | null>(null);
   const [copied, setCopied] = useState<"imessage" | "whatsapp" | "copy" | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Poll when on "waiting" step — auto-navigate when partner joins
+  useEffect(() => {
+    if (step !== "waiting" || !sessionId) return;
+    pollRef.current = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/decision-session/${sessionId}`);
+        if (!res.ok) return;
+        const data = await res.json() as { session: { status: string } };
+        if (data.session.status !== "waiting_partner") {
+          clearInterval(pollRef.current!);
+          window.location.href = `${shareUrl}?role=initiator`;
+        }
+      } catch { /* ignore network errors */ }
+    }, 4000);
+    return () => { if (pollRef.current) clearInterval(pollRef.current); };
+  }, [step, sessionId, shareUrl]);
 
   async function createSession() {
     if (shareUrl) return; // Already created
@@ -34,7 +53,8 @@ export default function DecisionRoomModal({
         body: JSON.stringify({ initiatorConstraints: initiatorQuery, cityId }),
       });
       if (!res.ok) throw new Error("Failed to create session");
-      const data = (await res.json()) as { shareUrl: string };
+      const data = (await res.json()) as { sessionId: string; shareUrl: string };
+      setSessionId(data.sessionId);
       setShareUrl(data.shareUrl);
     } catch {
       setError("Couldn't create a session. Try again.");
