@@ -181,7 +181,7 @@ export function useChat({
   }
 
   const sendMessage = useCallback(
-    async (text: string) => {
+    async (text: string, pinnedPlanId?: string) => {
       if (!text.trim() || loading) return;
 
       setActivePrice(null);
@@ -267,6 +267,7 @@ export function useChat({
             customWeights,
             session_id: getTelemetrySessionId(),
             user_id: userId ?? undefined,
+            pinned_plan_id: pinnedPlanId ?? undefined,
           }),
         });
 

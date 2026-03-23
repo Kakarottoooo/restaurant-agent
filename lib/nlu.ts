@@ -249,25 +249,68 @@ function buildPreferenceConstraintBlock(userPreferences: Record<string, string>)
   return "\n\nLearned user preferences (soft constraints from past feedback):\n" + lines.join("\n");
 }
 
+// ─── G-3: Partial-refine detection ─────────────────────────────────────────────
+
+const REFINE_HOTEL_PATTERNS = [
+  /换个酒店/,
+  /different hotel/i,
+  /change the hotel/i,
+  /swap the hotel/i,
+  /try a different hotel/i,
+  /another hotel/i,
+];
+
+const REFINE_FLIGHT_PATTERNS = [
+  /换个航班/,
+  /different flight/i,
+  /change the flight/i,
+  /swap the flight/i,
+  /try a different flight/i,
+  /another flight/i,
+];
+
+const REFINE_RESTAURANT_PATTERNS = [
+  /换个餐厅/,
+  /different restaurant/i,
+  /change the restaurant/i,
+  /swap the restaurant/i,
+  /try a different restaurant/i,
+  /another restaurant/i,
+];
+
+function detectRefineModule(
+  message: string
+): "hotel" | "flight" | "restaurant" | "venue" | undefined {
+  if (REFINE_HOTEL_PATTERNS.some((p) => p.test(message))) return "hotel";
+  if (REFINE_FLIGHT_PATTERNS.some((p) => p.test(message))) return "flight";
+  if (REFINE_RESTAURANT_PATTERNS.some((p) => p.test(message))) return "restaurant";
+  return undefined;
+}
+
 export async function analyzeMultilingualQuery(
   message: string,
   fallbackLocation?: string,
-  userPreferences?: Record<string, string>
+  userPreferences?: Record<string, string>,
+  options?: { pinned_plan_id?: string }
 ): Promise<MultilingualQueryContext> {
+  const pinned_plan_id = options?.pinned_plan_id;
   const fallback = buildFallbackContext(message, fallbackLocation);
+
+  // G-3: detect partial-refine intent when a pinned plan is provided
+  const refine_module = pinned_plan_id ? detectRefineModule(message) : undefined;
 
   const preferenceHints = userPreferences ? buildPreferenceConstraintHints(userPreferences) : [];
 
   // Fast path: pure English queries don't need MiniMax NLU — regex fallback is accurate enough.
   // MiniMax adds value for Chinese, mixed-language, and ambiguous queries.
   if (inferInputLanguage(message) === "en") {
-    if (preferenceHints.length > 0) {
-      return {
-        ...fallback,
-        constraints_hint: [...(fallback.constraints_hint ?? []), ...preferenceHints],
-      };
+    const result = preferenceHints.length > 0
+      ? { ...fallback, constraints_hint: [...(fallback.constraints_hint ?? []), ...preferenceHints] }
+      : fallback;
+    if (refine_module) {
+      return { ...result, refine_module, pinned_plan_id };
     }
-    return fallback;
+    return result;
   }
 
   const preferenceBlock = userPreferences ? buildPreferenceConstraintBlock(userPreferences) : "";
@@ -312,20 +355,20 @@ Rules:
     });
 
     const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) return fallback;
+    if (!jsonMatch) return refine_module ? { ...fallback, refine_module, pinned_plan_id } : fallback;
     const merged = mergeContexts(
       fallback,
       JSON.parse(jsonMatch[0]) as Partial<MultilingualQueryContext>
     );
-    if (preferenceHints.length > 0) {
-      return {
-        ...merged,
-        constraints_hint: [...(merged.constraints_hint ?? []), ...preferenceHints],
-      };
+    const withPrefs = preferenceHints.length > 0
+      ? { ...merged, constraints_hint: [...(merged.constraints_hint ?? []), ...preferenceHints] }
+      : merged;
+    if (refine_module) {
+      return { ...withPrefs, refine_module, pinned_plan_id };
     }
-    return merged;
+    return withPrefs;
   } catch {
-    return fallback;
+    return refine_module ? { ...fallback, refine_module, pinned_plan_id } : fallback;
   }
 }
 

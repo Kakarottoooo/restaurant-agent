@@ -520,7 +520,8 @@ export default function Home() {
         )
       );
       learnFromSearch(action.prompt);
-      chat.sendMessage(action.prompt);
+      // G-3: pass pinned_plan_id so agent can do module-level refine
+      chat.sendMessage(action.prompt, refinedFromPlanIdRef.current ?? undefined);
     }
   }
 

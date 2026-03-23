@@ -182,6 +182,10 @@ export interface MultilingualQueryContext {
   date_text_hint?: string;
   time_hint?: string;
   constraints_hint?: string[];
+  /** G-3: which module to replace in a partial-refine request */
+  refine_module?: "hotel" | "flight" | "restaurant" | "venue";
+  /** G-3: plan ID whose other modules should be kept unchanged */
+  pinned_plan_id?: string;
 }
 
 export interface AfterDinnerVenue {
