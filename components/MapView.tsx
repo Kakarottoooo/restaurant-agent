@@ -40,7 +40,7 @@ export interface MapPin {
   lng: number;
   rank: number;
   subtitle: string;
-  rating: number;
+  rating?: number;
 }
 
 // Great-circle arc interpolation (N intermediate points)
@@ -632,7 +632,7 @@ export default function MapView({
                     flexShrink: 0,
                   }}
                 >
-                  ★ {pin.rating}
+                  {pin.rating != null ? `★ ${pin.rating}` : ""}
                 </span>
               </div>
             </button>
