@@ -424,6 +424,9 @@ export interface FlightIntent extends BaseIntent {
   cabin_class?: "economy" | "business" | "first";
   prefer_direct?: boolean;
   max_stops?: number | null; // null = no preference, 0 = nonstop only, 1 = max 1 stop
+  avoid_red_eye?: boolean;      // true = exclude departures 00:00–05:59
+  earliest_departure?: string;  // "HH:MM" e.g. "07:00"
+  latest_departure?: string;    // "HH:MM" e.g. "21:00"
 }
 
 import type { WatchCategory } from "./watchTypes";

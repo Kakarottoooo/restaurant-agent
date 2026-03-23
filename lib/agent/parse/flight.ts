@@ -34,12 +34,16 @@ Return JSON with these fields (omit fields not mentioned):
   "cabin_class": "economy|business|first or null",
   "prefer_direct": true or false (true if user says 'nonstop', 'direct', '直飞'),
   "max_stops": null or 0 (nonstop only) or 1 (at most 1 stop) — set when user explicitly limits stops, otherwise null,
+  "avoid_red_eye": true if user says "no red-eye", "no early flights", "not too early", "不要凌晨", "not early morning" — else omit,
+  "earliest_departure": "HH:MM" if user specifies earliest acceptable departure time — else omit,
+  "latest_departure": "HH:MM" if user specifies latest acceptable departure time — else omit,
   "budget_total": number or null
 }
 
 For relative dates: "tomorrow" = tomorrow, "next Friday" = nearest upcoming Friday, "this weekend" = nearest Saturday.
 For "round trip"/"往返": set is_round_trip=true.
-Default cabin_class to "economy" if not specified.`,
+Default cabin_class to "economy" if not specified.
+For "not after 9pm" → latest_departure: "21:00". For "not before 8am" → earliest_departure: "08:00". "no red-eye" implies avoid_red_eye: true (flights departing midnight–6am).`,
       },
     ],
   });

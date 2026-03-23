@@ -1,6 +1,45 @@
 import { FlightIntent, FlightRecommendationCard, Flight } from "../../types";
 import { searchFlights, resolveMultiAirport } from "../../tools";
 
+// ─── G-1: Time-of-day filtering helpers ───────────────────────────────────────
+
+function parseHHMM(t: string): number {
+  const [h, m] = t.split(":").map(Number);
+  return (h ?? 0) * 60 + (m ?? 0);
+}
+
+function filterByTime(flights: Flight[], intent: FlightIntent): Flight[] {
+  const avoidRedEye = intent.avoid_red_eye;
+  const earliest = intent.earliest_departure ? parseHHMM(intent.earliest_departure) : null;
+  const latest = intent.latest_departure ? parseHHMM(intent.latest_departure) : null;
+
+  if (!avoidRedEye && earliest === null && latest === null) return flights;
+
+  const filtered = flights.filter((f) => {
+    // SerpAPI returns departure_time as "10:30 AM" or "HH:MM" — normalise
+    if (!f.departure_time) return true; // no data, keep
+    let minutes: number;
+    if (f.departure_time.toUpperCase().includes("PM") || f.departure_time.toUpperCase().includes("AM")) {
+      // 12-hour format
+      const [hm, period] = f.departure_time.split(/\s+/);
+      const [hh, mm] = hm.split(":").map(Number);
+      let hour = hh % 12;
+      if (period?.toUpperCase() === "PM") hour += 12;
+      minutes = hour * 60 + (mm ?? 0);
+    } else {
+      const raw = f.departure_time.trim();
+      minutes = parseHHMM(raw);
+    }
+    if (avoidRedEye && minutes >= 0 && minutes < 6 * 60) return false;
+    if (earliest !== null && minutes < earliest) return false;
+    if (latest !== null && minutes > latest) return false;
+    return true;
+  });
+
+  // Never return empty — fall back to unfiltered if all flights are filtered out
+  return filtered.length > 0 ? filtered : flights;
+}
+
 // ─── Phase 8: Flight Pipeline ─────────────────────────────────────────────────
 
 export async function runFlightPipeline(
@@ -85,6 +124,9 @@ export async function runFlightPipeline(
       maxResults: 8,
     });
   }
+
+  // Apply time-of-day filters (red-eye avoidance, departure window)
+  flights = filterByTime(flights, intent);
 
   if (flights.length === 0) {
     return { flightRecommendations: [], missing_fields: [], no_direct_available: false };
