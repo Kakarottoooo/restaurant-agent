@@ -14,6 +14,7 @@ interface Props {
   requestId?: string;
   onCompare?: () => void;
   isComparing?: boolean;
+  onFeedback?: (record: FeedbackRecord) => void;
 }
 
 const NOISE_ICON: Record<string, string> = {
@@ -70,6 +71,7 @@ export default function RecommendationCard({
   requestId,
   onCompare,
   isComparing,
+  onFeedback,
 }: Props) {
 
   function fireTelemetry(type: "map_click" | "reserve_click") {
@@ -121,6 +123,7 @@ export default function RecommendationCard({
       const next = [record, ...existing].slice(0, 50);
       localStorage.setItem("restaurant-feedback", JSON.stringify(next));
     } catch {}
+    onFeedback?.(record);
   }
 
   function handleFeedbackThumb(satisfied: boolean) {
@@ -688,7 +691,10 @@ export default function RecommendationCard({
                 </a>
               )}
               <a
-                href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(card.restaurant.name)}&query_place_id=${card.restaurant.id}`}
+                href={
+                  card.opentable_url ??
+                  `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(card.restaurant.name)}&query_place_id=${card.restaurant.id}`
+                }
                 target="_blank"
                 rel="noopener noreferrer"
                 onClick={() => fireTelemetry("reserve_click")}
