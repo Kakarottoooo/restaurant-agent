@@ -734,7 +734,7 @@ export interface CreditCardIntent extends BaseIntent {
   prefer_no_annual_fee?: "hard" | "soft" | false; // hard=exclude, soft=show with note, false=no pref
   prefer_flat_rate?: boolean;          // "don't track categories, give me one card"
   needs_spending_info?: boolean;       // true = user didn't provide spending details, ask first
-  optimization_mode?: "first_card" | "add_to_stack" | "portfolio_review";
+  optimization_mode?: "first_card" | "add_to_stack" | "portfolio_review" | "signup_bonus";
 }
 
 export interface CreditCard {

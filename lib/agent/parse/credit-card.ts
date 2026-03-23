@@ -30,7 +30,7 @@ Return JSON:
   "prefer_no_annual_fee": "hard" | "soft" | false,
   "prefer_flat_rate": true or false,
   "has_existing_cards": true or false,
-  "optimization_mode": "first_card" | "add_to_stack" | "portfolio_review",
+  "optimization_mode": "first_card" | "add_to_stack" | "portfolio_review" | "signup_bonus",
   "spending_profile": {
     "dining": monthly_usd or 0,
     "groceries": monthly_usd or 0,
@@ -88,6 +88,7 @@ For existing_cards, use these ids: chase-sapphire-preferred, chase-sapphire-rese
 If user says "Amex Blue" without specifying → amex-blue-cash-everyday. If user says "a Visa/Mastercard/card but doesn't know the name" → ignore (don't add to existing_cards).
 
 OPTIMIZATION MODE:
+- "signup_bonus": user asks about "best signup bonus", "welcome offer", "opening bonus", "best SUB", "开卡奖励", "开卡礼", "什么卡开卡送得多"
 - "portfolio_review": user names ≥1 specific card AND asks "what am I missing?" / "what should I add?" / "optimize" / "还需要什么" / "gap" / "complement"
 - "add_to_stack": user has cards (has_existing_cards=true) but just asks for a recommendation without specifically asking what's missing
 - "first_card": credit_score=0 OR user says "never had a card" / "first card"
