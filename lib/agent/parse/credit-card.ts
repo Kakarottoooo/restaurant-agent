@@ -30,6 +30,7 @@ Return JSON:
   "prefer_no_annual_fee": "hard" | "soft" | false,
   "prefer_flat_rate": true or false,
   "has_existing_cards": true or false,
+  "optimization_mode": "first_card" | "add_to_stack" | "portfolio_review",
   "spending_profile": {
     "dining": monthly_usd or 0,
     "groceries": monthly_usd or 0,
@@ -85,6 +86,12 @@ SPENDING INFO:
 
 For existing_cards, use these ids: chase-sapphire-preferred, chase-sapphire-reserve, chase-freedom-unlimited, chase-freedom-flex, amex-platinum, amex-gold, amex-blue-cash-preferred (6% groceries, $95/yr fee), amex-blue-cash-everyday (3% groceries, no fee), citi-strata-premier, citi-double-cash, capital-one-venture-x, capital-one-venture, capital-one-savor-one, discover-it-cash-back, wells-fargo-active-cash, bilt-mastercard, chase-ink-business-preferred, amex-business-gold.
 If user says "Amex Blue" without specifying → amex-blue-cash-everyday. If user says "a Visa/Mastercard/card but doesn't know the name" → ignore (don't add to existing_cards).
+
+OPTIMIZATION MODE:
+- "portfolio_review": user names ≥1 specific card AND asks "what am I missing?" / "what should I add?" / "optimize" / "还需要什么" / "gap" / "complement"
+- "add_to_stack": user has cards (has_existing_cards=true) but just asks for a recommendation without specifically asking what's missing
+- "first_card": credit_score=0 OR user says "never had a card" / "first card"
+- default: "add_to_stack"
 
 If user has not provided spending details, use these defaults: dining=300, groceries=400, travel=200, gas=100, online_shopping=150, streaming=30, pharmacy=50, rent=0, other=200.
 If user has not stated reward_preference, default to "travel".`,

@@ -721,6 +721,7 @@ export interface CreditCardIntent extends BaseIntent {
   prefer_no_annual_fee?: "hard" | "soft" | false; // hard=exclude, soft=show with note, false=no pref
   prefer_flat_rate?: boolean;          // "don't track categories, give me one card"
   needs_spending_info?: boolean;       // true = user didn't provide spending details, ask first
+  optimization_mode?: "first_card" | "add_to_stack" | "portfolio_review";
 }
 
 export interface CreditCard {
@@ -770,6 +771,7 @@ export interface CreditCardRecommendationCard {
   reward_preference: "cash" | "travel";
   why_recommended: string;
   watch_out: string[];
+  portfolio_gap_note?: string;      // e.g. "Fills your 1× gap on dining — earns 4× with this card"
 }
 
 // ─── Phase 10: Laptop Recommendation types ───────────────────────────────────
