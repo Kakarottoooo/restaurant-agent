@@ -4,7 +4,7 @@ import { runAgentForTwoParty } from "@/lib/agent/two-party";
 import { auth } from "@clerk/nextjs/server";
 import type { DecisionSession } from "@/lib/db";
 
-// runAgentForTwoParty calls MiniMax + SerpAPI — can take up to 45s
+// runAgentForTwoParty calls MiniMax (merge) + MiniMax (intent) + SerpAPI — can take up to 55s
 export const maxDuration = 60;
 
 /** Determine the caller's role from server-side signals, not client-supplied field. */
@@ -77,7 +77,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
 
     // Run the two-party agent to get merged options (hard 45s cap)
     const agentTimeout = new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error("Two-party agent timed out")), 45_000)
+      setTimeout(() => reject(new Error("Two-party agent timed out")), 55_000)
     );
     let mergeResult;
     try {
