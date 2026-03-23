@@ -120,9 +120,15 @@ function buildFallbackContext(
   ) {
     scenarioHint = "city_trip";
   } else if (
-    /\bconcert\b|\bgig\b|\blive music\b|\bfestival\b|\bmusical\b|\bcomedy show\b|\bstand.?up\b|\btickets?\b/i.test(lower) ||
-    (/\bshow\b|\bperformance\b|\bevent\b/i.test(lower) &&
-      /\bsee\b|\bwatch\b|\battend\b|\bgo to\b|\bgoing\b/i.test(lower))
+    // Don't set concert_event if a transport/product category was already identified
+    !categoryHint &&
+    (
+      /\bconcert\b|\bgig\b|\blive music\b|\bfestival\b|\bmusical\b|\bcomedy show\b|\bstand.?up\b/i.test(lower) ||
+      // "ticket(s)" alone only triggers concert when there are NO flight/travel signals
+      (/\btickets?\b/i.test(lower) && !/\bfly\b|\bflight\b|\bflights\b|\bairport\b|\bairline\b|\bplane\b/i.test(lower)) ||
+      (/\bshow\b|\bperformance\b|\bevent\b/i.test(lower) &&
+        /\bsee\b|\bwatch\b|\battend\b|\bgo to\b|\bgoing\b/i.test(lower))
+    )
   ) {
     scenarioHint = "concert_event";
   } else if (

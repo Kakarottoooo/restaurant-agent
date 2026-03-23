@@ -220,12 +220,37 @@ export default function Home() {
     chat.allLaptopCards.length > 0 ||
     chat.allSmartphoneCards.length > 0 ||
     chat.allHeadphoneCards.length > 0;
-  const isMapMode =
-    chat.resultMode === "category_cards" &&
+  // Concert event plans have map-able venue pins
+  const concertVenuePins: MapPin[] = (() => {
+    if (chat.resultMode !== "scenario_plan" || !chat.decisionPlan) return [];
+    const plan = chat.decisionPlan;
+    if (plan.scenario !== "concert_event") return [];
+    const opts = [plan.primary_plan, ...(plan.backup_options ?? [])].filter(Boolean);
+    return opts
+      .filter((o) => o.venue_lat != null && o.venue_lng != null)
+      .map((o, i) => ({
+        id: o.id,
+        name: o.title,
+        lat: o.venue_lat!,
+        lng: o.venue_lng!,
+        rank: i + 1,
+        subtitle: o.subtitle ?? "",
+      }));
+  })();
+
+  const isConcertMapMode =
+    chat.resultMode === "scenario_plan" &&
     chat.viewMode === "map" &&
-    hasCategoryResults;
-  // Unified map pins for restaurants and hotels (flights use arc lines, not pins)
-  const mapPins: MapPin[] = chat.resultCategory === "hotel"
+    concertVenuePins.length > 0;
+
+  const isMapMode =
+    (chat.resultMode === "category_cards" && chat.viewMode === "map" && hasCategoryResults) ||
+    isConcertMapMode;
+
+  // Unified map pins for restaurants, hotels, and concert venues
+  const mapPins: MapPin[] = isConcertMapMode
+    ? concertVenuePins
+    : chat.resultCategory === "hotel"
     ? chat.allHotelCards
         .filter((c) => c.hotel.lat != null && c.hotel.lng != null)
         .map((c, i) => ({
@@ -1852,8 +1877,32 @@ export default function Home() {
                   />
                 ))}
 
-                {/* Scenario Plan Results */}
-                {chat.resultMode === "scenario_plan" && chat.decisionPlan && (
+                {/* Map toggle for concert events with venue coords */}
+                {concertVenuePins.length > 0 && (
+                  <div
+                    className="flex gap-1 rounded-xl p-1 self-start"
+                    style={{ backgroundColor: "var(--card)", border: "0.5px solid var(--border)" }}
+                  >
+                    {(["list", "map"] as const).map((mode) => (
+                      <button
+                        key={mode}
+                        onClick={() => chat.setViewMode(mode)}
+                        aria-pressed={chat.viewMode === mode}
+                        className="px-3 py-1 rounded-lg text-xs font-medium transition-all capitalize"
+                        style={{
+                          backgroundColor: chat.viewMode === mode ? "var(--gold)" : "transparent",
+                          color: chat.viewMode === mode ? "#fff" : "var(--text-secondary)",
+                          fontFamily: "var(--font-dm-sans)",
+                        }}
+                      >
+                        {mode}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {/* Scenario Plan Results (hidden when concert map view is active) */}
+                {chat.resultMode === "scenario_plan" && chat.decisionPlan && !isConcertMapMode && (
                   <ScenarioPlanView
                     plan={chat.decisionPlan}
                     planFeedbackMessage={planFeedbackMessage}
