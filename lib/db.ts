@@ -368,6 +368,48 @@ export async function getAllPushSubscriptions(): Promise<PushSubscriptionRecord[
   return result.rows;
 }
 
+// ─── G-4: Venue quality degradation tracking ──────────────────────────────────
+
+let venueBaselinesTableReady: Promise<void> | null = null;
+
+export async function ensureVenueBaselinesTable(): Promise<void> {
+  if (!venueBaselinesTableReady) {
+    venueBaselinesTableReady = (async () => {
+      await sql`
+        CREATE TABLE IF NOT EXISTS venue_baselines (
+          id SERIAL PRIMARY KEY,
+          plan_id TEXT NOT NULL,
+          venue_id TEXT NOT NULL,
+          venue_name TEXT NOT NULL,
+          baseline_rating FLOAT NOT NULL,
+          baseline_review_count INT NOT NULL,
+          recorded_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+      `;
+      await sql`CREATE INDEX IF NOT EXISTS venue_baselines_plan_idx ON venue_baselines (plan_id)`;
+    })().catch((err) => {
+      venueBaselinesTableReady = null;
+      throw err;
+    });
+  }
+  await venueBaselinesTableReady;
+}
+
+export async function recordVenueBaseline(
+  planId: string,
+  venueId: string,
+  venueName: string,
+  rating: number,
+  reviewCount: number
+): Promise<void> {
+  await ensureVenueBaselinesTable();
+  await sql`
+    INSERT INTO venue_baselines (plan_id, venue_id, venue_name, baseline_rating, baseline_review_count)
+    VALUES (${planId}, ${venueId}, ${venueName}, ${rating}, ${reviewCount})
+    ON CONFLICT DO NOTHING
+  `;
+}
+
 /** On Clerk sign-in: copy all session-keyed prefs to the user account (idempotent). */
 export async function mergeSessionPreferences(
   sessionId: string,

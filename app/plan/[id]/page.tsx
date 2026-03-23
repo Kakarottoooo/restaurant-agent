@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { ensureDecisionPlansTable, ensurePlanVotesTable, sql } from "@/lib/db";
+import { ensureDecisionPlansTable, ensurePlanOutcomesTable, ensurePlanVotesTable, sql } from "@/lib/db";
 import { DecisionPlan } from "@/lib/types";
 import SharedPlanView from "./SharedPlanView";
 
@@ -15,6 +15,7 @@ export default async function SharedPlanPage({ params, searchParams }: Props) {
 
   let plan: DecisionPlan | null = null;
   let initialTally: Record<string, number> = {};
+  let hasVenueAlert = false;
 
   try {
     await ensureDecisionPlansTable();
@@ -44,6 +45,19 @@ export default async function SharedPlanPage({ params, searchParams }: Props) {
     }
   }
 
+  // G-4: Check for venue quality alert in plan outcomes
+  try {
+    await ensurePlanOutcomesTable();
+    const alertResult = await sql<{ id: number }>`
+      SELECT id FROM plan_outcomes
+      WHERE plan_id = ${id} AND outcome_type = 'venue_quality_alert'
+      LIMIT 1
+    `;
+    hasVenueAlert = alertResult.rows.length > 0;
+  } catch {
+    // Non-fatal — degrade gracefully
+  }
+
   return (
     <SharedPlanView
       plan={plan}
@@ -51,6 +65,7 @@ export default async function SharedPlanPage({ params, searchParams }: Props) {
       outcomeRecorded={outcome === "recorded"}
       voteMode={voteMode}
       initialTally={initialTally}
+      hasVenueAlert={hasVenueAlert}
     />
   );
 }

@@ -11,9 +11,10 @@ interface Props {
   outcomeRecorded: boolean;
   voteMode?: boolean;
   initialTally?: Record<string, number>;
+  hasVenueAlert?: boolean;
 }
 
-export default function SharedPlanView({ plan, planId, outcomeRecorded, voteMode = false, initialTally = {} }: Props) {
+export default function SharedPlanView({ plan, planId, outcomeRecorded, voteMode = false, initialTally = {}, hasVenueAlert = false }: Props) {
   const [approved, setApproved] = useState(outcomeRecorded);
   const [loading, setLoading] = useState(false);
   const [votedOptionId, setVotedOptionId] = useState<string | null>(null);
@@ -182,6 +183,21 @@ export default function SharedPlanView({ plan, planId, outcomeRecorded, voteMode
       ) : (
         /* ── Standard share mode ── */
         <>
+          {/* G-4: Venue quality degradation alert */}
+          {hasVenueAlert && (
+            <div style={{
+              padding: "12px 16px",
+              backgroundColor: "var(--amber, #E8A020)",
+              borderRadius: "8px",
+              marginBottom: "12px",
+              fontFamily: "var(--font-dm-sans)",
+              fontSize: "13px",
+              color: "#fff",
+            }}>
+              ⚠ This venue&apos;s recent ratings have dropped since we recommended it. Check current reviews before going.
+            </div>
+          )}
+
           {/* Primary plan */}
           <PrimaryPlanCard option={plan.primary_plan} language={lang} />
 
