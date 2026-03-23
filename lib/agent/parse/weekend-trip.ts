@@ -15,7 +15,7 @@ export async function parseWeekendTripIntent(
         role: "user",
         content: `Extract a weekend trip planning intent from this request. Return ONLY valid JSON.
 
-Today: ${today}
+Today: ${today} (tomorrow = ${new Date(Date.now() + 86400000).toISOString().split("T")[0]})
 Default departure city (use if user does not specify): ${cityFullName}
 User request: "${userMessage}"
 Canonical NLU hints: ${JSON.stringify({
@@ -48,15 +48,17 @@ Return JSON:
 }
 
 Rules:
-- If the user says "this weekend" or "next weekend", convert it into concrete Friday-Sunday dates.
-- If the user says "next month" and wants a weekend trip, choose the first Friday-Sunday weekend of next month and add that to planning_assumptions.
-- If the user gives a start date but no end date, default to a 2-night weekend and add an assumption.
-- If the user gives no traveler count, default to 2 for "we/us", otherwise 1, and add an assumption.
-- If the user gives no departure city, use the default departure city and add an assumption.
-- If a destination still cannot be inferred, include "destination" in missing_fields.
-- If dates still cannot be inferred, include "travel dates" in missing_fields.
+- "tomorrow" → start_date = tomorrow's date shown above. NEVER put "travel dates" in missing_fields when the user says "tomorrow".
+- "this weekend" / "next weekend" → convert to concrete Friday-Sunday dates.
+- "next month" → choose first Friday-Sunday weekend of next month.
+- If the user gives a start date but no end date, default to a 2-night trip (end_date = start_date + nights).
+- If the user gives no traveler count, default to 2 for "we/us", otherwise 1.
+- If the user gives no departure city, use the default departure city.
+- Only put "destination" in missing_fields if the destination truly cannot be inferred.
+- Only put "travel dates" in missing_fields if no date or relative time word (tomorrow, this weekend, next week, etc.) is present.
+- missing_fields should be EMPTY when destination and start date are both known or inferable.
 - Keep planning_assumptions short and explicit.
-- Keep trip_pace conservative: "easy" for phrases like "relaxing", "easy", "not too much hassle", "don't want to optimize"; "packed" for dense or ambitious language; otherwise "balanced".`,
+- Keep trip_pace conservative: "easy" for relaxing language; "packed" for dense/ambitious; otherwise "balanced".`,
       },
     ],
     max_tokens: 1200,
@@ -142,7 +144,10 @@ Rules:
           )
         : [],
       missing_fields,
-      needs_clarification: missing_fields.length > 0,
+      // Only ask for clarification when destination or dates are truly unknown
+      needs_clarification:
+        !parsed.destination_city ||
+        (!startDate && missing_fields.includes("travel dates")),
     };
   } catch {
     return fallback;
