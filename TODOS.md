@@ -1,8 +1,83 @@
 # TODOS
 
+## Scenario Coverage Gaps — Round 2 (identified 2026-03-23)
+
+### S-1: Quick lunch / fast service restaurant mode
+**Completed:** v0.2.23.0 (2026-03-23)
+**Priority:** P1
+**What:** "Company nearby, need to eat in 15 minutes" / "quick lunch, no wait" is parsed as a generic restaurant query. `service_pace` is extracted from reviews but never used as a filter or boosting signal. Slow-service restaurants appear alongside fast ones with no differentiation.
+**How to fix:**
+1. Add `service_pace_required?: "fast" | "normal"` to `UserRequirements` in `lib/types.ts`.
+2. Update `parseRestaurantIntent` prompt (`lib/agent/parse/restaurant.ts`) to extract it: "quick lunch / in and out / no wait / 15 minutes / fast service / 快速 / 不想等" → `service_pace_required: "fast"`.
+3. In `rankAndExplain` prompt (inside `lib/agent.ts` or wherever the ranking prompt is built), when `requirements.service_pace_required === "fast"`, inject: "PRIORITY: User needs fast service. Heavily favour restaurants whose review signals show service_pace='quick/fast'. Penalise any restaurant with wait_time > 20min or service_pace='slow'. Set preference_match low for any slow-service venue."
+4. No new API calls needed — `service_pace` and `wait_time` are already in `ReviewSignals` from Phase 3.1.
+**Depends on:** None — `ReviewSignals` already populated.
+
+---
+
+### S-2: Honeymoon / anniversary hotel mode
+**Completed:** v0.2.23.0 (2026-03-23)
+**Priority:** P1
+**What:** "结婚周年去迈阿密，海景房，浪漫" routes to hotel but `purpose: "romantic"` is the only signal. The ranking prompt treats it the same as any leisure trip — no suite/sea-view boosting, no special-arrangement note, no couples-package mention.
+**How to fix:**
+1. Add `special_occasion?: "honeymoon" | "anniversary" | "birthday" | null` to `HotelIntent` in `lib/types.ts`.
+2. Update `parseHotelIntent` prompt (`lib/agent/parse/hotel.ts`) to extract: "honeymoon / 蜜月 / anniversary / 结婚周年 / 纪念日" → `special_occasion: "honeymoon"/"anniversary"`.
+3. In `runHotelPipeline` (`lib/agent/pipelines/hotel.ts`), when `intent.special_occasion` is set, add a dedicated block to the MiniMax ranking prompt: "User is celebrating a [honeymoon/anniversary]. Heavily favour hotels with: spa, ocean/river view rooms, suites, couples packages, candle-lit dinner options, romantic reputation in reviews. Include a 'Special occasion tip' in `why_recommended` suggesting they call ahead to request a room upgrade or turndown service."
+**Depends on:** None.
+
+---
+
+### S-3: Family travel hotel mode
+**Completed:** v0.2.23.0 (2026-03-23)
+**Priority:** P1
+**What:** "带两个孩子去奥兰多，靠近迪士尼" parses `guests` and `purpose: "family"` but the hotel ranking has no kids-specific dimension — pools, connecting rooms, kids clubs, and theme-park proximity are not scored.
+**How to fix:**
+1. Add `has_children?: boolean; children_count?: number` to `HotelIntent` in `lib/types.ts`.
+2. Update `parseHotelIntent` prompt to extract: "带孩子 / with kids / children / family with kids / toddler / 小孩" → `has_children: true`; also extract count if mentioned.
+3. In `runHotelPipeline`, when `intent.has_children === true`, inject into the MiniMax ranking prompt: "FAMILY MODE: User is travelling with children. Heavily favour hotels with: pool, kids club, family rooms or connecting rooms, cribs/rollaway available, on-site dining, proximity to family attractions. Penalise hotels that are adult-only, boutique-only, or lack family amenities. Include a family tip (e.g. 'Request a connecting room when booking') in `why_recommended`."
+**Depends on:** None.
+
+---
+
+### S-4: Credit card signup bonus comparison mode
+**Completed:** v0.2.23.0 (2026-03-23)
+**Priority:** P1
+**What:** "最近有什么好的开卡奖励？" / "best welcome offer right now" is treated as a generic card recommendation ranked by annual value. The engine ignores `signup_bonus_points`, `signup_bonus_spend_requirement`, and `signup_bonus_timeframe_months` for ranking — a card with a 100k-point SUB and a $6k spend requirement scores the same as one with a 60k-point SUB and a $3k requirement.
+**How to fix:**
+1. Add `"signup_bonus"` to the `optimization_mode` union in `CreditCardIntent` (`lib/types.ts`): `"first_card" | "add_to_stack" | "portfolio_review" | "signup_bonus"`.
+2. Update `parseCreditCardIntent` prompt (`lib/agent/parse/credit-card.ts`) to detect: "best signup bonus / welcome offer / opening bonus / 开卡奖励 / 开卡礼 / SUB" → `optimization_mode: "signup_bonus"`.
+3. In `runCreditCardPipeline` (`lib/agent/pipelines/credit-card.ts`), when `optimization_mode === "signup_bonus"`:
+   - Use the full `CARDS` array from `lib/creditCardEngine.ts`
+   - Compute for each card: `sub_value = signup_bonus_points * point_value_cash` and `spend_feasibility` based on `totalMonthlySpend * signup_bonus_timeframe_months` vs `signup_bonus_spend_requirement`
+   - Sort by `sub_value * spend_feasibility_factor` (factor = 1.0 if feasible, 0.6 if tight, 0.2 if unreachable)
+   - Return top 3 with `portfolio_gap_note` set to: "Bonus: {N}k pts (~$${sub_value}) · Spend $${req} in ${months}mo · {feasibility}"
+   - Filter out cards where credit_score is below minimum if `intent.credit_score` is provided
+4. No external API — all data is in `lib/creditCardEngine.ts`.
+**Depends on:** G-2 (optimization_mode already added to type and parser; this adds a fourth mode).
+
+---
+
+### S-5: Single-constraint refinement ("再便宜点" / "quieter" / "closer")
+**Completed:** v0.2.23.0 (2026-03-23)
+**Priority:** P2
+**What:** When a user says "再便宜点" / "cheaper" / "quieter please" after seeing results, the system re-runs the full pipeline from scratch with no memory of what was shown. The new query lacks context (no location, no cuisine, no party size), so results often drift completely. Users have to re-specify everything.
+**How to fix:**
+1. In `buildFallbackContext` (`lib/nlu.ts`), detect single-constraint refinement patterns:
+   - "cheaper / 便宜点 / lower budget / reduce price" → add `"lower price than previous results"` to `constraints_hint`; set `category_hint` to preserve previous category
+   - "quieter / 安静点 / less noisy" → add `"quieter than previous results"` to `constraints_hint`
+   - "closer / 近一点 / nearby" → add `"closer location preferred"` to `constraints_hint`
+   - "faster / 快一点 / quicker service" → add `service_pace_required: "fast"` signal to context
+2. In `app/api/chat/route.ts`, pass the last `N` turns of conversation history to `analyzeMultilingualQuery` and to the intent parser so MiniMax has context to resolve "cheaper than what you showed me" without re-specifying location, cuisine, and party size.
+3. The conversation history is already sent to `parseCreditCardIntent` and available in `runAgent` — replicate the same pattern for `parseRestaurantIntent` and `parseHotelIntent` so they also receive recent history for context resolution.
+**Note:** Step 3 is the highest-leverage change — conversation history allows MiniMax to carry forward all previous constraints automatically.
+**Depends on:** S-1 (fast service constraint handling).
+
+---
+
 ## Scenario Coverage Gaps (identified 2026-03-23)
 
 ### G-1: Flight time-of-day filtering (red-eye avoidance)
+**Completed:** v0.2.23.0 (2026-03-23)
 **Priority:** P1
 **What:** "不要红眼航班" / "no early morning flights" / "not after 9pm" currently has no effect — `FlightIntent` has no time-of-day fields, and `runFlightPipeline` does no time filtering after fetching results.
 **Why:** Time-of-day preference is the second most common flight constraint after price. Silently ignoring it makes the recommendation feel broken.
@@ -25,6 +100,7 @@
 ---
 
 ### G-2: Credit card portfolio optimization ("I already have CSP + Amex Gold, what's missing?")
+**Completed:** v0.2.23.0 (2026-03-23)
 **Priority:** P1
 **What:** `existing_cards` is already parsed correctly from user messages. But the pipeline treats "I have CSP and Amex Gold" the same as a first-card search — it just filters out those cards. There is no "gap analysis" mode that identifies which spending categories are underserved and scores remaining cards by how well they fill the gap.
 **Why:** Portfolio optimization is the highest-value credit card use case (experienced users with 2–3 cards). Currently the output is a generic recommendation, not a gap analysis.
@@ -45,6 +121,7 @@
 ---
 
 ### G-3: Module-level Refine ("换个酒店，航班不变")
+**Completed:** v0.2.23.0 (2026-03-23)
 **Priority:** P2
 **What:** Current refine re-runs the entire pipeline from scratch. Users who say "keep the flights, just find a different hotel" still get a fully regenerated plan including new flights — wasting latency and ignoring their explicit intent to pin one component.
 **Why:** Module-level refinement is the difference between a one-shot recommender and a collaborative planning agent. Without it, every "tweak" feels like starting over.
@@ -63,6 +140,7 @@
 ---
 
 ### G-4: Venue quality degradation alert
+**Completed:** v0.2.23.0 (2026-03-23)
 **Priority:** P2
 **What:** When a user creates a plan for a future date, the recommended venue's quality (Google rating, review sentiment) could degrade before the event. Currently the system never re-checks. If a restaurant drops from 4.5★ to 3.8★ or gets a wave of bad reviews, the user still sees the original recommendation with no warning.
 **Why:** "Went and it was bad — it had been going downhill" is a failure mode that damages trust more than a wrong recommendation, because the system had time to warn but didn't.

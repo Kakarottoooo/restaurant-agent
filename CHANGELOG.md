@@ -4,6 +4,29 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.2.23.0] - 2026-03-23
+
+### Added
+- **Rebrand: Folio → Onegent** — product renamed to Onegent across all copy, metadata, and the public URL (`onegent.one`). The name reflects the agent-first positioning.
+- **Phase 3.3a — Session preference extraction**: after each restaurant query, MiniMax extracts preference signals (noise tolerance, budget, chain preference, excluded cuisines) from the user's message and accumulates them in-session. Injected into all subsequent ranking prompts so the second query "remembers" everything from the first.
+- **Phase 3.3b — Persistent preference profile**: session preferences promote into a `UserPreferenceProfile` stored in localStorage and synced to the cloud for signed-in users. Survives across sessions — "no chains" doesn't need repeating.
+- **Phase 3.3c — Inline feedback loop**: thumbs-up/down on any recommendation card triggers `POST /api/feedback/inline`, which maps structured issues (too noisy → `noise_sensitivity:high`, too expensive → `budget_sensitivity:high`, slow service → `wait_sensitivity:high`) to per-session `user_preferences` updates. Next query automatically reflects the feedback.
+- **OpenTable Reserve button**: "Reserve" on date_night cards now uses `card.opentable_url` (direct OpenTable page) when available, falling back to Google Maps — eliminating the extra search step.
+- **G-1 — Flight time-of-day filtering**: `FlightIntent` gains `avoid_red_eye?`, `earliest_departure?`, `latest_departure?`. NLU detects "no red-eye / 不要凌晨 / not after 9pm" and maps to these fields. `runFlightPipeline` post-filters SerpAPI results by departure window. Falls back to unfiltered set when all flights would be excluded so results are never empty.
+- **G-2 — Credit card portfolio gap analysis**: "I have CSP and Amex Gold, what's missing?" triggers `optimization_mode: "portfolio_review"`. Pipeline computes effective earn rates per spending category across the user's existing cards, identifies uncovered categories (<2×), scores remaining cards by gap-fill potential, and annotates each with a `portfolio_gap_note` explaining the specific gap it fills.
+- **G-3 — Module-level refine**: "keep the flights, just find a different hotel" sets `refine_module` + `pinned_plan_id`. `runAgent` loads the existing plan from DB, re-runs only the swapped module (hotel or flight), pins the rest from the stored plan, and saves the result as a new plan with `parent_plan_id` lineage. Eliminates the full re-run on targeted refinements.
+- **G-4 — Venue quality degradation alert**: `venue_baselines` table records Google Places rating at plan-save time for `date_night` plans with future event dates. Weekly cron (`/api/cron/venue-health-check`) re-queries Google Places for each baseline; when rating drops ≥0.3★, a `venue_quality_alert` outcome is recorded. `SharedPlanView` shows an amber warning banner on the share page when this alert is present.
+- **S-1 — Fast-service restaurant mode**: `service_pace_required: "fast"` added to `UserRequirements`. Detected from "quick lunch / in and out / 15 minutes / 快速 / 不想等". `rankAndExplain` prompt injects a FAST SERVICE MODE block that heavily boosts low-wait venues and penalises slow-service ones.
+- **S-2 — Honeymoon / anniversary hotel mode**: `special_occasion?: "honeymoon" | "anniversary" | "birthday"` added to `HotelIntent`. Detected from "蜜月 / anniversary / 结婚周年 / 纪念日". Hotel ranking prompt boosts spa, ocean-view rooms, suites, couples packages, and romantic reputation. `why_recommended` includes a tip to call ahead for a room upgrade.
+- **S-3 — Family travel hotel mode**: `has_children?: boolean; children_count?: number` added to `HotelIntent`. Detected from "带孩子 / with kids / children / toddler". Ranking prompt prioritises pool, kids club, connecting rooms, family dining, and proximity to family attractions; penalises adult-only properties.
+- **S-4 — Credit card signup bonus ranking**: `optimization_mode: "signup_bonus"` added. Detected from "best welcome offer / 开卡奖励 / SUB". Pipeline scores cards by `sub_value × spend_feasibility_factor` (1.0 if feasible, 0.6 if tight, 0.2 if unreachable), returns top 3 with bonus details in `portfolio_gap_note`.
+- **S-5 — Single-constraint refinement**: NLU detects "cheaper / 便宜点 / quieter / 安静点 / closer / 近一点 / faster service" as refinement constraints and injects them into `constraints_hint`. Last 4 conversation turns are passed to `parseRestaurantIntent` and `parseHotelIntent` so MiniMax can resolve "cheaper than what you showed me" without the user re-specifying location, cuisine, and party size.
+
+### Fixed
+- **Flight query misrouted to concert_event**: `\btickets?\b` in the concert_event NLU regex was matching "find cheapest ticket" for flight queries. Fixed by only triggering concert_event when no transport category is already detected (`!categoryHint` guard).
+- **Concert venues not shown on map**: Ticketmaster venue lat/lng was parsed but not propagated through the `TicketmasterEvent → PlanOption` type chain. Extended `TmVenue`, `TicketmasterEvent`, and `PlanOption` types with `venue_lat`/`venue_lng`. `page.tsx` builds `concertVenuePins` from concert plan options and shows a map/list toggle.
+- **`decision_plans` table missing before JOIN**: `GET /api/feedback-prompts` ran a JOIN against `decision_plans` without first calling `ensureDecisionPlansTable()`, causing a "relation does not exist" error in cold-start environments. Fixed by adding the ensure call before the JOIN.
+
 ## [0.2.22.0] - 2026-03-22
 
 ### Added

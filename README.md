@@ -49,6 +49,16 @@ Scenario decision engine (`lib/scenario2.ts`):
 - **Gift recommendation OS** — returns 3 curated options (Safe pick / Most thoughtful / Most creative) sourced from SerpAPI Google Shopping with direct purchase links
 - **Fitness/wellness OS** — returns 3 studio options (Top rated / Most popular / Best value) sourced from Google Places with ClassPass + Mindbody + Google Maps booking links; covers yoga, pilates, spin, HIIT, CrossFit, boxing, barre, dance, meditation, swimming, running, martial arts
 - **Structured scoring** — restaurant ranking uses 5 weighted dimensions computed deterministically; collapsible score breakdown panel on each card
+- **Flight time-of-day filtering** — "no red-eye", "not after 9pm", "earliest 7am" parsed from natural language; departure window filtering applied post-SerpAPI with graceful fallback when all flights would be excluded
+- **Credit card portfolio gap analysis** — "I have CSP and Amex Gold, what's missing?" triggers `portfolio_review` mode: computes effective earn rates per spending category across existing cards, scores remaining cards by gap-fill potential, annotates each with a "portfolio gap" explanation
+- **Credit card signup bonus ranking** — "best welcome offer right now" triggers `signup_bonus` mode: scores cards by `SUB value × spend feasibility factor`, surfaces top 3 with bonus size, spend requirement, and timeframe
+- **Module-level refine** — "keep the flights, just find a different hotel" re-runs only the swapped module and pins the rest; result saved as a new plan with `parent_plan_id` lineage
+- **Venue quality degradation alert** — weekly cron re-checks Google Places ratings for venues with upcoming event dates; surfaces an amber warning banner on the share page when rating drops ≥0.3★
+- **Fast-service restaurant mode** — "quick lunch, need to eat in 15 minutes" sets `service_pace_required: "fast"`; ranking prompt heavily favours low-wait venues and penalises slow-service restaurants
+- **Honeymoon / anniversary hotel mode** — "celebrating our anniversary" sets `special_occasion`; ranking prompt boosts hotels with spa, ocean-view rooms, suites, couples packages, and romantic reputation
+- **Family travel hotel mode** — "traveling with two kids" sets `has_children: true`; ranking prompt prioritises pool, kids club, connecting rooms, family dining, and theme-park proximity; penalises adult-only properties
+- **Single-constraint refinement** — "cheaper" / "quieter" / "closer" after seeing results is detected in NLU and injected as a refinement constraint; last 4 conversation turns passed to MiniMax so the new query inherits location, cuisine, and party size from context
+- **Inline feedback loop** — thumbs-up/down on any card fires `POST /api/feedback/inline`, mapping structured issues (too noisy, too expensive, slow service) to `user_preferences` updates so the next query reflects what you just told it
 - Save favorites (localStorage)
 - Dark mode (system preference)
 - PWA-installable with offline support
@@ -120,6 +130,7 @@ app/
     cron/
       feedback-prompts/route.ts      # GET — daily cron: create prompts for plans 20–28h ago
       price-check/route.ts           # GET — daily cron: re-query SerpAPI, record price drops; fires push notifications
+      venue-health-check/route.ts    # GET — weekly cron: re-check Google Places ratings; records venue_quality_alert
   internal/scenario-events/          # Analytics UI (Clerk-gated)
   plan/[id]/                         # Shared plan view (read-only, partner approval button)
   hooks/
@@ -150,7 +161,7 @@ lib/
   tools.ts              # Google Places, SerpAPI, Tavily, Geocoding API wrappers
   schemas.ts            # Zod schemas for request/response validation
   types.ts              # TypeScript interfaces (DecisionPlan, SessionPreferences, UserPreferenceProfile, etc.)
-  db.ts                 # Neon DB helpers (8 tables)
+  db.ts                 # Neon DB helpers (9 tables)
   push.ts               # Web Push helper — wraps web-push with VAPID setup
   ticketmaster.ts       # Ticketmaster Discovery API client
   serpapi-shopping.ts   # SerpAPI Google Shopping client
