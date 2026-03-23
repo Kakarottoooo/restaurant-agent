@@ -265,20 +265,18 @@ export async function runAgent(
     const flightIntent = buildWeekendTripFlightIntent(scenarioIntent);
     const hotelIntent = buildWeekendTripHotelIntent(scenarioIntent);
 
-    // Run flight + hotel in parallel (credit card is non-essential and deferred to avoid timeout)
-    const [
-      { flightRecommendations, no_direct_available },
-      { hotelRecommendations },
-    ] = await Promise.all([
-      runFlightPipeline(flightIntent),
+    // Run flight + hotel in parallel; flight is best-effort (SerpAPI can be slow)
+    const [flightResult, { hotelRecommendations }] = await Promise.all([
+      runFlightPipeline(flightIntent).catch(() => ({ flightRecommendations: [], no_direct_available: false })),
       runHotelPipeline(hotelIntent, conversationHistory, scenarioIntent.destination_city ?? cityFullName),
     ]);
+    const { flightRecommendations, no_direct_available } = flightResult;
 
     // Credit card recommendation: run only if flight+hotel succeeded (best-effort, non-blocking)
     const creditCardIntent = buildWeekendTripCardIntent(scenarioIntent);
     const { creditCardRecommendations } = await runCreditCardPipeline(creditCardIntent).catch(() => ({ creditCardRecommendations: [] }));
 
-    if (flightRecommendations.length === 0 || hotelRecommendations.length === 0) {
+    if (hotelRecommendations.length === 0) {
       const refinedIntent: WeekendTripIntent = {
         ...scenarioIntent,
         needs_clarification: true,

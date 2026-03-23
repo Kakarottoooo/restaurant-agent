@@ -688,7 +688,7 @@ export async function searchFlights(params: {
     const debugUrl = new URL(url.toString());
     debugUrl.searchParams.set("api_key", "REDACTED");
     console.log("[searchFlights] url:", debugUrl.toString());
-    const res = await fetch(url.toString());
+    const res = await fetch(url.toString(), { signal: AbortSignal.timeout(15_000) });
     if (!res.ok) {
       const errText = await res.text().catch(() => "");
       console.warn("SerpApi flight search failed:", res.status, errText.slice(0, 200));
