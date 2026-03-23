@@ -107,6 +107,8 @@ function buildEventPlanOption(
     primary_action: primaryAction,
     secondary_actions: secondaryActions,
     score,
+    venue_lat: event.venue_lat,
+    venue_lng: event.venue_lng,
   };
 }
 
