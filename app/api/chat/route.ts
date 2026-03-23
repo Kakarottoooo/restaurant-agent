@@ -39,7 +39,9 @@ function classifyError(err: unknown): string {
 
 // ─── Timeout ───────────────────────────────────────────────────────────────────
 
-const AGENT_TIMEOUT_MS = 45_000;
+export const maxDuration = 60; // Vercel: allow up to 60s for multi-step scenario plans
+
+const AGENT_TIMEOUT_MS = 58_000;
 
 function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   return Promise.race([
