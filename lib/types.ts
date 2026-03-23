@@ -11,6 +11,7 @@ export interface UserRequirements {
   party_size?: number;
   constraints?: string[]; // no chains, no tourist traps, etc.
   priorities?: string[]; // what matters most
+  service_pace_required?: "fast" | "normal";
 }
 
 export interface ReviewSignals {
