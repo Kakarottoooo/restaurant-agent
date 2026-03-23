@@ -266,14 +266,20 @@ export async function runAgent(
     const hotelIntent = buildWeekendTripHotelIntent(scenarioIntent);
 
     // Run flight + hotel in parallel; flight is best-effort (SerpAPI can be slow)
-    // Cap the entire flight pipeline at 15s — SerpAPI can hang for 50s+ otherwise
+    // Cap each pipeline at 20s — SerpAPI can hang for 50s+ otherwise
     const flightTimeout = new Promise<{ flightRecommendations: []; no_direct_available: false }>(
-      (resolve) => setTimeout(() => resolve({ flightRecommendations: [], no_direct_available: false }), 15_000)
+      (resolve) => setTimeout(() => resolve({ flightRecommendations: [], no_direct_available: false }), 20_000)
+    );
+    const hotelTimeout = new Promise<{ hotelRecommendations: []; suggested_refinements: [] }>(
+      (resolve) => setTimeout(() => resolve({ hotelRecommendations: [], suggested_refinements: [] }), 20_000)
     );
     const [flightResult, { hotelRecommendations }] = await Promise.all([
       Promise.race([runFlightPipeline(flightIntent), flightTimeout])
         .catch(() => ({ flightRecommendations: [] as [], no_direct_available: false as const })),
-      runHotelPipeline(hotelIntent, conversationHistory, scenarioIntent.destination_city ?? cityFullName),
+      Promise.race([
+        runHotelPipeline(hotelIntent, conversationHistory, scenarioIntent.destination_city ?? cityFullName),
+        hotelTimeout,
+      ]).catch(() => ({ hotelRecommendations: [] as [], suggested_refinements: [] as [] })),
     ]);
     const { flightRecommendations, no_direct_available } = flightResult;
 
@@ -281,7 +287,7 @@ export async function runAgent(
     const creditCardIntent = buildWeekendTripCardIntent(scenarioIntent);
     const { creditCardRecommendations } = await runCreditCardPipeline(creditCardIntent).catch(() => ({ creditCardRecommendations: [] }));
 
-    if (hotelRecommendations.length === 0) {
+    if (hotelRecommendations.length === 0 && flightRecommendations.length === 0) {
       const refinedIntent: WeekendTripIntent = {
         ...scenarioIntent,
         needs_clarification: true,

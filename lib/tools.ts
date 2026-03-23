@@ -436,7 +436,7 @@ export async function searchHotels(params: {
   url.searchParams.set("api_key", apiKey);
 
   try {
-    const res = await fetch(url.toString());
+    const res = await fetch(url.toString(), { signal: AbortSignal.timeout(15_000) });
     if (!res.ok) {
       console.warn("SerpApi hotel search failed:", res.status);
       return [];
