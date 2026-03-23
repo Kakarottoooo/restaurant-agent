@@ -3,19 +3,44 @@ import { minimaxChat } from "../../minimax";
 import { normalizeDate } from "../../tools";
 import { resolveLocationHint } from "../../nlu";
 
+function resolveRelativeDates(message: string): { resolvedMessage: string; dateHint: string } {
+  const now = new Date();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const fmt = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+
+  const tomorrow = new Date(now); tomorrow.setDate(now.getDate() + 1);
+  const dayAfter = new Date(now); dayAfter.setDate(now.getDate() + 2);
+
+  const lower = message.toLowerCase();
+  if (/\btomorrow\b/.test(lower)) return { resolvedMessage: message, dateHint: `Start date: ${fmt(tomorrow)} (tomorrow)` };
+  if (/\bday after tomorrow\b/.test(lower)) return { resolvedMessage: message, dateHint: `Start date: ${fmt(dayAfter)} (day after tomorrow)` };
+  if (/\bthis weekend\b/.test(lower)) {
+    const daysUntilFri = (5 - now.getDay() + 7) % 7 || 7;
+    const fri = new Date(now); fri.setDate(now.getDate() + daysUntilFri);
+    return { resolvedMessage: message, dateHint: `Start date: ${fmt(fri)} (this Friday)` };
+  }
+  if (/\bnext weekend\b/.test(lower)) {
+    const daysUntilFri = (5 - now.getDay() + 7) % 7 || 7;
+    const fri = new Date(now); fri.setDate(now.getDate() + daysUntilFri + 7);
+    return { resolvedMessage: message, dateHint: `Start date: ${fmt(fri)} (next Friday)` };
+  }
+  return { resolvedMessage: message, dateHint: "" };
+}
+
 export async function parseWeekendTripIntent(
   userMessage: string,
   cityFullName: string,
   queryContext?: MultilingualQueryContext
 ): Promise<WeekendTripIntent> {
   const today = new Date().toISOString().split("T")[0];
+  const { dateHint } = resolveRelativeDates(userMessage);
   const text = await minimaxChat({
     messages: [
       {
         role: "user",
         content: `Extract a weekend trip planning intent from this request. Return ONLY valid JSON.
 
-Today: ${today} (tomorrow = ${new Date(Date.now() + 86400000).toISOString().split("T")[0]})
+Today: ${today}${dateHint ? `\nRESOLVED DATE HINT: ${dateHint} — use this as start_date, do NOT put travel dates in missing_fields` : ` (tomorrow = ${new Date(Date.now() + 86400000).toISOString().split("T")[0]})`}
 Default departure city (use if user does not specify): ${cityFullName}
 User request: "${userMessage}"
 Canonical NLU hints: ${JSON.stringify({
@@ -91,7 +116,9 @@ Rules:
 
   try {
     const parsed = JSON.parse(jsonMatch[0]) as Partial<WeekendTripIntent>;
-    const startDate = normalizeDate(parsed.start_date ?? null) ?? undefined;
+    // If MiniMax ignored the date hint, fall back to our pre-resolved date
+    const resolvedStartDate = dateHint ? dateHint.match(/(\d{4}-\d{2}-\d{2})/)?.[1] : undefined;
+    const startDate = normalizeDate(parsed.start_date ?? null) ?? resolvedStartDate ?? undefined;
     const endDate = normalizeDate(parsed.end_date ?? null) ?? undefined;
     const nights =
       parsed.nights ??
@@ -145,9 +172,10 @@ Rules:
         : [],
       missing_fields,
       // Only ask for clarification when destination or dates are truly unknown
+      // Never ask about dates when we pre-resolved a relative date hint
       needs_clarification:
         !parsed.destination_city ||
-        (!startDate && missing_fields.includes("travel dates")),
+        (!startDate && !dateHint && missing_fields.includes("travel dates")),
     };
   } catch {
     return fallback;
