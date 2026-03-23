@@ -1,5 +1,19 @@
 # TODOS
 
+## Decision Room (Phase 4.1)
+
+### DR-1: Partner identity persistence (identified 2026-03-23)
+**Priority:** P2
+**What:** Partners have no persistent identity token. If a partner closes the tab and reopens the share link, they're treated as a new visitor — their votes are lost and could be double-counted or replaced.
+**Why:** The current flow is fine for MVP (24h session window, single-sitting use case), but could cause confusing vote state if a partner's network drops and they rejoin mid-session.
+**How to fix:**
+1. On first visit to `/decide/[sessionId]`, set a `dr_partner_{sessionId}` cookie (HttpOnly, 24h) containing the `partner_session_token`.
+2. On subsequent visits to the same session, read the cookie to confirm the partner's identity server-side.
+3. Optionally store the partner's votes keyed by their token so they can be restored on rejoin.
+**Depends on:** Nothing blocking. Partner token already exists in the DB (`partner_session_token` column).
+
+---
+
 ## Scenario Coverage Gaps — Round 2 (identified 2026-03-23)
 
 ### S-1: Quick lunch / fast service restaurant mode
