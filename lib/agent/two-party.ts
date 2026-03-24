@@ -59,7 +59,7 @@ Or if conflict:
 }`,
       },
     ],
-    maxTokens: 300,
+    max_tokens: 300,
   });
 
   const match = text.match(/\{[\s\S]*\}/);
