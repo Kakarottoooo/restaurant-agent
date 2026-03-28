@@ -39,6 +39,7 @@ export async function runHotelPipeline(
   const filtered = hotels
     .filter((h) => h.rating >= 3.5 || h.review_count === 0)
     .slice(0, 15);
+  console.log(`[runHotelPipeline] hotels=${hotels.length} filtered=${filtered.length} sample=${JSON.stringify(hotels[0] ? { name: hotels[0].name, rating: hotels[0].rating, reviews: hotels[0].review_count } : null)}`);
 
   const hotelList = filtered
     .map(
@@ -103,8 +104,12 @@ Return ONLY the JSON array.`,
     timeout_ms: 60000,
   });
 
+  console.log(`[runHotelPipeline] minimax response length=${text.length} snippet=${text.slice(0, 120).replace(/\n/g, " ")}`);
   const jsonMatch = text.match(/\[[\s\S]*\]/);
-  if (!jsonMatch) return { hotelRecommendations: [], suggested_refinements: [] };
+  if (!jsonMatch) {
+    console.warn("[runHotelPipeline] no JSON array in minimax response");
+    return { hotelRecommendations: [], suggested_refinements: [] };
+  }
 
   let raw: unknown;
   try {
@@ -113,7 +118,11 @@ Return ONLY the JSON array.`,
     return { hotelRecommendations: [], suggested_refinements: [] };
   }
 
-  if (!Array.isArray(raw)) return { hotelRecommendations: [], suggested_refinements: [] };
+  if (!Array.isArray(raw)) {
+    console.warn("[runHotelPipeline] parsed JSON is not an array:", typeof raw);
+    return { hotelRecommendations: [], suggested_refinements: [] };
+  }
+  console.log(`[runHotelPipeline] AI returned ${(raw as unknown[]).length} hotel picks`);
 
   const suggested_refinements: string[] = (raw[0] as Record<string, unknown>)?.suggested_refinements as string[] ?? [];
 
@@ -140,5 +149,6 @@ Return ONLY the JSON array.`,
     .sort((a, b) => b.score - a.score)
     .map((card, i) => ({ ...card, rank: i + 1 }));
 
+  console.log(`[runHotelPipeline] final cards=${cards.length}`);
   return { hotelRecommendations: cards, suggested_refinements };
 }
