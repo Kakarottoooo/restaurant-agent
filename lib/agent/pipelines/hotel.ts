@@ -59,13 +59,15 @@ export async function runHotelPipeline(
     ? `\nFAMILY MODE: User is travelling with ${intent.children_count ?? "children"}. Heavily favour hotels with: pool, kids club, family rooms or connecting rooms, cribs/rollaway, on-site dining, and proximity to family attractions. Penalise adult-only or boutique-only properties. Include a family tip in why_recommended (e.g. "Request a connecting room when booking").`
     : "";
 
-  const text = await minimaxChat({
-    system: systemPrompt,
-    messages: [
-      ...conversationHistory,
-      {
-        role: "user" as const,
-        content: `User hotel requirements: ${JSON.stringify(intent, null, 2)}
+  let text = "";
+  try {
+    text = await minimaxChat({
+      system: systemPrompt,
+      messages: [
+        ...conversationHistory,
+        {
+          role: "user" as const,
+          content: `User hotel requirements: ${JSON.stringify(intent, null, 2)}
 
 Candidate hotels:
 ${hotelList}
@@ -98,11 +100,30 @@ Return a JSON array:
 ]
 
 Return ONLY the JSON array.`,
-      },
-    ],
-    max_tokens: 4096,
-    timeout_ms: 60000,
-  });
+        },
+      ],
+      max_tokens: 4096,
+      timeout_ms: 30000,
+    });
+  } catch (err) {
+    console.warn("[runHotelPipeline] minimaxChat threw — using SerpAPI data directly:", err instanceof Error ? err.message : err);
+    // Fallback: build basic cards from SerpAPI data without AI scoring
+    const fallbackCards: HotelRecommendationCard[] = filtered.slice(0, 5).map((hotel, i) => ({
+      hotel,
+      rank: i + 1,
+      score: hotel.rating * 10,
+      why_recommended: `${hotel.star_rating}-star hotel with ${hotel.review_count} reviews`,
+      best_for: "Travelers seeking quality accommodation",
+      watch_out: "",
+      not_great_if: "",
+      price_summary: `$${hotel.price_per_night}/night · ${nights} nights $${Math.round(hotel.price_per_night * nights)} total`,
+      location_summary: hotel.address,
+      scoring: undefined,
+      suggested_refinements: [],
+    }));
+    console.log(`[runHotelPipeline] fallback cards=${fallbackCards.length}`);
+    return { hotelRecommendations: fallbackCards, suggested_refinements: [] };
+  }
 
   console.log(`[runHotelPipeline] minimax response length=${text.length} snippet=${text.slice(0, 120).replace(/\n/g, " ")}`);
   const jsonMatch = text.match(/\[[\s\S]*\]/);

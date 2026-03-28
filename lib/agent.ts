@@ -267,12 +267,12 @@ export async function runAgent(
     const hotelIntent = buildWeekendTripHotelIntent(scenarioIntent);
 
     // Run flight + hotel in parallel; flight is best-effort (SerpAPI can be slow)
-    // Cap each pipeline at 20s — SerpAPI can hang for 50s+ otherwise
+    // Flight: 20s cap (SerpAPI only). Hotel: 40s cap (SerpAPI ~5s + MiniMax ~15-25s).
     const flightTimeout = new Promise<{ flightRecommendations: []; no_direct_available: false }>(
       (resolve) => setTimeout(() => resolve({ flightRecommendations: [], no_direct_available: false }), 20_000)
     );
     const hotelTimeout = new Promise<{ hotelRecommendations: []; suggested_refinements: [] }>(
-      (resolve) => setTimeout(() => resolve({ hotelRecommendations: [], suggested_refinements: [] }), 20_000)
+      (resolve) => setTimeout(() => resolve({ hotelRecommendations: [], suggested_refinements: [] }), 40_000)
     );
     const [flightResult, { hotelRecommendations }] = await Promise.all([
       Promise.race([runFlightPipeline(flightIntent), flightTimeout])
