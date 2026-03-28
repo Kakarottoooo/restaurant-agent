@@ -55,19 +55,19 @@ const HERO_TAGLINES = [
   },
 ];
 
-const DIETARY_OPTIONS = ["素食", "纯素", "无麸质", "无贝类", "清真", "犹太洁食"];
+const DIETARY_OPTIONS = ["Vegetarian", "Vegan", "Gluten-free", "Shellfish-free", "Halal", "Kosher"];
 const NOISE_OPTIONS: Array<{ value: "quiet" | "moderate" | "lively"; label: string }> = [
-  { value: "quiet", label: "安静" },
-  { value: "moderate", label: "适中" },
-  { value: "lively", label: "热闹" },
+  { value: "quiet", label: "Quiet" },
+  { value: "moderate", label: "Moderate" },
+  { value: "lively", label: "Lively" },
 ];
 
 const WEIGHT_LABELS: Record<string, string> = {
-  budget_match: "预算匹配",
-  scene_match: "场景契合",
-  review_quality: "口碑质量",
-  location_convenience: "位置便利",
-  preference_match: "偏好吻合",
+  budget_match: "Budget match",
+  scene_match: "Scene fit",
+  review_quality: "Review quality",
+  location_convenience: "Location",
+  preference_match: "Preference match",
 };
 
 export default function Home() {
@@ -413,7 +413,7 @@ export default function Home() {
 
       setPlanFeedbackMessage(
         chat.decisionPlan.output_language === "zh"
-          ? "投票链接已复制 — 发给朋友吧！"
+          ? "Vote link copied — send it to your friend!"
           : "Vote link copied — send it to your friends!"
       );
       return;
@@ -464,7 +464,7 @@ export default function Home() {
       const lang = chat.decisionPlan.output_language;
       setPlanFeedbackMessage(
         lang === "zh"
-          ? "价格提醒已开启 — 价格下降超过 10% 时会推送通知"
+          ? "Watching prices — you'll get a push notification if prices drop more than 10%"
           : "Watching prices — you'll get a push notification if prices drop more than 10%"
       );
       return;
@@ -785,7 +785,7 @@ export default function Home() {
                   color: "var(--text-primary)",
                 }}
               >
-                我的偏好
+                My Preferences
               </h2>
               <button
                 onClick={() => setPrefModalOpen(false)}
@@ -813,7 +813,7 @@ export default function Home() {
                   marginBottom: "8px",
                 }}
               >
-                饮食限制
+                Dietary restrictions
               </p>
               <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
                 {DIETARY_OPTIONS.map((d) => {
@@ -856,7 +856,7 @@ export default function Home() {
                   marginBottom: "8px",
                 }}
               >
-                噪音偏好
+                Noise preference
               </p>
               <div style={{ display: "flex", gap: "8px" }}>
                 {NOISE_OPTIONS.map(({ value, label }) => {
@@ -905,7 +905,7 @@ export default function Home() {
                   color: "var(--text-primary)",
                 }}
               >
-                排除连锁餐厅
+                Exclude chain restaurants
               </span>
               <button
                 onClick={() =>
@@ -956,7 +956,7 @@ export default function Home() {
                     color: "var(--text-primary)",
                   }}
                 >
-                  每人预算上限
+                  Max budget per person
                 </span>
                 <span
                   style={{
@@ -967,7 +967,7 @@ export default function Home() {
                 >
                   {profile.typical_budget_per_person
                     ? `$${profile.typical_budget_per_person}`
-                    : "不限"}
+                    : "No limit"}
                 </span>
               </div>
               <input
@@ -996,7 +996,7 @@ export default function Home() {
                     marginBottom: "8px",
                   }}
                 >
-                  个性化权重
+                  Personalized weights
                 </p>
                 <p
                   style={{
@@ -1006,7 +1006,7 @@ export default function Home() {
                     marginBottom: "10px",
                   }}
                 >
-                  基于 {learnedWeights.sample_size} 条反馈自动学习
+                  Auto-learned from {learnedWeights.sample_size} feedback responses
                 </p>
                 <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
                   {(["scene_match", "budget_match", "review_quality", "location_convenience", "preference_match"] as const).map((key) => {
@@ -1049,7 +1049,7 @@ export default function Home() {
                   fontWeight: 500,
                 }}
               >
-                保存
+                Save
               </button>
               <button
                 onClick={() => {
@@ -1067,7 +1067,7 @@ export default function Home() {
                   fontSize: "13px",
                 }}
               >
-                重置
+                Reset
               </button>
             </div>
           </div>
@@ -1100,7 +1100,7 @@ export default function Home() {
                   color: "var(--text-primary)",
                 }}
               >
-                对比
+                Compare
               </h3>
               <button
                 onClick={() => setCompareOpen(false)}
@@ -1172,7 +1172,7 @@ export default function Home() {
                           );
                         })}
                         <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: "12px", fontWeight: 600, color: "var(--gold)", marginTop: "4px" }}>
-                          综合 {card.scoring.weighted_total.toFixed(1)}
+                          Score {card.scoring.weighted_total.toFixed(1)}
                         </p>
                       </div>
                     )}
@@ -1204,7 +1204,7 @@ export default function Home() {
                       fontSize: "12px",
                     }}
                   >
-                    点击卡片上的「对比」
+                    Click "Compare" on a card to add it here
                   </div>
                 )
               )}
@@ -1380,7 +1380,7 @@ export default function Home() {
           <button
             onClick={() => setPrefModalOpen(true)}
             aria-label="Open preferences"
-            title="我的偏好"
+            title="Preferences"
             style={{
               background: "none",
               border: "0.5px solid var(--border)",
@@ -1473,7 +1473,7 @@ export default function Home() {
                         cursor: "pointer",
                       }}
                     >
-                      偏好设置
+                      Preferences
                     </button>
                     <button
                       onClick={() => { auth.signOut(); setAccountMenuOpen(false); }}
@@ -1491,7 +1491,7 @@ export default function Home() {
                         borderTop: "0.5px solid var(--border)",
                       }}
                     >
-                      退出登录
+                      Sign out
                     </button>
                   </div>
                 )}
@@ -1512,7 +1512,7 @@ export default function Home() {
                   whiteSpace: "nowrap",
                 }}
               >
-                登录
+                Sign in
               </button>
             )}
           </div>
@@ -1548,7 +1548,7 @@ export default function Home() {
               flex: 1,
             }}
           >
-            保存到云端，换设备也能看到你的收藏
+            Save to cloud — access your favorites from any device
           </span>
           <button
             onClick={() => { auth.signIn(); setUpgradePromptShown(false); }}
@@ -1564,7 +1564,7 @@ export default function Home() {
               flexShrink: 0,
             }}
           >
-            登录
+            Sign in
           </button>
           <button
             onClick={() => setUpgradePromptShown(false)}
@@ -2266,7 +2266,7 @@ export default function Home() {
             }}
             placeholder={
               isListening
-                ? "正在聆听..."
+                ? "Listening..."
                 : hasMessages
                 ? "Refine: 'more quiet', 'cheaper options'..."
                 : "Describe what you're looking for..."
