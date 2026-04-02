@@ -8,7 +8,7 @@
  * To cancel a scheduled retry: pass retryAfter: null
  */
 import { NextRequest, NextResponse } from "next/server";
-import { getBookingJob, updateBookingJobStep } from "@/lib/db";
+import { getBookingJob, updateBookingJobStep, updateBookingJobStatus } from "@/lib/db";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -54,6 +54,13 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     }
 
     await updateBookingJobStep(id, body.stepIndex, patch);
+
+    // If job is stuck in "running" (e.g. previous run crashed), reset to "failed"
+    // so the /start endpoint will accept the next attempt
+    if (body.resetStatus && job.status === "running") {
+      await updateBookingJobStatus(id, "failed");
+    }
+
     return NextResponse.json({ ok: true, cancelled: body.retryAfter === null });
   }
 

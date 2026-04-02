@@ -266,6 +266,7 @@ function NeedsHelpCard({ step, onManualLink, jobId, stepIndex, onRefresh }: {
   const [sendingAnswer, setSendingAnswer] = useState(false);
   const [readyToRetry, setReadyToRetry] = useState(false);
   const [enrichedTask, setEnrichedTask] = useState<string | undefined>();
+  const [retrying, setRetrying] = useState(false);
 
   const originalTask = typeof step.body?.task === "string" ? step.body.task : "";
 
@@ -317,6 +318,8 @@ function NeedsHelpCard({ step, onManualLink, jobId, stepIndex, onRefresh }: {
   }
 
   async function handleRetry() {
+    if (retrying) return;
+    setRetrying(true);
     // Always patch in latest model config from localStorage so retries use current settings
     const savedModel = JSON.parse(localStorage.getItem("agent_model_config") ?? "{}");
     const agentModel = savedModel.model && savedModel.apiKey ? savedModel : undefined;
@@ -395,13 +398,16 @@ function NeedsHelpCard({ step, onManualLink, jobId, stepIndex, onRefresh }: {
 
         {/* Retry CTA */}
         {readyToRetry && (
-          <button onClick={handleRetry} style={{
+          <button onClick={handleRetry} disabled={retrying} style={{
             width: "100%", padding: "11px 0", borderRadius: 12, marginBottom: 10,
-            border: "none", backgroundColor: "var(--gold, #C9A84C)",
-            color: "#fff", fontFamily: "var(--font-dm-sans)", fontSize: 14,
-            fontWeight: 700, cursor: "pointer",
+            border: "none",
+            backgroundColor: retrying ? "var(--border, #e5e7eb)" : "var(--gold, #C9A84C)",
+            color: retrying ? "var(--text-muted, #aaa)" : "#fff",
+            fontFamily: "var(--font-dm-sans)", fontSize: 14,
+            fontWeight: 700, cursor: retrying ? "default" : "pointer",
+            transition: "background 0.2s",
           }}>
-            ↺ Retry booking
+            {retrying ? "Starting…" : "↺ Retry booking"}
           </button>
         )}
 
