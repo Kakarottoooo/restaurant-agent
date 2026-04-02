@@ -1,0 +1,130 @@
+"use client";
+
+/**
+ * GlobalNav — shared top navigation bar
+ *
+ * Used on: /trips, /monitoring, /insights, /metrics
+ * NOT on: / (home) — home has its own inline nav
+ */
+
+import { useState, useEffect } from "react";
+
+type Page = "trips" | "monitoring" | "insights" | "metrics" | "other";
+
+interface Props {
+  active?: Page;
+}
+
+function getSessionId() {
+  if (typeof window === "undefined") return "";
+  return localStorage.getItem("session_id") ?? "";
+}
+
+export default function GlobalNav({ active }: Props) {
+  const [actionCount, setActionCount] = useState(0);
+  const [monitorCount, setMonitorCount] = useState(0);
+
+  useEffect(() => {
+    const sid = getSessionId();
+    if (!sid) return;
+
+    // Fetch action-needed count for badge
+    fetch(`/api/booking-jobs?session_id=${encodeURIComponent(sid)}`)
+      .then((r) => r.ok ? r.json() : null)
+      .then((d) => {
+        if (!d?.jobs) return;
+        const actions = d.jobs.reduce((n: number, j: { steps?: { actionItem?: unknown }[] }) =>
+          n + (j.steps?.filter((s) => s.actionItem).length ?? 0), 0);
+        setActionCount(actions);
+      })
+      .catch(() => {});
+
+    // Fetch active monitor count
+    fetch(`/api/monitors?session_id=${encodeURIComponent(sid)}`)
+      .then((r) => r.ok ? r.json() : null)
+      .then((d) => {
+        if (!d?.monitors) return;
+        setMonitorCount(d.monitors.filter((m: { status: string }) => m.status === "active").length);
+      })
+      .catch(() => {});
+  }, []);
+
+  const links: { href: string; label: string; id: Page; badge?: number }[] = [
+    { href: "/trips",      label: "My Trips",   id: "trips",      badge: actionCount || undefined },
+    { href: "/monitoring", label: "Monitoring",  id: "monitoring", badge: monitorCount || undefined },
+    { href: "/insights",   label: "Insights",    id: "insights" },
+  ];
+
+  return (
+    <nav style={{
+      position: "sticky",
+      top: 0,
+      zIndex: 100,
+      backgroundColor: "var(--bg, #fafaf9)",
+      borderBottom: "0.5px solid var(--border, #e5e7eb)",
+      padding: "0 20px",
+      height: 52,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+    }}>
+      {/* Logo */}
+      <a
+        href="/"
+        style={{
+          fontFamily: "var(--font-playfair, serif)",
+          fontSize: 17,
+          fontWeight: 700,
+          color: "var(--text-primary, #111)",
+          textDecoration: "none",
+          letterSpacing: "-0.01em",
+          flexShrink: 0,
+        }}
+      >
+        Onegent<span style={{ color: "var(--gold, #C9A84C)" }}>.</span>
+      </a>
+
+      {/* Links */}
+      <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+        {links.map((link) => {
+          const isActive = active === link.id;
+          return (
+            <a
+              key={link.id}
+              href={link.href}
+              style={{
+                position: "relative",
+                display: "flex",
+                alignItems: "center",
+                gap: 5,
+                padding: "5px 12px",
+                borderRadius: 8,
+                fontSize: 13,
+                fontWeight: isActive ? 600 : 400,
+                color: isActive ? "var(--text-primary, #111)" : "var(--text-secondary, #666)",
+                textDecoration: "none",
+                backgroundColor: isActive ? "var(--card, #f5f5f4)" : "transparent",
+                transition: "background 0.15s, color 0.15s",
+              }}
+            >
+              {link.label}
+              {link.badge != null && link.badge > 0 && (
+                <span style={{
+                  fontSize: 10,
+                  fontWeight: 700,
+                  color: "#fff",
+                  backgroundColor: link.id === "monitoring" ? "var(--gold, #C9A84C)" : "rgba(220,38,38,0.85)",
+                  borderRadius: 20,
+                  padding: "1px 5px",
+                  lineHeight: 1.5,
+                }}>
+                  {link.badge}
+                </span>
+              )}
+            </a>
+          );
+        })}
+      </div>
+    </nav>
+  );
+}

@@ -137,6 +137,18 @@ export default function Home() {
   const [heroVisible, setHeroVisible] = useState(true);
   const [decisionRoomOpen, setDecisionRoomOpen] = useState(false);
   const [decisionRoomQuery, setDecisionRoomQuery] = useState("");
+  const [recentJobs, setRecentJobs] = useState<{ id: string; trip_label: string; status: string; created_at: string }[]>([]);
+
+  // Load recent jobs for home page strip
+  useEffect(() => {
+    const sid = chat.getSessionId();
+    if (!sid) return;
+    fetch(`/api/booking-jobs?session_id=${encodeURIComponent(sid)}`)
+      .then((r) => r.ok ? r.json() : null)
+      .then((d) => { if (d?.jobs) setRecentJobs(d.jobs.slice(0, 3)); })
+      .catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Phase 4.6: Call learnWeightsFromFeedback on mount
   useEffect(() => {
@@ -1636,6 +1648,33 @@ export default function Home() {
                 >
                   {HERO_TAGLINES[heroIdx].sub}
                 </p>
+                {/* Scenario quick-start cards */}
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, width: "100%", maxWidth: 440, marginBottom: 24 }}>
+                  {[
+                    { emoji: "🕯", label: "Date Night", desc: "Dinner & after-plans", msg: "Plan a romantic date night — dinner for two, intimate vibe, ~$100/person, then something fun after" },
+                    { emoji: "🏙", label: "Weekend Trip", desc: "Hotel + things to do", msg: "Plan a weekend trip, 2 nights, great hotel + local activities for a couple, budget-conscious" },
+                    { emoji: "🍽", label: "Group Dinner", desc: "Private dining for groups", msg: "Find a great restaurant for a group of 8, private dining room preferred, ~$60/person" },
+                    { emoji: "🎯", label: "Local Activity", desc: "Experiences near you", msg: "Find a fun local activity for this weekend, something unique or adventurous" },
+                  ].map((s) => (
+                    <button
+                      key={s.label}
+                      onClick={() => { learnFromSearch(s.msg); chat.sendMessage(s.msg); }}
+                      style={{
+                        textAlign: "left", borderRadius: 14, padding: "14px 14px",
+                        backgroundColor: "var(--card)", border: "0.5px solid var(--border)",
+                        cursor: "pointer", transition: "border-color 0.15s",
+                      }}
+                      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = "var(--gold)"; }}
+                      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = "var(--border)"; }}
+                    >
+                      <div style={{ fontSize: 22, marginBottom: 6 }}>{s.emoji}</div>
+                      <div style={{ fontFamily: "var(--font-dm-sans)", fontWeight: 700, fontSize: 13, color: "var(--text-primary)", marginBottom: 2 }}>{s.label}</div>
+                      <div style={{ fontFamily: "var(--font-dm-sans)", fontSize: 11, color: "var(--text-secondary)" }}>{s.desc}</div>
+                    </button>
+                  ))}
+                </div>
+
+                {/* Example prompts */}
                 <div className="flex flex-col gap-2 w-full max-w-sm">
                   {DEFAULT_EXAMPLES.map((ex) => (
                     <button
@@ -1654,18 +1693,49 @@ export default function Home() {
                         lineHeight: 1.5,
                       }}
                       onMouseEnter={(e) => {
-                        (e.currentTarget as HTMLElement).style.borderColor =
-                          "var(--gold)";
+                        (e.currentTarget as HTMLElement).style.borderColor = "var(--gold)";
                       }}
                       onMouseLeave={(e) => {
-                        (e.currentTarget as HTMLElement).style.borderColor =
-                          "var(--border)";
+                        (e.currentTarget as HTMLElement).style.borderColor = "var(--border)";
                       }}
                     >
                       &quot;{ex}&quot;
                     </button>
                   ))}
                 </div>
+
+                {/* Recent tasks strip */}
+                {recentJobs.length > 0 && (
+                  <div style={{ width: "100%", maxWidth: 440, marginTop: 28 }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+                      <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 12, fontWeight: 600, color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                        Recent trips
+                      </p>
+                      <a href="/trips" style={{ fontFamily: "var(--font-dm-sans)", fontSize: 12, color: "var(--gold)", textDecoration: "none" }}>
+                        View all →
+                      </a>
+                    </div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                      {recentJobs.map((job) => {
+                        const statusMeta: Record<string, { dot: string; label: string }> = {
+                          pending:    { dot: "#aaa",      label: "Pending" },
+                          running:    { dot: "#C9A84C",   label: "In progress" },
+                          done:       { dot: "#22c55e",   label: "Completed" },
+                          partial:    { dot: "#f59e0b",   label: "Partial" },
+                          failed:     { dot: "#ef4444",   label: "Failed" },
+                        };
+                        const sm = statusMeta[job.status] ?? statusMeta.pending;
+                        return (
+                          <a key={job.id} href="/trips" style={{ textDecoration: "none", display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", borderRadius: 12, backgroundColor: "var(--card)", border: "0.5px solid var(--border)" }}>
+                            <span style={{ width: 7, height: 7, borderRadius: "50%", backgroundColor: sm.dot, flexShrink: 0 }} />
+                            <span style={{ fontFamily: "var(--font-dm-sans)", fontSize: 13, color: "var(--text-primary)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{job.trip_label}</span>
+                            <span style={{ fontFamily: "var(--font-dm-sans)", fontSize: 11, color: "var(--text-secondary)", flexShrink: 0 }}>{sm.label}</span>
+                          </a>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
 
               </div>
             ) : (
