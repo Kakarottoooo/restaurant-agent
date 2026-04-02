@@ -64,18 +64,14 @@ export async function runBrowserTask(
       apiKey: process.env.BROWSERBASE_API_KEY,
       projectId: process.env.BROWSERBASE_PROJECT_ID,
     }),
-    model: {
-      provider: "anthropic",
-      name: "claude-sonnet-4-6",
-      clientOptions: { apiKey: process.env.ANTHROPIC_API_KEY },
-    },
     verbose: 0,
     disablePino: true,
   });
 
   try {
     await stagehand.init();
-    const page = stagehand.page;
+    // v3 API: use resolvePage() instead of stagehand.page
+    const page = await stagehand.resolvePage();
 
     // Navigate to the starting URL
     await page.goto(input.startUrl, { waitUntil: "domcontentloaded", timeout: 30_000 });
@@ -83,21 +79,17 @@ export async function runBrowserTask(
     // Build the agent instruction
     const instruction = buildInstruction(input);
 
-    // Run the agent
+    // Run the agent — v3 uses "provider/model" format
     const agent = stagehand.agent({
-      provider: "anthropic",
-      model: "claude-sonnet-4-6",
+      model: "anthropic/claude-sonnet-4-6",
       instructions: `You are a booking assistant helping a user complete a reservation.
 Follow the task exactly. Navigate the site, fill in all provided information.
 CRITICAL: Stop immediately when you reach ANY payment page, credit card form,
-or checkout confirmation that requires payment details. Do NOT enter payment info.
-Take a screenshot just before stopping.`,
+or checkout confirmation that requires payment details. Do NOT enter payment info.`,
     });
 
-    const result = await agent.execute({
-      instruction,
-      maxSteps: 25,
-    });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const result = await agent.execute({ instruction, maxSteps: 25 }) as any;
 
     const currentUrl = page.url();
     const screenshotBuffer = await page.screenshot({ type: "png" });
