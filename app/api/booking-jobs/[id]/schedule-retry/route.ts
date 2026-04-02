@@ -14,7 +14,12 @@ type Params = { params: Promise<{ id: string }> };
 
 export async function PATCH(req: NextRequest, { params }: Params) {
   const { id } = await params;
-  const body = await req.json() as { stepIndex: number; retryAfter: string | null };
+  const body = await req.json() as {
+    stepIndex: number;
+    retryAfter: string | null;
+    resetStatus?: boolean;
+    patchBody?: Record<string, unknown>;
+  };
 
   if (typeof body.stepIndex !== "number") {
     return NextResponse.json({ error: "stepIndex required" }, { status: 400 });
@@ -27,14 +32,29 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   if (!step) return NextResponse.json({ error: "Step not found" }, { status: 404 });
 
   // Only allow scheduling retry on failed steps
-  if (step.status === "done" && !body.retryAfter) {
+  if (step.status === "done" && !body.retryAfter && !body.resetStatus) {
     return NextResponse.json({ error: "Step already succeeded" }, { status: 400 });
   }
 
-  if (body.retryAfter === null) {
-    // Cancel scheduled retry
-    await updateBookingJobStep(id, body.stepIndex, { retryScheduledFor: undefined });
-    return NextResponse.json({ ok: true, cancelled: true });
+  if (body.retryAfter === null || body.resetStatus) {
+    const patch: Parameters<typeof updateBookingJobStep>[2] = {
+      retryScheduledFor: undefined,
+    };
+
+    // Reset step to pending so the executor will re-run it
+    if (body.resetStatus) {
+      patch.status = "pending";
+      patch.error = undefined;
+      patch.decisionLog = [];
+    }
+
+    // Merge enriched task fields into step body (e.g. updated task instruction)
+    if (body.patchBody && typeof body.patchBody === "object") {
+      patch.body = { ...step.body, ...body.patchBody };
+    }
+
+    await updateBookingJobStep(id, body.stepIndex, patch);
+    return NextResponse.json({ ok: true, cancelled: body.retryAfter === null });
   }
 
   const retryAt = new Date(body.retryAfter);

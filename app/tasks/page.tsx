@@ -258,124 +258,197 @@ function NeedsHelpCard({ step, onManualLink, jobId, stepIndex, onRefresh }: {
   stepIndex: number;
   onRefresh?: () => void;
 }) {
-  const { reason, suggestion, chatPrompt } = diagnoseFail(step);
-  const [input, setInput] = useState(chatPrompt);
-  const [reply, setReply] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [retryNow, setRetryNow] = useState(false);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  // Agent speaks first — generates a specific question on mount
+  const [question, setQuestion] = useState("");
+  const [questionLoading, setQuestionLoading] = useState(true);
+  const [answer, setAnswer] = useState("");
+  const [agentReply, setAgentReply] = useState("");
+  const [sendingAnswer, setSendingAnswer] = useState(false);
+  const [readyToRetry, setReadyToRetry] = useState(false);
+  const [enrichedTask, setEnrichedTask] = useState<string | undefined>();
 
-  async function send() {
-    const msg = input.trim();
-    if (!msg || loading) return;
-    setLoading(true);
-    setReply("");
-    setRetryNow(false);
+  const originalTask = typeof step.body?.task === "string" ? step.body.task : "";
+
+  // Load agent's question automatically
+  useEffect(() => {
+    setQuestionLoading(true);
+    fetch("/api/agent-chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        mode: "question",
+        stepLabel: step.label,
+        originalTask,
+        decisionLog: step.decisionLog ?? [],
+        error: step.error,
+      }),
+    })
+      .then((r) => r.json())
+      .then((d) => setQuestion(d.question ?? "What information do you need to proceed?"))
+      .catch(() => setQuestion("What would you like to do next?"))
+      .finally(() => setQuestionLoading(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step.label, step.error]);
+
+  async function sendAnswer() {
+    if (!answer.trim() || sendingAnswer) return;
+    setSendingAnswer(true);
+    setAgentReply("");
     try {
       const res = await fetch("/api/agent-chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: msg, stepLabel: step.label, failReason: reason }),
+        body: JSON.stringify({
+          mode: "answer",
+          answer: answer.trim(),
+          stepLabel: step.label,
+          originalTask,
+          decisionLog: step.decisionLog ?? [],
+          error: step.error,
+        }),
       });
       const data = await res.json();
-      setReply(data.reply ?? "");
-      setRetryNow(!!data.retryNow);
+      setAgentReply(data.reply ?? "");
+      setReadyToRetry(!!data.retryNow);
+      setEnrichedTask(data.enrichedTask);
     } finally {
-      setLoading(false);
+      setSendingAnswer(false);
     }
   }
 
-  async function handleRetryNow() {
-    await fetch(`/api/booking-jobs/${jobId}/schedule-retry`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ stepIndex, retryAfter: null, resetStatus: true }),
-    }).catch(() => {});
+  async function handleRetry() {
+    // Patch the step body with the enriched task if we got one
+    if (enrichedTask) {
+      await fetch(`/api/booking-jobs/${jobId}/schedule-retry`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          stepIndex,
+          retryAfter: null,
+          resetStatus: true,
+          patchBody: { task: enrichedTask },
+        }),
+      }).catch(() => {});
+    } else {
+      await fetch(`/api/booking-jobs/${jobId}/schedule-retry`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ stepIndex, retryAfter: null, resetStatus: true }),
+      }).catch(() => {});
+    }
     fetch(`/api/booking-jobs/${jobId}/start`, { method: "POST" }).catch(() => {});
     setTimeout(() => onRefresh?.(), 800);
   }
 
   return (
-    <div style={{ borderTop: "0.5px solid rgba(220,38,38,0.15)", backgroundColor: "rgba(220,38,38,0.03)" }}>
+    <div style={{ borderTop: "0.5px solid var(--border, #e5e7eb)", backgroundColor: "var(--bg, #fafaf9)" }}>
+      <div style={{ padding: "14px" }}>
 
-      {/* What happened */}
-      <div style={{ padding: "12px 14px 8px" }}>
-        <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 12, fontWeight: 700, color: "rgba(185,28,28,0.85)", marginBottom: 4 }}>
-          What happened
-        </p>
-        <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 12, color: "var(--text-secondary, #666)", lineHeight: 1.6 }}>
-          {reason} {suggestion}
-        </p>
-      </div>
-
-      {/* Inline chat */}
-      <div style={{ padding: "0 14px 14px" }}>
-
-        {/* Agent reply bubble */}
-        {reply && (
+        {/* Agent question bubble */}
+        <div style={{
+          display: "flex", gap: 10, alignItems: "flex-start", marginBottom: 12,
+        }}>
           <div style={{
-            backgroundColor: "var(--card, #fff)", borderRadius: 12,
+            width: 28, height: 28, borderRadius: "50%", flexShrink: 0,
+            backgroundColor: "var(--gold, #C9A84C)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            fontSize: 14,
+          }}>
+            🤖
+          </div>
+          <div style={{
+            flex: 1, backgroundColor: "var(--card, #fff)", borderRadius: "4px 12px 12px 12px",
             border: "0.5px solid var(--border, #e5e7eb)",
-            padding: "10px 13px", marginBottom: 10,
+            padding: "10px 13px",
             fontFamily: "var(--font-dm-sans)", fontSize: 13,
             color: "var(--text-primary, #111)", lineHeight: 1.6,
+            minHeight: 40,
           }}>
-            <span style={{ fontSize: 14, marginRight: 6 }}>🤖</span>{reply}
+            {questionLoading
+              ? <span style={{ color: "var(--text-muted, #aaa)" }}>Analysing what went wrong…</span>
+              : question}
+          </div>
+        </div>
+
+        {/* Agent's follow-up after user answers */}
+        {agentReply && (
+          <div style={{
+            display: "flex", gap: 10, alignItems: "flex-start", marginBottom: 12,
+          }}>
+            <div style={{
+              width: 28, height: 28, borderRadius: "50%", flexShrink: 0,
+              backgroundColor: "var(--gold, #C9A84C)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              fontSize: 14,
+            }}>
+              🤖
+            </div>
+            <div style={{
+              flex: 1, backgroundColor: "var(--card, #fff)", borderRadius: "4px 12px 12px 12px",
+              border: "0.5px solid var(--border, #e5e7eb)",
+              padding: "10px 13px",
+              fontFamily: "var(--font-dm-sans)", fontSize: 13,
+              color: "var(--text-primary, #111)", lineHeight: 1.6,
+            }}>
+              {agentReply}
+            </div>
           </div>
         )}
 
-        {/* Retry button if agent says to */}
-        {retryNow && (
-          <button onClick={handleRetryNow} style={{
-            width: "100%", padding: "9px 0", borderRadius: 10, marginBottom: 10,
+        {/* Retry CTA */}
+        {readyToRetry && (
+          <button onClick={handleRetry} style={{
+            width: "100%", padding: "11px 0", borderRadius: 12, marginBottom: 10,
             border: "none", backgroundColor: "var(--gold, #C9A84C)",
-            color: "#fff", fontFamily: "var(--font-dm-sans)", fontSize: 13,
+            color: "#fff", fontFamily: "var(--font-dm-sans)", fontSize: 14,
             fontWeight: 700, cursor: "pointer",
           }}>
-            ↺ Retry now
+            ↺ Retry booking
           </button>
         )}
 
-        {/* Input row */}
-        <div style={{
-          display: "flex", gap: 8, alignItems: "flex-end",
-          backgroundColor: "var(--card, #fff)", borderRadius: 14,
-          border: "0.5px solid var(--border, #e5e7eb)",
-          padding: "8px 10px",
-        }}>
-          <textarea
-            ref={textareaRef}
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
-            rows={2}
-            style={{
-              flex: 1, border: "none", outline: "none", resize: "none",
-              fontFamily: "var(--font-dm-sans)", fontSize: 13,
-              color: "var(--text-primary, #111)", backgroundColor: "transparent",
-              lineHeight: 1.5,
-            }}
-          />
-          <button onClick={send} disabled={loading || !input.trim()} style={{
-            flexShrink: 0, width: 32, height: 32, borderRadius: 8, border: "none",
-            backgroundColor: loading || !input.trim() ? "var(--border, #e5e7eb)" : "var(--gold, #C9A84C)",
-            color: "#fff", cursor: loading || !input.trim() ? "default" : "pointer",
-            fontSize: 15, display: "flex", alignItems: "center", justifyContent: "center",
-            transition: "background 0.2s",
+        {/* Answer input — shown until agent has enough to retry */}
+        {!readyToRetry && !questionLoading && (
+          <div style={{
+            display: "flex", gap: 8, alignItems: "flex-end",
+            backgroundColor: "var(--card, #fff)", borderRadius: 14,
+            border: "0.5px solid var(--border, #e5e7eb)",
+            padding: "8px 10px",
           }}>
-            {loading ? "…" : "↑"}
-          </button>
-        </div>
+            <textarea
+              value={answer}
+              onChange={(e) => setAnswer(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendAnswer(); } }}
+              placeholder="Type your answer…"
+              rows={1}
+              style={{
+                flex: 1, border: "none", outline: "none", resize: "none",
+                fontFamily: "var(--font-dm-sans)", fontSize: 13,
+                color: "var(--text-primary, #111)", backgroundColor: "transparent",
+                lineHeight: 1.5,
+              }}
+            />
+            <button onClick={sendAnswer} disabled={sendingAnswer || !answer.trim()} style={{
+              flexShrink: 0, width: 32, height: 32, borderRadius: 8, border: "none",
+              backgroundColor: sendingAnswer || !answer.trim() ? "var(--border)" : "var(--gold, #C9A84C)",
+              color: "#fff", cursor: sendingAnswer || !answer.trim() ? "default" : "pointer",
+              fontSize: 15, display: "flex", alignItems: "center", justifyContent: "center",
+              transition: "background 0.2s",
+            }}>
+              {sendingAnswer ? "…" : "↑"}
+            </button>
+          </div>
+        )}
 
-        {/* Manual booking fallback */}
+        {/* Manual fallback — subtle */}
         {step.actionItem?.options.map((opt, j) => (
           <button key={j} onClick={() => onManualLink(opt.label, opt.url, j)} style={{
-            width: "100%", marginTop: 8, padding: "7px 12px", borderRadius: 10,
+            width: "100%", marginTop: 8, padding: "6px 12px", borderRadius: 10,
             border: "0.5px solid var(--border, #e5e7eb)", background: "transparent",
             color: "var(--text-muted, #aaa)", fontFamily: "var(--font-dm-sans)",
             fontSize: 11, cursor: "pointer", textAlign: "left",
           }}>
-            ↗ Book manually: {opt.label}
+            ↗ Book manually instead
           </button>
         ))}
       </div>
