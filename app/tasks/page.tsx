@@ -213,6 +213,19 @@ function RetryScheduler({ step, stepIndex, jobId, onScheduled }: {
   step: BookingJobStep; stepIndex: number; jobId: string; onScheduled: () => void;
 }) {
   const [scheduling, setScheduling] = useState(false);
+  const [retrying, setRetrying] = useState(false);
+
+  async function retryNow() {
+    setRetrying(true);
+    // Clear any scheduled retry, reset step to pending, then start job
+    await fetch(`/api/booking-jobs/${jobId}/schedule-retry`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ stepIndex, retryAfter: null, resetStatus: true }),
+    }).catch(() => {});
+    fetch(`/api/booking-jobs/${jobId}/start`, { method: "POST" }).catch(() => {});
+    setTimeout(() => { setRetrying(false); onScheduled(); }, 800);
+  }
 
   async function scheduleRetry(hoursFromNow: number | null) {
     setScheduling(true);
@@ -247,8 +260,18 @@ function RetryScheduler({ step, stepIndex, jobId, onScheduled }: {
 
   return (
     <div style={{ borderTop: "0.5px solid var(--border, #e5e7eb)", padding: "8px 12px", backgroundColor: "var(--card-2, #f9f9f9)" }}>
+      {/* Retry now */}
+      <button onClick={retryNow} disabled={retrying} style={{
+        width: "100%", padding: "9px 0", borderRadius: 10, marginBottom: 10,
+        border: "none", backgroundColor: retrying ? "var(--border)" : "var(--gold, #D4A34B)",
+        color: "#fff", fontFamily: "var(--font-dm-sans)", fontSize: 13, fontWeight: 600,
+        cursor: retrying ? "default" : "pointer", transition: "background 0.2s",
+      }}>
+        {retrying ? "Starting agent…" : "↺ Retry now"}
+      </button>
+      {/* Schedule retry */}
       <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 11, color: "var(--text-muted, #aaa)", marginBottom: 6 }}>
-        Try again automatically:
+        Or retry automatically:
       </p>
       <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
         {[
@@ -456,6 +479,11 @@ function StepCard({ step, stepIndex, jobId, onRefresh }: {
         </div>
       )}
 
+      {/* Human intervention banner — awaiting_confirmation or needs_login */}
+      {(step.status === "awaiting_confirmation" || (step.status === "error" && step.handoff_url && step.handoff_url !== step.fallbackUrl)) && (
+        <InterventionBanner step={step} />
+      )}
+
       {/* Retry scheduling — shown for failed steps without an action item */}
       {(step.status === "error" || step.status === "no_availability") && (
         <RetryScheduler
@@ -466,6 +494,117 @@ function StepCard({ step, stepIndex, jobId, onRefresh }: {
         />
       )}
     </div>
+  );
+}
+
+// ── Intervention banner + modal ────────────────────────────────────────────────
+
+function InterventionBanner({ step }: { step: BookingJobStep }) {
+  const [open, setOpen] = useState(true); // auto-open when first rendered
+
+  const isPaymentWait = step.status === "awaiting_confirmation";
+  const color = isPaymentWait ? "rgba(22,163,74,0.85)" : "rgba(220,38,38,0.8)";
+  const bg = isPaymentWait ? "rgba(22,163,74,0.06)" : "rgba(220,38,38,0.05)";
+  const border = isPaymentWait ? "rgba(22,163,74,0.25)" : "rgba(220,38,38,0.2)";
+  const emoji = isPaymentWait ? "💳" : "🔑";
+  const title = isPaymentWait ? "Agent paused — ready for payment" : "Agent needs your help";
+  const subtitle = isPaymentWait
+    ? "The agent filled everything in. Open the link to enter payment and confirm."
+    : "The site requires your login. Open the link, sign in, then the agent can continue.";
+
+  return (
+    <>
+      {/* Inline banner */}
+      <div style={{ borderTop: `0.5px solid ${border}`, padding: "10px 14px", backgroundColor: bg }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+          <div style={{ flex: 1 }}>
+            <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 12, fontWeight: 700, color, marginBottom: 2 }}>
+              {emoji} {title}
+            </p>
+            <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 11, color: "var(--text-secondary, #666)" }}>
+              {subtitle}
+            </p>
+          </div>
+          <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+            <button onClick={() => setOpen(true)} style={{
+              padding: "7px 14px", borderRadius: 8, border: "none",
+              backgroundColor: color, color: "#fff",
+              fontFamily: "var(--font-dm-sans)", fontSize: 12, fontWeight: 600, cursor: "pointer",
+            }}>
+              Open →
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Modal */}
+      {open && step.handoff_url && (
+        <div style={{
+          position: "fixed", inset: 0, zIndex: 1000,
+          backgroundColor: "rgba(0,0,0,0.55)", backdropFilter: "blur(4px)",
+          display: "flex", alignItems: "center", justifyContent: "center", padding: 20,
+        }} onClick={() => setOpen(false)}>
+          <div style={{
+            backgroundColor: "var(--card, #fff)", borderRadius: 20,
+            padding: "28px 24px", maxWidth: 440, width: "100%",
+            boxShadow: "0 24px 80px rgba(0,0,0,0.18)",
+          }} onClick={(e) => e.stopPropagation()}>
+
+            {/* Icon */}
+            <div style={{ fontSize: 40, textAlign: "center", marginBottom: 16 }}>{emoji}</div>
+
+            {/* Title */}
+            <p style={{
+              fontFamily: "var(--font-playfair, serif)", fontSize: 20, fontWeight: 700,
+              color: "var(--text-primary, #111)", textAlign: "center", marginBottom: 8,
+            }}>
+              {title}
+            </p>
+            <p style={{
+              fontFamily: "var(--font-dm-sans)", fontSize: 13, color: "var(--text-secondary, #666)",
+              textAlign: "center", lineHeight: 1.6, marginBottom: 24,
+            }}>
+              {subtitle}
+            </p>
+
+            {/* What the agent did */}
+            <div style={{
+              backgroundColor: "var(--bg, #fafaf9)", borderRadius: 12,
+              padding: "12px 14px", marginBottom: 20,
+              border: "0.5px solid var(--border, #e5e7eb)",
+            }}>
+              <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 11, fontWeight: 700, color: "var(--text-muted, #aaa)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>
+                What the agent did
+              </p>
+              <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 12, color: "var(--text-secondary, #666)", lineHeight: 1.5 }}>
+                {step.decisionLog?.filter(e => e.type === "succeeded").at(-1)?.message
+                  ?? "Navigated the booking site and filled in all available details."}
+              </p>
+            </div>
+
+            {/* CTA */}
+            <a href={step.handoff_url} target="_blank" rel="noopener noreferrer"
+              onClick={() => setOpen(false)}
+              style={{
+                display: "block", width: "100%", padding: "13px 0", borderRadius: 12,
+                backgroundColor: color, color: "#fff", textAlign: "center",
+                fontFamily: "var(--font-dm-sans)", fontSize: 14, fontWeight: 700,
+                textDecoration: "none", boxSizing: "border-box",
+              }}>
+              {isPaymentWait ? "Complete payment →" : "Sign in to continue →"}
+            </a>
+
+            <button onClick={() => setOpen(false)} style={{
+              display: "block", width: "100%", marginTop: 10, padding: "9px 0",
+              background: "none", border: "none", cursor: "pointer",
+              fontFamily: "var(--font-dm-sans)", fontSize: 12, color: "var(--text-muted, #aaa)",
+            }}>
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 
