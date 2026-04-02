@@ -1387,28 +1387,6 @@ export default function Home() {
             {tn.trips}
           </a>
 
-          {/* Preferences button */}
-          <button
-            onClick={() => setPrefModalOpen(true)}
-            aria-label="Open preferences"
-            title="Preferences"
-            style={{
-              background: "none",
-              border: "0.5px solid var(--border)",
-              borderRadius: "50%",
-              width: "28px",
-              height: "28px",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              cursor: "pointer",
-              fontSize: "14px",
-              flexShrink: 0,
-            }}
-          >
-            ⚙
-          </button>
-
           {/* Phase 5.3: Auth area */}
           <div className="ml-auto flex-shrink-0 relative">
             {auth.isSignedIn ? (
