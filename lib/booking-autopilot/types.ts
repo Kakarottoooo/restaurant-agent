@@ -23,15 +23,53 @@ export interface HotelAutopilotRequest {
   user_profile?: BookingProfile;
 }
 
+/** @deprecated — kept for backwards compat; use BrowserTaskStatus */
 export type AutopilotStatus =
   | "ready"           // screenshot taken, handoff_url works
   | "no_availability" // no slots found near requested time
-  | "error";          // Playwright failed
+  | "error";          // automation failed
 
+/** @deprecated — kept for backwards compat; use BrowserTaskResult */
 export interface AutopilotResult {
   status: AutopilotStatus;
-  screenshot_base64?: string;  // PNG as base64 data URL
-  handoff_url: string;         // URL user opens to complete booking
-  selected_time?: string;      // actual slot selected (may differ from requested)
+  screenshot_base64?: string;
+  handoff_url: string;
+  selected_time?: string;
+  error?: string;
+}
+
+// ── New browser-use types ────────────────────────────────────────────────────
+
+export interface BrowserTaskInput {
+  /** Starting URL (search page or direct booking URL). */
+  startUrl: string;
+  /** Natural-language goal for the agent, e.g. "Book a table for 2 at Nobu on March 15 at 7pm". */
+  task: string;
+  /** User profile for form pre-filling. */
+  profile: BookingProfile;
+  /** For logging / job association. */
+  jobId: string;
+  stepIndex: number;
+}
+
+export type BrowserTaskStatus =
+  | "completed"             // fully done (agent confirmed booking without payment gate)
+  | "paused_payment"        // reached payment page — waiting for user to pay
+  | "needs_login"           // site requires account login the agent can't bypass
+  | "captcha"               // hard-blocked by CAPTCHA
+  | "no_availability"       // agent confirmed no slots/rooms available
+  | "error";                // unexpected failure
+
+export interface BrowserTaskResult {
+  status: BrowserTaskStatus;
+  /** Base64 PNG of what the agent sees at the pause/completion point. */
+  screenshotBase64?: string;
+  /** URL for the user to continue (warm session or deep link). */
+  handoffUrl: string;
+  /** Browserbase live-view URL for debugging (only in production mode). */
+  sessionUrl?: string;
+  /** Human-readable summary of what the agent did. */
+  summary: string;
+  /** Error detail when status === "error". */
   error?: string;
 }

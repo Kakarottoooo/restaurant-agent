@@ -633,7 +633,7 @@ export interface BookingJobStep {
    */
   timeFallbacks?: string[];
   // ── Runtime fields (filled in as job runs) ──
-  status: "pending" | "loading" | "done" | "error" | "no_availability";
+  status: "pending" | "loading" | "done" | "error" | "no_availability" | "awaiting_confirmation";
   handoff_url?: string;
   selected_time?: string;
   error?: string;

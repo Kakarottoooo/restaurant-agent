@@ -1,11 +1,13 @@
 /**
  * Skill: search_hotel
  *
- * Wraps the existing hotel autopilot endpoint.
+ * Uses the universal Stagehand browser executor to book a hotel on any site.
  * Handles: primary attempt → area switch (allowAreaSwitch).
  */
 
 import type { Skill, SkillContext, StepOutcome, RecoveryStrategy } from "../types";
+import type { BrowserTaskResult } from "@/lib/booking-autopilot/types";
+import { buildHotelTask } from "@/lib/booking-autopilot/stagehand-executor";
 
 export interface SearchHotelInput extends Record<string, unknown> {
   destination: string;
@@ -13,10 +15,17 @@ export interface SearchHotelInput extends Record<string, unknown> {
   checkOut: string;  // ISO date
   guests: number;
   rooms?: number;
-  budget?: string;   // "mid-range" | "luxury" | "budget"
+  budget?: string;
   preferredArea?: string;
+  hotelName?: string;
   notes?: string;
   fallbackCandidates?: Array<{ name: string; area?: string; stars?: number }>;
+  bookingProfile?: {
+    first_name: string;
+    last_name: string;
+    email: string;
+    phone: string;
+  };
 }
 
 export const searchHotelSkill: Skill<SearchHotelInput> = {
@@ -26,85 +35,56 @@ export const searchHotelSkill: Skill<SearchHotelInput> = {
   stepType: "hotel",
 
   async execute(input, ctx: SkillContext): Promise<StepOutcome> {
-    const { baseUrl, autonomy, jobId, sessionId } = ctx;
+    const { baseUrl, autonomy, jobId } = ctx;
     const htl = autonomy.hotel;
 
     ctx.log({
       type: "attempt",
-      message: `Searching hotels in ${input.destination} ${input.checkIn}→${input.checkOut}`,
+      message: `Booking hotel in ${input.destination} ${input.checkIn}→${input.checkOut}`,
     });
 
-    const body = {
-      destination: input.destination,
-      checkIn: input.checkIn,
-      checkOut: input.checkOut,
-      guests: input.guests,
-      rooms: input.rooms ?? 1,
-      budget: input.budget,
-      preferredArea: input.preferredArea,
-      notes: input.notes,
-      fallbackCandidates: input.fallbackCandidates ?? [],
-      autonomySettings: htl,
-      jobId,
-      sessionId,
+    const profile = input.bookingProfile ?? {
+      first_name: "", last_name: "", email: "", phone: "",
     };
 
+    const hotelName = input.hotelName ?? input.destination;
+
+    // Booking.com search URL as starting point
+    const startUrl = `https://www.booking.com/searchresults.html?ss=${encodeURIComponent(hotelName + " " + input.destination)}&checkin=${input.checkIn}&checkout=${input.checkOut}&group_adults=${input.guests}&no_rooms=${input.rooms ?? 1}`;
+
+    const { task } = buildHotelTask({
+      hotelName,
+      city: input.destination,
+      checkin: input.checkIn,
+      checkout: input.checkOut,
+      adults: input.guests,
+      profile,
+    });
+
+    const taskWithContext = input.preferredArea
+      ? `${task} Prefer hotels in ${input.preferredArea}.`
+      : task;
+
     try {
-      const res = await fetch(`${baseUrl}/api/autopilot/hotel`, {
+      const res = await fetch(`${baseUrl}/api/booking-autopilot/universal`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
+        body: JSON.stringify({
+          startUrl,
+          task: taskWithContext,
+          profile,
+          jobId,
+          stepIndex: 0,
+        }),
         signal: ctx.signal,
       });
 
       if (!res.ok) {
-        return { status: "failed", reason: `HTTP ${res.status} from hotel autopilot` };
+        return { status: "failed", reason: `HTTP ${res.status} from universal autopilot` };
       }
 
-      const data = await res.json() as {
-        status: string;
-        hotelName?: string;
-        area?: string;
-        handoffUrl?: string;
-        usedFallback?: boolean;
-        fallbackLabel?: string;
-        error?: string;
-        actionItem?: string;
-      };
-
-      if (data.status === "ready" || data.status === "done") {
-        const entityLabel = data.hotelName ?? input.destination;
-        const result = {
-          summary: `Booked ${entityLabel}${data.area ? ` in ${data.area}` : ""}`,
-          entityLabel,
-          handoffUrl: data.handoffUrl,
-          scheduledAt: `${input.checkIn}T14:00`,  // standard check-in time
-          usedFallback: data.usedFallback,
-          provider: "Booking.com",
-          meta: {
-            destination: input.destination,
-            area: data.area ?? input.preferredArea,
-            checkIn: input.checkIn,
-            checkOut: input.checkOut,
-          },
-        };
-
-        if (data.usedFallback && data.fallbackLabel) {
-          ctx.log({ type: "venue_switched", message: `Switched to ${data.fallbackLabel}` });
-          return { status: "fallback", result, fallbackLabel: data.fallbackLabel };
-        }
-        return { status: "succeeded", result };
-      }
-
-      if (data.actionItem) {
-        return {
-          status: "blocked",
-          reason: data.error ?? "No hotel availability",
-          actionItem: data.actionItem,
-        };
-      }
-
-      return { status: "failed", reason: data.error ?? "Unknown hotel autopilot error" };
+      const data = await res.json() as BrowserTaskResult;
+      return mapBrowserResult(data, hotelName, input.destination, input.checkIn);
     } catch (err) {
       if (err instanceof Error && err.name === "AbortError") {
         return { status: "blocked", reason: "Execution cancelled" };
@@ -113,7 +93,7 @@ export const searchHotelSkill: Skill<SearchHotelInput> = {
     }
   },
 
-  getFallbackStrategies(reason: string, ctx: SkillContext): RecoveryStrategy[] {
+  getFallbackStrategies(_reason: string, ctx: SkillContext): RecoveryStrategy[] {
     const strategies: RecoveryStrategy[] = [];
     const htl = ctx.autonomy.hotel;
 
@@ -143,3 +123,34 @@ export const searchHotelSkill: Skill<SearchHotelInput> = {
     return strategies;
   },
 };
+
+function mapBrowserResult(
+  data: BrowserTaskResult,
+  hotelName: string,
+  destination: string,
+  checkIn: string
+): StepOutcome {
+  const result = {
+    summary: data.summary,
+    entityLabel: hotelName,
+    handoffUrl: data.handoffUrl,
+    screenshotBase64: data.screenshotBase64,
+    sessionUrl: data.sessionUrl,
+    scheduledAt: `${checkIn}T14:00`,
+    meta: { destination },
+  };
+
+  switch (data.status) {
+    case "completed":
+    case "paused_payment":
+      return { status: "succeeded", result: { ...result, requiresPayment: data.status === "paused_payment" } };
+    case "no_availability":
+      return { status: "blocked", reason: "No availability", actionItem: `Book in ${destination} manually` };
+    case "needs_login":
+      return { status: "blocked", reason: "Site requires login", actionItem: "Sign in and book manually" };
+    case "captcha":
+      return { status: "blocked", reason: "Blocked by anti-bot system", actionItem: "Book manually" };
+    default:
+      return { status: "failed", reason: data.error ?? data.summary };
+  }
+}
