@@ -58,11 +58,10 @@ export async function runBrowserTask(
   const useCloud =
     !!(process.env.BROWSERBASE_API_KEY && process.env.BROWSERBASE_PROJECT_ID);
 
-  // Resolve model + key before creating Stagehand — needed for both constructor
-  // (act/extract/observe tools) AND agent() call.
-  // Stagehand v3 requires "provider/model" format: "openai/gpt-4o-2024-08-06",
-  // "anthropic/claude-sonnet-4-6", "google/gemini-2.0-flash", etc.
+  // Resolve model name — Stagehand v3 uses "provider/model" format
   const modelName = input.agentModel?.model ?? "openai/gpt-4o-2024-08-06";
+
+  // Resolve API key from user-supplied config or env fallback
   const modelApiKey = input.agentModel?.apiKey
     ?? (modelName.startsWith("google/") || modelName.includes("gemini")
         ? (process.env.GEMINI_API_KEY ?? process.env.GOOGLE_GENERATIVE_AI_API_KEY ?? process.env.GOOGLE_API_KEY)
@@ -70,7 +69,19 @@ export async function runBrowserTask(
         ? process.env.ANTHROPIC_API_KEY
         : process.env.OPENAI_API_KEY);
 
-  const modelConfig = modelApiKey ? { modelName, apiKey: modelApiKey } : modelName;
+  // Stagehand reads credentials from env vars (providerEnvVarMap), NOT from the
+  // model config object. Inject the resolved key into the correct env var so
+  // both constructor-level (act/observe) and agent-level calls can find it.
+  if (modelApiKey) {
+    if (modelName.startsWith("google/") || modelName.includes("gemini")) {
+      process.env.GEMINI_API_KEY = modelApiKey;
+      process.env.GOOGLE_GENERATIVE_AI_API_KEY = modelApiKey;
+    } else if (modelName.startsWith("anthropic/") || modelName.includes("claude")) {
+      process.env.ANTHROPIC_API_KEY = modelApiKey;
+    } else {
+      process.env.OPENAI_API_KEY = modelApiKey;
+    }
+  }
 
   const stagehand = new Stagehand({
     env: useCloud ? "BROWSERBASE" : "LOCAL",
@@ -78,7 +89,7 @@ export async function runBrowserTask(
       apiKey: process.env.BROWSERBASE_API_KEY,
       projectId: process.env.BROWSERBASE_PROJECT_ID,
     }),
-    model: modelConfig,   // needed for act/extract/observe inside agent tools
+    model: modelName,  // just the string — Stagehand reads key from env vars above
     verbose: 0,
     disablePino: true,
   });
@@ -94,9 +105,9 @@ export async function runBrowserTask(
     // Build the agent instruction
     const instruction = buildInstruction(input);
 
-    // Pass same model+key to agent() for consistency
+    // Agent uses the same model string — key is already in process.env
     const agent = stagehand.agent({
-      model: modelConfig,
+      model: modelName,
       systemPrompt: `You are a booking assistant helping a user complete a reservation.
 Follow the task exactly. Navigate the site, fill in all provided information.
 CRITICAL: Stop immediately when you reach ANY payment page, credit card form,
