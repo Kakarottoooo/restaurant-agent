@@ -58,12 +58,25 @@ export async function runBrowserTask(
   const useCloud =
     !!(process.env.BROWSERBASE_API_KEY && process.env.BROWSERBASE_PROJECT_ID);
 
+  // Resolve model + key before creating Stagehand — needed for both constructor
+  // (act/extract/observe tools) AND agent() call.
+  const modelName = input.agentModel?.model ?? "gpt-4o-2024-08-06";
+  const modelApiKey = input.agentModel?.apiKey
+    ?? (modelName.includes("gemini") || modelName.includes("google")
+        ? (process.env.GEMINI_API_KEY ?? process.env.GOOGLE_GENERATIVE_AI_API_KEY ?? process.env.GOOGLE_API_KEY)
+        : modelName.includes("claude") || modelName.includes("anthropic")
+        ? process.env.ANTHROPIC_API_KEY
+        : process.env.OPENAI_API_KEY);
+
+  const modelConfig = modelApiKey ? { modelName, apiKey: modelApiKey } : modelName;
+
   const stagehand = new Stagehand({
     env: useCloud ? "BROWSERBASE" : "LOCAL",
     ...(useCloud && {
       apiKey: process.env.BROWSERBASE_API_KEY,
       projectId: process.env.BROWSERBASE_PROJECT_ID,
     }),
+    model: modelConfig,   // needed for act/extract/observe inside agent tools
     verbose: 0,
     disablePino: true,
   });
@@ -79,20 +92,9 @@ export async function runBrowserTask(
     // Build the agent instruction
     const instruction = buildInstruction(input);
 
-    // Stagehand tool-based agent uses SHORT model names (not "provider/model" prefix).
-    // "provider/model" format is only for CUA mode.
-    // Short names: "gpt-4o", "gemini-2.0-flash", "claude-sonnet-4-6" etc.
-    const modelName = input.agentModel?.model ?? "gpt-4o-2024-08-06";
-    const modelApiKey = input.agentModel?.apiKey
-      ?? (modelName.includes("gemini") || modelName.includes("google")
-          ? (process.env.GEMINI_API_KEY ?? process.env.GOOGLE_GENERATIVE_AI_API_KEY ?? process.env.GOOGLE_API_KEY)
-          : modelName.includes("claude") || modelName.includes("anthropic")
-          ? process.env.ANTHROPIC_API_KEY
-          : process.env.OPENAI_API_KEY);
-
-    // Pass apiKey explicitly if available; otherwise let Stagehand look up its own env vars
+    // Pass same model+key to agent() for consistency
     const agent = stagehand.agent({
-      model: modelApiKey ? { modelName, apiKey: modelApiKey } : modelName,
+      model: modelConfig,
       systemPrompt: `You are a booking assistant helping a user complete a reservation.
 Follow the task exactly. Navigate the site, fill in all provided information.
 CRITICAL: Stop immediately when you reach ANY payment page, credit card form,
