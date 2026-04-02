@@ -8,6 +8,7 @@
  */
 
 import { useState, useEffect } from "react";
+import { useLanguage, LANGUAGES } from "@/app/hooks/useLanguage";
 
 type Page = "trips" | "monitoring" | "insights" | "metrics" | "other";
 
@@ -23,6 +24,8 @@ function getSessionId() {
 export default function GlobalNav({ active }: Props) {
   const [actionCount, setActionCount] = useState(0);
   const [monitorCount, setMonitorCount] = useState(0);
+  const { lang, setLang, current: currentLang } = useLanguage();
+  const [langMenuOpen, setLangMenuOpen] = useState(false);
 
   useEffect(() => {
     const sid = getSessionId();
@@ -84,7 +87,7 @@ export default function GlobalNav({ active }: Props) {
         Onegent<span style={{ color: "var(--gold, #C9A84C)" }}>.</span>
       </a>
 
-      {/* Links */}
+      {/* Links + Language picker */}
       <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
         {links.map((link) => {
           const isActive = active === link.id;
@@ -124,6 +127,56 @@ export default function GlobalNav({ active }: Props) {
             </a>
           );
         })}
+
+        {/* Language picker */}
+        <div style={{ position: "relative", marginLeft: 4 }}>
+          <button
+            onClick={() => setLangMenuOpen((o) => !o)}
+            title="Language"
+            style={{
+              background: "none", border: "0.5px solid var(--border, #e5e7eb)",
+              borderRadius: 8, padding: "5px 8px", cursor: "pointer",
+              fontSize: 15, lineHeight: 1, display: "flex", alignItems: "center",
+            }}
+          >
+            {currentLang.flag}
+          </button>
+          {langMenuOpen && (
+            <>
+              {/* Backdrop to close */}
+              <div
+                onClick={() => setLangMenuOpen(false)}
+                style={{ position: "fixed", inset: 0, zIndex: 49 }}
+              />
+              <div style={{
+                position: "absolute", right: 0, top: "calc(100% + 8px)",
+                backgroundColor: "var(--bg, #fafaf9)", border: "0.5px solid var(--border, #e5e7eb)",
+                borderRadius: 12, boxShadow: "0 4px 16px rgba(0,0,0,0.12)",
+                minWidth: 190, zIndex: 50, overflow: "hidden",
+              }}>
+                {LANGUAGES.map((l) => (
+                  <button
+                    key={l.code}
+                    onClick={() => { setLang(l.code); setLangMenuOpen(false); }}
+                    style={{
+                      display: "flex", alignItems: "center", gap: 8,
+                      width: "100%", textAlign: "left", padding: "8px 14px",
+                      fontFamily: "var(--font-dm-sans)", fontSize: "13px",
+                      color: l.code === lang ? "var(--gold, #C9A84C)" : "var(--text-primary, #111)",
+                      fontWeight: l.code === lang ? 600 : 400,
+                      background: l.code === lang ? "rgba(201,168,76,0.07)" : "none",
+                      border: "none", borderBottom: "0.5px solid var(--border, #e5e7eb)", cursor: "pointer",
+                    }}
+                  >
+                    <span>{l.flag}</span>
+                    <span>{l.label}</span>
+                    {l.code === lang && <span style={{ marginLeft: "auto", fontSize: 10 }}>✓</span>}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
       </div>
     </nav>
   );

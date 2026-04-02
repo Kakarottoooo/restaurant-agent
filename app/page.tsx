@@ -27,6 +27,7 @@ import { useAuth } from "@/app/hooks/useAuth";
 import { PlanAction, PlanLinkAction, RecommendationCard as CardType, PostExperienceFeedback, FeedbackRecord } from "@/lib/types";
 import type { FeedbackPromptItem } from "@/app/api/feedback-prompts/route";
 import DecisionRoomModal from "@/components/DecisionRoomModal";
+import { useLanguage, LANGUAGES } from "@/app/hooks/useLanguage";
 
 // Leaflet is not SSR-compatible
 const MapView = dynamic(() => import("@/components/MapView"), { ssr: false });
@@ -75,6 +76,8 @@ export default function Home() {
     usePreferences();
   const profileContext = formatProfileForPrompt(profile);
   const { userId } = useAuth();
+  const { lang, setLang, current: currentLang, aiInstruction: languageInstruction } = useLanguage();
+  const [langMenuOpen, setLangMenuOpen] = useState(false);
 
   const location = useLocation();
   const subs = useSubscriptions();
@@ -84,6 +87,7 @@ export default function Home() {
     isNearMe: location.isNearMe,
     nearLocation: location.nearLocation,
     profileContext,
+    languageInstruction,
     learnedWeights,
     userId,
     onSubscriptionIntent: (intent) => {
@@ -1480,6 +1484,45 @@ export default function Home() {
                     >
                       Preferences
                     </button>
+
+                    {/* Language picker */}
+                    <div style={{ borderTop: "0.5px solid var(--border)" }}>
+                      <button
+                        onClick={() => setLangMenuOpen((o) => !o)}
+                        style={{
+                          display: "flex", alignItems: "center", justifyContent: "space-between",
+                          width: "100%", textAlign: "left", padding: "8px 14px",
+                          fontFamily: "var(--font-dm-sans)", fontSize: "13px",
+                          color: "var(--text-primary)", background: "none", border: "none", cursor: "pointer",
+                        }}
+                      >
+                        <span>{currentLang.flag} Language</span>
+                        <span style={{ fontSize: 11, color: "var(--text-secondary)" }}>{currentLang.label} {langMenuOpen ? "▲" : "▼"}</span>
+                      </button>
+                      {langMenuOpen && (
+                        <div style={{ borderTop: "0.5px solid var(--border)", maxHeight: 220, overflowY: "auto" }}>
+                          {LANGUAGES.map((l) => (
+                            <button
+                              key={l.code}
+                              onClick={() => { setLang(l.code); setLangMenuOpen(false); setAccountMenuOpen(false); }}
+                              style={{
+                                display: "flex", alignItems: "center", gap: 8,
+                                width: "100%", textAlign: "left", padding: "7px 14px 7px 20px",
+                                fontFamily: "var(--font-dm-sans)", fontSize: "12px",
+                                color: l.code === lang ? "var(--gold)" : "var(--text-primary)",
+                                fontWeight: l.code === lang ? 600 : 400,
+                                background: l.code === lang ? "rgba(201,168,76,0.07)" : "none",
+                                border: "none", cursor: "pointer",
+                              }}
+                            >
+                              <span>{l.flag}</span>
+                              <span>{l.label}</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
                     <button
                       onClick={() => { auth.signOut(); setAccountMenuOpen(false); }}
                       style={{
@@ -1502,23 +1545,72 @@ export default function Home() {
                 )}
               </>
             ) : (
-              /* Not signed in: Login button */
-              <button
-                onClick={() => auth.signIn()}
-                style={{
-                  fontFamily: "var(--font-dm-sans)",
-                  fontSize: "12px",
-                  color: "var(--text-secondary)",
-                  background: "none",
-                  border: "0.5px solid var(--border)",
-                  borderRadius: "16px",
-                  padding: "4px 10px",
-                  cursor: "pointer",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                Sign in
-              </button>
+              /* Not signed in: Language globe + Login button */
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                {/* Language picker (always visible) */}
+                <div style={{ position: "relative" }}>
+                  <button
+                    onClick={() => setLangMenuOpen((o) => !o)}
+                    title="Language"
+                    style={{
+                      background: "none", border: "0.5px solid var(--border)", borderRadius: "16px",
+                      padding: "4px 8px", cursor: "pointer", fontSize: "14px",
+                      display: "flex", alignItems: "center", gap: 4,
+                      fontFamily: "var(--font-dm-sans)", fontSize: "12px", color: "var(--text-secondary)",
+                    }}
+                  >
+                    {currentLang.flag}
+                  </button>
+                  {langMenuOpen && (
+                    <>
+                      <div onClick={() => setLangMenuOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 49 }} />
+                      <div style={{
+                        position: "absolute", right: 0, top: "calc(100% + 8px)",
+                        backgroundColor: "var(--card)", border: "0.5px solid var(--border)",
+                        borderRadius: 12, boxShadow: "0 4px 16px rgba(0,0,0,0.16)",
+                        minWidth: 180, zIndex: 50, overflow: "hidden",
+                      }}>
+                        {LANGUAGES.map((l) => (
+                          <button
+                            key={l.code}
+                            onClick={() => { setLang(l.code); setLangMenuOpen(false); }}
+                            style={{
+                              display: "flex", alignItems: "center", gap: 8,
+                              width: "100%", textAlign: "left", padding: "8px 14px",
+                              fontFamily: "var(--font-dm-sans)", fontSize: "13px",
+                              color: l.code === lang ? "var(--gold)" : "var(--text-primary)",
+                              fontWeight: l.code === lang ? 600 : 400,
+                              background: l.code === lang ? "rgba(201,168,76,0.07)" : "none",
+                              border: "none", borderBottom: "0.5px solid var(--border)", cursor: "pointer",
+                            }}
+                          >
+                            <span>{l.flag}</span>
+                            <span>{l.label}</span>
+                            {l.code === lang && <span style={{ marginLeft: "auto", fontSize: 10 }}>✓</span>}
+                          </button>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </div>
+
+                <button
+                  onClick={() => auth.signIn()}
+                  style={{
+                    fontFamily: "var(--font-dm-sans)",
+                    fontSize: "12px",
+                    color: "var(--text-secondary)",
+                    background: "none",
+                    border: "0.5px solid var(--border)",
+                    borderRadius: "16px",
+                    padding: "4px 10px",
+                    cursor: "pointer",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  Sign in
+                </button>
+              </div>
             )}
           </div>
         </div>

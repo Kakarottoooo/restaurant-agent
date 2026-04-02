@@ -35,6 +35,7 @@ interface UseChatParams {
   isNearMe: boolean;
   nearLocation: string;
   profileContext?: string;
+  languageInstruction?: string;
   learnedWeights?: LearnedWeights | null;
   onSubscriptionIntent?: (intent: SubscriptionIntent) => void;
   // Called after every complete agent response with the parsed intent/requirements
@@ -48,6 +49,7 @@ export function useChat({
   isNearMe,
   nearLocation,
   profileContext,
+  languageInstruction,
   learnedWeights,
   onSubscriptionIntent,
   onAgentResponse,
@@ -266,7 +268,7 @@ export function useChat({
               currentSessionPrefs.refined_from_query_count > 0
                 ? currentSessionPrefs
                 : undefined,
-            profileContext: profileContext || undefined,
+            profileContext: [profileContext, languageInstruction].filter(Boolean).join("\n\n") || undefined,
             customWeights,
             session_id: getTelemetrySessionId(),
             user_id: userId ?? undefined,
