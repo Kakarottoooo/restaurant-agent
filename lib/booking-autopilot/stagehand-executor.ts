@@ -80,8 +80,12 @@ export async function runBrowserTask(
     const instruction = buildInstruction(input);
 
     // Run the agent — v3 uses "provider/model" format
+    // modelClientOptions passes the API key explicitly (required in LOCAL mode)
     const agent = stagehand.agent({
       model: "anthropic/claude-sonnet-4-6",
+      modelClientOptions: {
+        apiKey: process.env.ANTHROPIC_API_KEY,
+      },
       instructions: `You are a booking assistant helping a user complete a reservation.
 Follow the task exactly. Navigate the site, fill in all provided information.
 CRITICAL: Stop immediately when you reach ANY payment page, credit card form,
