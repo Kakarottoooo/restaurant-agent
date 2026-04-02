@@ -1196,7 +1196,8 @@ export default function Home() {
       >
         <div className="max-w-2xl mx-auto h-full flex items-center gap-3 px-4">
           {/* Brand */}
-          <span
+          <a
+            href="/"
             style={{
               fontFamily: "var(--font-playfair)",
               fontSize: "18px",
@@ -1204,10 +1205,11 @@ export default function Home() {
               color: "var(--text-primary)",
               letterSpacing: "-0.01em",
               flexShrink: 0,
+              textDecoration: "none",
             }}
           >
             Onegent<span style={{ color: "var(--gold)" }}>.</span>
-          </span>
+          </a>
 
           {/* Location Input with Dropdown */}
           <div className="relative flex-shrink-0">

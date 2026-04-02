@@ -1586,6 +1586,22 @@ export default function TripsPage() {
         padding: "16px 20px", display: "flex", alignItems: "center",
         justifyContent: "space-between", zIndex: 10,
       }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+          <a
+            href="/"
+            style={{
+              fontFamily: "var(--font-playfair, serif)",
+              fontSize: 18,
+              fontWeight: 700,
+              color: "var(--text-primary, #111)",
+              textDecoration: "none",
+              letterSpacing: "-0.01em",
+              flexShrink: 0,
+            }}
+          >
+            Onegent<span style={{ color: "var(--gold, #C9A84C)" }}>.</span>
+          </a>
+        </div>
         <div>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <p style={{ fontFamily: "var(--font-dm-sans)", fontWeight: 700, fontSize: 17 }}>My Trips</p>
