@@ -1,20 +1,18 @@
 /**
  * POST /api/booking-jobs/[id]/start
  *
- * Long-running endpoint (up to 5 min) that executes the autopilot steps
- * for a booking job sequentially, updating the DB after each step.
- * The client fires this request and doesn't await it (keepalive: true).
- * The UI polls /api/booking-jobs/[id] for progress.
+ * Long-running endpoint (up to 5 min) that executes autopilot steps
+ * sequentially with full in-task decision-making:
  *
- * Recovery logic per step:
- *  1. Try primary  (attempt 1)
- *  2. Retry after 2s if error (attempt 2)
- *  3. Retry after 5s if still error (attempt 3)
- *  4. Try each fallbackCandidate (1 attempt each, no delay)
- *  5. If all fail → mark step as "error", populate actionItem, continue to next step
- *  6. "no_availability" is final — no retry, skip to fallback candidates immediately
+ * Per step:
+ *  1. Try primary   (up to 3 attempts with 2s/5s backoff on transient error)
+ *  2. If restaurant + no_availability: auto-try timeFallbacks (±30, ±60, ±90 min)
+ *     — the agent picks the best adjacent time on the user's behalf
+ *  3. Try each fallbackCandidate venue (1 attempt each)
+ *  4. If candidate is a restaurant + no_availability: also try its timeFallbacks
+ *  5. All failed → actionItem with manual booking links, continue to next step
  *
- * On completion, sends a Web Push notification to the user.
+ * Every decision is logged in step.decisionLog for the task view.
  */
 import { NextRequest, NextResponse } from "next/server";
 import {
@@ -23,7 +21,11 @@ import {
   updateBookingJobSteps,
   getPushSubscriptionsBySession,
 } from "@/lib/db";
-import type { BookingJobStep, FallbackCandidate } from "@/lib/db";
+import type {
+  BookingJobStep,
+  FallbackCandidate,
+  DecisionLogEntry,
+} from "@/lib/db";
 import { sendPushNotification } from "@/lib/push";
 import type { PushSubscription } from "web-push";
 import type { AutopilotResult } from "@/lib/booking-autopilot/types";
@@ -34,7 +36,14 @@ type Params = { params: Promise<{ id: string }> };
 
 const BASE_URL = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
 
-/** Call a single autopilot endpoint and return the raw result. */
+function now(): string {
+  return new Date().toISOString();
+}
+
+function sleep(ms: number) {
+  return new Promise<void>((resolve) => setTimeout(resolve, ms));
+}
+
 async function callAutopilotEndpoint(
   endpoint: string,
   body: Record<string, unknown>
@@ -47,122 +56,271 @@ async function callAutopilotEndpoint(
   return res.json() as Promise<AutopilotResult>;
 }
 
-/** Sleep for `ms` milliseconds. */
-function sleep(ms: number) {
-  return new Promise<void>((resolve) => setTimeout(resolve, ms));
+/**
+ * Try one specific body payload against the autopilot endpoint.
+ * Returns { data, log } — data is the API result, log is the entry to append.
+ */
+async function tryOnce(
+  endpoint: string,
+  body: Record<string, unknown>,
+  logMessage: string
+): Promise<{ data: AutopilotResult | null; entry: DecisionLogEntry }> {
+  try {
+    const data = await callAutopilotEndpoint(endpoint, body);
+    const outcome =
+      data.status === "ready"
+        ? "Booked ✓"
+        : data.status === "no_availability"
+        ? "No availability"
+        : data.error ?? "Error";
+    return {
+      data,
+      entry: {
+        ts: now(),
+        type: data.status === "ready" ? "succeeded" : data.status === "no_availability" ? "skipped" : "failed",
+        message: logMessage,
+        outcome,
+      },
+    };
+  } catch (err) {
+    return {
+      data: null,
+      entry: {
+        ts: now(),
+        type: "failed",
+        message: logMessage,
+        outcome: err instanceof Error ? err.message : "Network error",
+      },
+    };
+  }
 }
 
 /**
- * Run one step with full recovery:
- *  - Up to 3 attempts with 2s / 5s backoff on error
- *  - no_availability is not retried; fall straight through to candidates
- *  - Each fallback candidate gets 1 attempt
- *  - Returns the mutated step with final status + any actionItem
+ * Try a venue+body with optional time fallbacks.
+ * Returns the first successful result, or null if all fail.
+ * Appends to `log` for every attempt made.
  */
+async function tryWithTimeFallbacks(
+  endpoint: string,
+  baseBody: Record<string, unknown>,
+  primaryLabel: string,
+  timeFallbacks: string[] | undefined,
+  log: DecisionLogEntry[]
+): Promise<AutopilotResult | null> {
+  // Primary time
+  const primaryTime = typeof baseBody.time === "string" ? baseBody.time : undefined;
+  const primaryMessage =
+    primaryTime && baseBody.restaurant_name
+      ? `Tried ${baseBody.restaurant_name} at ${primaryTime}`
+      : primaryLabel;
+
+  const { data, entry } = await tryOnce(endpoint, baseBody, primaryMessage);
+  log.push(entry);
+
+  if (data?.status === "ready") return data;
+
+  // Only try time fallbacks for no_availability (not transient errors)
+  if (data?.status === "no_availability" && timeFallbacks?.length) {
+    for (const altTime of timeFallbacks) {
+      const altBody = { ...baseBody, time: altTime };
+      const altMessage = baseBody.restaurant_name
+        ? `Agent adjusted to ${altTime} at ${baseBody.restaurant_name}`
+        : `Trying ${altTime}`;
+      const { data: altData, entry: altEntry } = await tryOnce(endpoint, altBody, altMessage);
+      altEntry.type = altData?.status === "ready" ? "succeeded" : "time_adjusted";
+      log.push(altEntry);
+      if (altData?.status === "ready") return altData;
+    }
+  }
+
+  return null;
+}
+
 async function runStepWithRecovery(
   step: BookingJobStep,
   onProgress: (updated: BookingJobStep) => Promise<void>
 ): Promise<BookingJobStep> {
-  const RETRY_DELAYS = [0, 2000, 5000]; // delays before attempt 1, 2, 3
-  let current = { ...step, attemptCount: 0 };
+  const RETRY_DELAYS = [0, 2000, 5000];
+  const log: DecisionLogEntry[] = [];
+  let current = { ...step, attemptCount: 0, decisionLog: log };
 
-  // ── Phase 1: try primary with up to 3 attempts ──────────────────────────
+  // ── Phase 1: primary, up to 3 attempts with backoff ──────────────────
+  let primarySucceeded = false;
+  let primaryData: AutopilotResult | null = null;
+
   for (let attempt = 0; attempt < RETRY_DELAYS.length; attempt++) {
     if (attempt > 0) {
       await sleep(RETRY_DELAYS[attempt]);
+      log.push({
+        ts: now(),
+        type: "retry",
+        message: `Retrying… (attempt ${attempt + 1} of ${RETRY_DELAYS.length})`,
+      });
     }
 
     current = {
       ...current,
       status: "loading",
       attemptCount: (current.attemptCount ?? 0) + 1,
-      error: undefined,
     };
-    await onProgress(current);
+    await onProgress({ ...current, decisionLog: [...log] });
 
     try {
       const data = await callAutopilotEndpoint(step.apiEndpoint, step.body);
 
       if (data.status === "ready") {
-        return {
-          ...current,
-          status: "done",
-          handoff_url: data.handoff_url,
-          selected_time: data.selected_time,
-          error: undefined,
-          usedFallback: false,
-        };
+        const primaryTime =
+          typeof step.body.time === "string" ? step.body.time : undefined;
+        log.push({
+          ts: now(),
+          type: "succeeded",
+          message: primaryTime
+            ? `Booked ${step.label} at ${primaryTime}`
+            : `Booked ${step.label}`,
+          outcome: "Booked ✓",
+        });
+        primarySucceeded = true;
+        primaryData = data;
+        break;
       }
 
       if (data.status === "no_availability") {
-        // No point retrying — availability won't change between attempts.
-        current = { ...current, status: "no_availability", error: data.error };
-        break; // proceed to fallback candidates
+        const primaryTime =
+          typeof step.body.time === "string" ? ` at ${step.body.time}` : "";
+        log.push({
+          ts: now(),
+          type: "skipped",
+          message: `Tried ${step.label}${primaryTime}`,
+          outcome: "No availability",
+        });
+        primaryData = data;
+        break; // no_availability = don't retry same time
       }
 
-      // error status → retry
-      current = { ...current, status: "error", error: data.error ?? "Unknown error" };
+      // transient error → loop to retry
+      log.push({
+        ts: now(),
+        type: "attempt",
+        message: `Tried ${step.label}`,
+        outcome: data.error ?? "Error",
+      });
+      primaryData = data;
     } catch (err) {
-      current = {
-        ...current,
-        status: "error",
-        error: err instanceof Error ? err.message : "Network error",
-      };
+      log.push({
+        ts: now(),
+        type: "attempt",
+        message: `Tried ${step.label}`,
+        outcome: err instanceof Error ? err.message : "Network error",
+      });
     }
   }
 
-  // ── Phase 2: try fallback candidates ───────────────────────────────────
+  if (primarySucceeded && primaryData) {
+    return {
+      ...current,
+      status: "done",
+      handoff_url: primaryData.handoff_url,
+      selected_time: primaryData.selected_time,
+      usedFallback: false,
+      timeAdjusted: false,
+      decisionLog: [...log],
+    };
+  }
+
+  // ── Phase 2: time fallbacks (restaurants only) ───────────────────────
+  if (
+    step.type === "restaurant" &&
+    primaryData?.status === "no_availability" &&
+    step.timeFallbacks?.length
+  ) {
+    current = { ...current, status: "loading" };
+    await onProgress({ ...current, decisionLog: [...log] });
+
+    for (const altTime of step.timeFallbacks) {
+      const altBody = { ...step.body, time: altTime };
+      const altMessage = `Agent adjusted to ${altTime} at ${step.label}`;
+      const { data: altData, entry: altEntry } = await tryOnce(
+        step.apiEndpoint,
+        altBody,
+        altMessage
+      );
+      altEntry.type = altData?.status === "ready" ? "succeeded" : "time_adjusted";
+      log.push(altEntry);
+
+      await onProgress({ ...current, decisionLog: [...log] });
+
+      if (altData?.status === "ready") {
+        return {
+          ...current,
+          status: "done",
+          handoff_url: altData.handoff_url,
+          selected_time: altData.selected_time,
+          usedFallback: false,
+          timeAdjusted: true,
+          decisionLog: [...log],
+        };
+      }
+    }
+  }
+
+  // ── Phase 3: fallback candidates (alternative venues) ────────────────
   const candidates: FallbackCandidate[] = step.fallbackCandidates ?? [];
   for (const candidate of candidates) {
     current = {
       ...current,
       status: "loading",
-      label: `${step.label} → ${candidate.label}`,
-      error: undefined,
     };
-    await onProgress(current);
+    await onProgress({ ...current, decisionLog: [...log] });
 
-    try {
-      const data = await callAutopilotEndpoint(step.apiEndpoint, candidate.body);
+    log.push({
+      ts: now(),
+      type: "venue_switched",
+      message: `Switching to alternative: ${candidate.label}`,
+    });
 
-      if (data.status === "ready") {
-        return {
-          ...current,
-          status: "done",
-          handoff_url: data.handoff_url,
-          selected_time: data.selected_time,
-          error: undefined,
-          usedFallback: true,
-        };
-      }
+    const successData = await tryWithTimeFallbacks(
+      step.apiEndpoint,
+      candidate.body,
+      candidate.label,
+      step.type === "restaurant" ? step.timeFallbacks : undefined,
+      log
+    );
 
-      current = {
+    await onProgress({ ...current, decisionLog: [...log] });
+
+    if (successData) {
+      return {
         ...current,
-        status: data.status === "no_availability" ? "no_availability" : "error",
-        error: data.error,
-      };
-    } catch (err) {
-      current = {
-        ...current,
-        status: "error",
-        error: err instanceof Error ? err.message : "Network error",
+        status: "done",
+        label: candidate.label,
+        handoff_url: successData.handoff_url,
+        selected_time: successData.selected_time,
+        usedFallback: true,
+        decisionLog: [...log],
       };
     }
   }
 
-  // ── Phase 3: all attempts failed — build actionItem ────────────────────
+  // ── Phase 4: all failed — build actionItem ────────────────────────────
+  log.push({
+    ts: now(),
+    type: "failed",
+    message: "All automatic options exhausted",
+    outcome: "Needs your attention",
+  });
+
   const manualOptions = [
     { label: step.label, url: step.fallbackUrl },
     ...candidates.map((c) => ({ label: c.label, url: c.fallbackUrl })),
-  ].filter((o) => o.url); // drop entries with no URL
+  ].filter((o) => o.url);
 
   const actionItem =
     manualOptions.length > 0
       ? {
           message:
             manualOptions.length === 1
-              ? `Auto-booking failed. Tap to complete manually:`
-              : `Auto-booking failed. Choose one of these options to book manually:`,
+              ? "Auto-booking failed. Tap to complete manually:"
+              : "Auto-booking failed. Choose one of these to book manually:",
           options: manualOptions,
         }
       : undefined;
@@ -170,8 +328,9 @@ async function runStepWithRecovery(
   return {
     ...current,
     status: "error",
+    handoff_url: step.fallbackUrl,
     actionItem,
-    handoff_url: step.fallbackUrl, // best-effort deep link
+    decisionLog: [...log],
   };
 }
 
@@ -191,7 +350,6 @@ export async function POST(_req: NextRequest, { params }: Params) {
   const steps: BookingJobStep[] = [...job.steps];
 
   for (let i = 0; i < steps.length; i++) {
-    // Callback that persists intermediate step state to DB while the step runs
     const onProgress = async (updated: BookingJobStep) => {
       steps[i] = updated;
       await updateBookingJobSteps(id, steps);
@@ -205,42 +363,49 @@ export async function POST(_req: NextRequest, { params }: Params) {
   const finalStatus = doneCount > 0 ? "done" : "failed";
   await updateBookingJobStatus(id, finalStatus, new Date());
 
-  // ── Push notification ─────────────────────────────────────────────────
+  // ── Push notification ──────────────────────────────────────────────────
   try {
     const subscriptions = await getPushSubscriptionsBySession(job.session_id);
-
-    const failedSteps = steps.filter((s) => s.status === "error" || s.status === "no_availability");
-    const needsAttention = failedSteps.filter((s) => s.actionItem).length;
+    const needsAttention = steps.filter((s) => s.actionItem).length;
+    const timeAdjusted = steps.filter((s) => s.timeAdjusted).length;
+    const usedFallback = steps.filter((s) => s.usedFallback).length;
 
     let title: string;
     let body: string;
 
     if (doneCount === steps.length) {
+      const adjustNote =
+        timeAdjusted > 0 || usedFallback > 0
+          ? ` (agent made ${timeAdjusted + usedFallback} smart adjustment${timeAdjusted + usedFallback > 1 ? "s" : ""})`
+          : "";
       title = "✈ Your trip is ready to book!";
-      body = `All ${steps.length} bookings pre-filled — tap to open and pay.`;
+      body = `All ${steps.length} bookings pre-filled${adjustNote} — tap to open and pay.`;
     } else if (doneCount > 0 && needsAttention > 0) {
-      const doneLabels = steps
+      const doneEmojis = steps
         .filter((s) => s.status === "done")
         .map((s) => s.emoji)
         .join(" ");
-      title = `${doneLabels} Partially booked — action needed`;
+      title = `${doneEmojis} Partially booked — action needed`;
       body = `${doneCount} of ${steps.length} ready. ${needsAttention} step${needsAttention > 1 ? "s need" : " needs"} your attention.`;
     } else if (doneCount > 0) {
       title = "Trip booking update";
-      body = `${doneCount} of ${steps.length} bookings pre-filled — tap to see what's ready.`;
+      body = `${doneCount} of ${steps.length} bookings pre-filled — tap to see.`;
     } else {
-      title = "Trip booking update";
-      body = "Some steps couldn't complete. Tap to see what's ready.";
+      title = "Trip booking needs attention";
+      body = "Autopilot couldn't complete any steps. Tap to book manually.";
     }
 
-    const pushPayload = { title, body, url: "/trips" };
     await Promise.allSettled(
       subscriptions.map((sub) =>
-        sendPushNotification(sub.push_subscription as PushSubscription, pushPayload)
+        sendPushNotification(sub.push_subscription as PushSubscription, {
+          title,
+          body,
+          url: "/trips",
+        })
       )
     );
   } catch {
-    // Push failure should never block the job completion response
+    // Push failure never blocks job completion
   }
 
   return NextResponse.json({ jobId: id, status: finalStatus, steps });

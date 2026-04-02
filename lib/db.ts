@@ -593,6 +593,24 @@ export interface StepActionItem {
   options: Array<{ label: string; url: string }>;
 }
 
+/**
+ * One entry in the agent's decision log for a step.
+ * Lets users see exactly what the agent tried on their behalf.
+ */
+export interface DecisionLogEntry {
+  ts: string; // ISO timestamp
+  type:
+    | "attempt"        // tried primary or fallback
+    | "retry"          // retrying after transient error
+    | "time_adjusted"  // restaurant: trying a different time slot
+    | "venue_switched" // hotel/restaurant: switching to backup venue
+    | "succeeded"      // terminal success
+    | "failed"         // terminal failure for this option
+    | "skipped";       // no_availability — not retried
+  message: string;     // human-readable, e.g. "Tried Le Bernardin at 7:00pm"
+  outcome?: string;    // e.g. "No availability", "Network error", "Booked ✓"
+}
+
 export interface BookingJobStep {
   type: "flight" | "hotel" | "restaurant";
   emoji: string;
@@ -602,6 +620,12 @@ export interface BookingJobStep {
   fallbackUrl: string;
   /** Backup venues/hotels/restaurants tried if the primary fails */
   fallbackCandidates?: FallbackCandidate[];
+  /**
+   * For restaurants: alternate time slots to try (in "HH:MM" format) before
+   * giving up and switching venues. E.g. ["19:30", "18:30", "20:00"].
+   * The agent tries these automatically — no user input needed.
+   */
+  timeFallbacks?: string[];
   // ── Runtime fields (filled in as job runs) ──
   status: "pending" | "loading" | "done" | "error" | "no_availability";
   handoff_url?: string;
@@ -611,8 +635,12 @@ export interface BookingJobStep {
   attemptCount?: number;
   /** True when a fallback candidate succeeded instead of the primary */
   usedFallback?: boolean;
+  /** True when a time fallback was used instead of the originally requested time */
+  timeAdjusted?: boolean;
   /** Populated when all attempts + fallbacks fail — tells user what to do manually */
   actionItem?: StepActionItem;
+  /** Full log of every decision the agent made for this step */
+  decisionLog?: DecisionLogEntry[];
 }
 
 export interface BookingJob {

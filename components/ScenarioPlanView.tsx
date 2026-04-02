@@ -70,6 +70,28 @@ interface ParsedComponent {
   text: string;
 }
 
+/**
+ * Generate adjacent time slots for restaurant bookings.
+ * The agent will try these automatically before switching venues.
+ * baseTime: "HH:MM" (24h). Returns up to 6 fallbacks within 11:00–22:00.
+ */
+function generateTimeFallbacks(baseTime: string): string[] {
+  const [h, m] = baseTime.split(":").map(Number);
+  if (isNaN(h) || isNaN(m)) return [];
+  const base = h * 60 + m;
+  // Try ±30, ±60, ±90 minutes — ordered by proximity
+  const deltas = [30, -30, 60, -60, 90, -90];
+  return deltas
+    .map((d) => {
+      const t = base + d;
+      if (t < 11 * 60 || t > 22 * 60) return null;
+      const hh = Math.floor(t / 60).toString().padStart(2, "0");
+      const mm = (t % 60).toString().padStart(2, "0");
+      return `${hh}:${mm}`;
+    })
+    .filter(Boolean) as string[];
+}
+
 /** Extract the venue name from a component text before the first bullet/dash/colon separator. */
 function extractVenueName(text: string): string {
   return text.split(/[•·\-–—:|,]/)[0].trim();
@@ -360,6 +382,7 @@ export default function ScenarioPlanView({
           },
           fallbackUrl: `https://www.opentable.com/s?term=${encodeURIComponent(name)}`,
           fallbackCandidates: backupRestaurants.length > 0 ? backupRestaurants : undefined,
+          timeFallbacks: generateTimeFallbacks(ctx.time_hint ?? "19:00"),
         });
       }
     }

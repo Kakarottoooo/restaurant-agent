@@ -19,6 +19,11 @@ export interface BookableStep {
   fallbackUrl: string;
   /** Backup alternatives tried by the recovery engine if the primary fails */
   fallbackCandidates?: BookableFallbackCandidate[];
+  /**
+   * For restaurants: adjacent time slots the agent will try automatically
+   * before giving up (e.g. ["19:30", "18:30", "20:00"]).
+   */
+  timeFallbacks?: string[];
 }
 
 type StepStatus = "pending" | "loading" | "done" | "error" | "no_availability";
