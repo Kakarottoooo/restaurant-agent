@@ -46,6 +46,13 @@ import { createBookingMonitor } from "@/lib/db";
 import { sendPushNotification } from "@/lib/push";
 import type { PushSubscription } from "web-push";
 import type { AutopilotResult } from "@/lib/booking-autopilot/types";
+import { buildPreferenceProfile } from "@/lib/policy";
+
+// ── Agent-runtime: activity skill dispatch ─────────────────────────────────
+// Restaurant / hotel / flight use the 4-phase recovery loop below.
+// Activity steps (and future new types) are dispatched through the agent-runtime.
+import { findActivitySkill } from "@/lib/agent-runtime/skills/find-activity";
+import type { SkillContext } from "@/lib/agent-runtime/types";
 
 export const maxDuration = 300;
 
@@ -302,6 +309,49 @@ async function runStepWithRecovery(
   };
 }
 
+// ── Activity step via agent-runtime skill ─────────────────────────────────
+
+async function runActivityStep(
+  step: BookingJobStep,
+  ctx: SkillContext,
+  onProgress: (s: BookingJobStep) => Promise<void>
+): Promise<BookingJobStep> {
+  const log: DecisionLogEntry[] = [];
+  const withLog = { ...ctx, log: (e: Omit<DecisionLogEntry, "ts">) => log.push({ ...e, ts: new Date().toISOString() } as DecisionLogEntry) };
+
+  await onProgress({ ...step, status: "loading", decisionLog: log });
+
+  const outcome = await findActivitySkill.execute(
+    step.body as Parameters<typeof findActivitySkill.execute>[0],
+    withLog
+  );
+
+  if (outcome.status === "succeeded" || outcome.status === "adjusted" || outcome.status === "fallback") {
+    log.push({ ts: new Date().toISOString(), type: "succeeded",
+      message: `Found ${outcome.result.entityLabel}`, outcome: "Ready ✓" });
+    return {
+      ...step, status: "done",
+      handoff_url: outcome.result.handoffUrl,
+      selected_time: outcome.result.scheduledAt,
+      usedFallback: outcome.status === "fallback",
+      decisionLog: log,
+    };
+  }
+
+  if (outcome.status === "blocked") {
+    log.push({ ts: new Date().toISOString(), type: "skipped",
+      message: outcome.reason, outcome: "No availability" });
+    return {
+      ...step, status: "no_availability", error: outcome.reason,
+      actionItem: { message: outcome.actionItem ?? outcome.reason, options: [] },
+      decisionLog: log,
+    };
+  }
+
+  log.push({ ts: new Date().toISOString(), type: "failed", message: outcome.reason, outcome: "Error" });
+  return { ...step, status: "error", error: outcome.reason, decisionLog: log };
+}
+
 // ── Route handler ──────────────────────────────────────────────────────────
 
 export async function POST(_req: NextRequest, { params }: Params) {
@@ -317,16 +367,31 @@ export async function POST(_req: NextRequest, { params }: Params) {
   // Use the autonomy settings saved at job-creation time, fall back to defaults
   const autonomy: AgentAutonomySettings = job.autonomy_settings ?? DEFAULT_AUTONOMY;
 
-  // Load policy bias for this session — seeds candidate ordering and tolerance notes
+  // Load policy bias + preference profile for this session
   let policy: PolicyBias;
+  let events: Awaited<ReturnType<typeof getAgentFeedbackEvents>> = [];
   try {
-    const events = await getAgentFeedbackEvents(job.session_id, 500);
+    events = await getAgentFeedbackEvents(job.session_id, 500);
     policy = computePolicyBias(events);
   } catch {
     policy = computePolicyBias([]); // safe fallback — no bias applied
   }
+  const profile = buildPreferenceProfile(events);
 
   await updateBookingJobStatus(id, "running");
+
+  // Shared skill context for agent-runtime dispatched steps (activity, etc.)
+  const skillCtx: SkillContext = {
+    jobId: id,
+    sessionId: job.session_id,
+    tripLabel: job.trip_label,
+    autonomy,
+    policy,
+    profile,
+    relationship: null,
+    baseUrl: BASE_URL,
+    log: () => {}, // fire-and-forget; step logs are written via onProgress
+  };
 
   const steps: BookingJobStep[] = [...job.steps];
 
@@ -341,7 +406,15 @@ export async function POST(_req: NextRequest, { params }: Params) {
       steps[i] = updated;
       await updateBookingJobSteps(id, steps);
     };
-    steps[i] = await runStepWithRecovery(steps[i], autonomy, policy, onProgress);
+
+    // ── Dispatch: activity steps → agent-runtime skill ─────────────────
+    // Restaurant / hotel / flight use the battle-tested 4-phase recovery loop.
+    // Activity (and future types) are dispatched through the agent-runtime skill.
+    if ((steps[i].type as string) === "activity") {
+      steps[i] = await runActivityStep(steps[i], skillCtx, onProgress);
+    } else {
+      steps[i] = await runStepWithRecovery(steps[i], autonomy, policy, onProgress);
+    }
     await updateBookingJobSteps(id, steps);
 
     // ── Scene-level replan ─────────────────────────────────────────────

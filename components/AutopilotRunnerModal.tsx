@@ -242,6 +242,42 @@ export function AutopilotRunnerModal({ open, steps, tripLabel, onClose }: Props)
         {/* Body */}
         <div style={{ flex: 1, overflowY: "auto", padding: "20px" }}>
 
+          {/* ── Before action: trust panel ─────────────────────────────────
+               Shows what the agent is allowed to change, before it acts.
+               Only shown while steps haven't started yet.               */}
+          {!allDone && !bgSent && stepStates.every((s) => s.status === "pending" || s.status === "loading") && (() => {
+            const a = loadAutonomySettings();
+            const signals: string[] = [];
+            if (a.restaurant.timeWindowMinutes > 0)
+              signals.push(`Shift restaurant time ±${a.restaurant.timeWindowMinutes} min`);
+            if (a.restaurant.allowVenueSwitch)
+              signals.push("Switch to a backup restaurant if primary is unavailable");
+            if (a.hotel.allowAreaSwitch)
+              signals.push("Try a nearby area hotel if first choice is full");
+            if (a.flight.allowLayover)
+              signals.push("Try 1-stop flights when no direct is available");
+            if (a.flight.allowAlternateAirport)
+              signals.push("Try nearby airports (e.g. JFK ↔ LGA ↔ EWR)");
+            if (signals.length === 0) return null;
+            return (
+              <div style={{
+                marginBottom: 16, padding: "12px 14px", borderRadius: 10,
+                background: "rgba(74,154,74,0.06)", border: "0.5px solid rgba(74,154,74,0.25)",
+              }}>
+                <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 11, fontWeight: 700,
+                  color: "rgba(74,154,74,0.9)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>
+                  What the agent can do automatically
+                </p>
+                {signals.map((s) => (
+                  <p key={s} style={{ fontFamily: "var(--font-dm-sans)", fontSize: 12,
+                    color: "var(--text-secondary, #666)", marginBottom: 3, display: "flex", gap: 6 }}>
+                    <span style={{ color: "rgba(74,154,74,0.8)", flexShrink: 0 }}>✓</span>{s}
+                  </p>
+                ))}
+              </div>
+            );
+          })()}
+
           {/* Background booking sent */}
           {bgSent && (
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -410,11 +446,17 @@ export function AutopilotRunnerModal({ open, steps, tripLabel, onClose }: Props)
                           ? "Navigating to hotel page on Booking.com…"
                           : "Finding your table on OpenTable…"
                       )}
-                      {status === "done" && (
-                        state.result?.selected_time
-                          ? `Ready · ${step.type === "flight" ? "Price: " : "Time: "}${state.result.selected_time}`
-                          : "Pre-filled and ready to confirm"
-                      )}
+                      {status === "done" && (() => {
+                        const r = state.result;
+                        // During action: surface what the agent adjusted
+                        if (r?.selected_time && r.selected_time !== step.body?.time) {
+                          return <span style={{ color: "var(--gold, #D4A34B)" }}>↻ Agent adjusted time to {r.selected_time}</span>;
+                        }
+                        if (r?.selected_time) {
+                          return `Ready · ${step.type === "flight" ? "Departs " : ""}${r.selected_time}`;
+                        }
+                        return "Pre-filled and ready to confirm";
+                      })()}
                       {status === "no_availability" && (
                         state.result?.error ?? "No availability — search page ready"
                       )}
@@ -448,6 +490,40 @@ export function AutopilotRunnerModal({ open, steps, tripLabel, onClose }: Props)
               );
             })}
           </div>
+
+          {/* ── After action: what the agent learned ──────────────────────
+               Shown once all steps are complete. Surfaces what was adjusted
+               so the user understands what the agent will remember.      */}
+          {allDone && (() => {
+            const adjusted = stepStates.filter((s) =>
+              s.result?.selected_time && steps[stepStates.indexOf(s)]?.body?.time !== s.result.selected_time
+            );
+            const succeeded = stepStates.filter((s) => s.status === "done").length;
+            const failed    = stepStates.filter((s) => s.status === "no_availability" || s.status === "error").length;
+            if (succeeded === 0) return null;
+            return (
+              <div style={{
+                marginBottom: 16, padding: "12px 14px", borderRadius: 10,
+                background: "rgba(212,163,75,0.06)", border: "0.5px solid rgba(212,163,75,0.25)",
+              }}>
+                <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 11, fontWeight: 700,
+                  color: "var(--gold, #D4A34B)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>
+                  What the agent did
+                </p>
+                <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 12, color: "var(--text-secondary, #666)", marginBottom: 3 }}>
+                  ✓ {succeeded} step{succeeded !== 1 ? "s" : ""} pre-filled{adjusted.length > 0 ? ` · ${adjusted.length} time adjustment${adjusted.length !== 1 ? "s" : ""} made` : ""}
+                </p>
+                {failed > 0 && (
+                  <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 12, color: "var(--text-secondary, #666)" }}>
+                    ⚠ {failed} step{failed !== 1 ? "s" : ""} need manual booking
+                  </p>
+                )}
+                <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 11, color: "var(--text-muted, #aaa)", marginTop: 6 }}>
+                  Your feedback on these bookings trains the agent for next time.
+                </p>
+              </div>
+            );
+          })()}
 
           {/* Final CTA */}
           {allDone && doneWithUrls.length > 0 && (

@@ -7,6 +7,7 @@ import ScenarioEvidencePanel from "@/components/ScenarioEvidencePanel";
 import { AutopilotRunnerModal } from "@/components/AutopilotRunnerModal";
 import type { BookableStep } from "@/components/AutopilotRunnerModal";
 import { buildPlanFeedbackCopy, getScenarioUiCopy } from "@/lib/outputCopy";
+import { loadAutonomySettings } from "@/lib/autonomy";
 import type {
   DecisionPlan,
   PlanAction,
@@ -875,6 +876,43 @@ export default function ScenarioPlanView({
               );
             })}
           </div>
+
+          {/* ── Before action: trust signals ──────────────────────────────
+               Shown when the plan has bookable steps, before the user
+               approves. Tells them exactly what the agent can change.    */}
+          {autopilotSteps.length > 0 && !myPlanBuilt && (() => {
+            const a = loadAutonomySettings();
+            const signals: string[] = [];
+            const hasRestaurant = autopilotSteps.some((s) => s.type === "restaurant");
+            const hasHotel      = autopilotSteps.some((s) => s.type === "hotel");
+            const hasFlight     = autopilotSteps.some((s) => s.type === "flight");
+            if (hasRestaurant && a.restaurant.timeWindowMinutes > 0)
+              signals.push(`Shift restaurant time ±${a.restaurant.timeWindowMinutes} min`);
+            if (hasRestaurant && a.restaurant.allowVenueSwitch)
+              signals.push("Switch to backup restaurants if unavailable");
+            if (hasHotel && a.hotel.allowAreaSwitch)
+              signals.push("Try nearby area hotels if first choice is full");
+            if (hasFlight && a.flight.allowLayover)
+              signals.push("Try 1-stop flights when no direct available");
+            if (signals.length === 0) return null;
+            return (
+              <div style={{
+                padding: "10px 12px", borderRadius: 10, marginBottom: 8,
+                background: "rgba(74,154,74,0.05)", border: "0.5px solid rgba(74,154,74,0.2)",
+              }}>
+                <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 10, fontWeight: 700,
+                  color: "rgba(74,154,74,0.8)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 5 }}>
+                  {plan.output_language === "zh" ? "Agent 自动调整范围" : "Agent can adjust automatically"}
+                </p>
+                {signals.map((s) => (
+                  <p key={s} style={{ fontFamily: "var(--font-dm-sans)", fontSize: 11,
+                    color: "var(--text-secondary, #666)", marginBottom: 2, display: "flex", gap: 5 }}>
+                    <span style={{ color: "rgba(74,154,74,0.7)", flexShrink: 0 }}>✓</span>{s}
+                  </p>
+                ))}
+              </div>
+            );
+          })()}
 
           {/* Make this my plan CTA */}
           {!myPlanBuilt ? (
