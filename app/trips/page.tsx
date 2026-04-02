@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import type { BookingJob, BookingJobStep, DecisionLogEntry, AgentFeedbackStats } from "@/lib/db";
 import type { PolicyBias, UserPreferenceProfile } from "@/lib/policy";
+import type { BookingMonitor } from "@/lib/monitors";
 import {
   computeJobSemanticStatus,
   computeStepSemanticStatus,
@@ -468,7 +469,7 @@ function StepCard({ step, stepIndex, jobId, onRefresh }: {
 
 // ── Job card ───────────────────────────────────────────────────────────────────
 
-function JobCard({ job, onRefresh }: { job: BookingJob; onRefresh?: () => void }) {
+function JobCard({ job, onRefresh, sessionId }: { job: BookingJob; onRefresh?: () => void; sessionId: string }) {
   const [expanded, setExpanded] = useState(job.status !== "pending");
   const doneCount = job.steps.filter((s) => s.status === "done").length;
   const actionCount = job.steps.filter((s) => s.actionItem).length;
@@ -578,10 +579,177 @@ function JobCard({ job, onRefresh }: { job: BookingJob; onRefresh?: () => void }
 
           <WhatsNext job={job} />
 
+          {/* Active monitors — show after job completes */}
+          {isComplete && (
+            <MonitorPanel jobId={job.id} sessionId={sessionId} />
+          )}
+
           {/* Satisfaction widget for completed jobs */}
           {isComplete && <SatisfactionWidget jobId={job.id} />}
         </>
       )}
+    </div>
+  );
+}
+
+// ── Monitor panel ─────────────────────────────────────────────────────────────
+
+const MONITOR_TYPE_LABEL: Record<string, string> = {
+  availability_watch: "Watching for availability",
+  reservation_check:  "Checking reservation",
+  weather_alert:      "Monitoring weather",
+};
+
+const MONITOR_TYPE_EMOJI: Record<string, string> = {
+  availability_watch: "🔔",
+  reservation_check:  "📋",
+  weather_alert:      "⛅",
+};
+
+const MONITOR_STATUS_COLOR: Record<string, string> = {
+  active:    "var(--gold, #D4A34B)",
+  triggered: "rgba(220,38,38,0.8)",
+  paused:    "var(--text-muted, #aaa)",
+  cancelled: "var(--text-muted, #aaa)",
+  resolved:  "rgba(22,163,74,0.7)",
+};
+
+function MonitorPanel({ jobId, sessionId }: { jobId: string; sessionId: string }) {
+  const [monitors, setMonitors] = useState<BookingMonitor[]>([]);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    if (loaded) return;
+    fetch(`/api/monitors?session_id=${encodeURIComponent(sessionId)}`)
+      .then((r) => r.json())
+      .then((d) => {
+        const jobMonitors = (d.monitors ?? []).filter((m: BookingMonitor) => m.job_id === jobId);
+        setMonitors(jobMonitors);
+        setLoaded(true);
+      })
+      .catch(() => setLoaded(true));
+  }, [jobId, sessionId, loaded]);
+
+  async function cancelMonitor(id: string) {
+    await fetch(`/api/monitors/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: "cancelled" }),
+    }).catch(() => {});
+    setMonitors((prev) => prev.map((m) => m.id === id ? { ...m, status: "cancelled" } : m));
+  }
+
+  const active = monitors.filter((m) => m.status === "active");
+  const triggered = monitors.filter((m) => m.status === "triggered");
+
+  if (!loaded || monitors.length === 0) return null;
+
+  return (
+    <div style={{ borderRadius: 12, border: "0.5px solid var(--border, #e5e7eb)", overflow: "hidden" }}>
+      {/* Header */}
+      <div style={{ padding: "10px 14px", background: "var(--card-2, #f9f9f9)", display: "flex", alignItems: "center", gap: 8 }}>
+        <span style={{ fontSize: 13 }}>📡</span>
+        <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 12, fontWeight: 700 }}>
+          Agent monitoring
+        </p>
+        {active.length > 0 && (
+          <span style={{
+            fontFamily: "var(--font-dm-sans)", fontSize: 10, fontWeight: 700,
+            color: "var(--gold, #D4A34B)", background: "rgba(212,163,75,0.12)",
+            borderRadius: 10, padding: "1px 6px",
+          }}>
+            {active.length} active
+          </span>
+        )}
+        {triggered.length > 0 && (
+          <span style={{
+            fontFamily: "var(--font-dm-sans)", fontSize: 10, fontWeight: 700,
+            color: "#fff", background: "rgba(220,38,38,0.8)",
+            borderRadius: 10, padding: "1px 6px",
+          }}>
+            {triggered.length} alert{triggered.length > 1 ? "s" : ""}
+          </span>
+        )}
+      </div>
+
+      {/* Monitor list */}
+      <div style={{ display: "flex", flexDirection: "column" }}>
+        {monitors.filter((m) => m.status !== "cancelled").map((monitor) => (
+          <div key={monitor.id} style={{
+            borderTop: "0.5px solid var(--border, #e5e7eb)",
+            padding: "10px 14px",
+            background: monitor.status === "triggered" ? "rgba(220,38,38,0.03)" : "transparent",
+          }}>
+            <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
+              {/* Pulse dot */}
+              <div style={{
+                flexShrink: 0, marginTop: 3,
+                width: 7, height: 7, borderRadius: "50%",
+                backgroundColor: MONITOR_STATUS_COLOR[monitor.status] ?? "var(--text-muted, #aaa)",
+                animation: monitor.status === "active" ? "jobpulse 2s ease-in-out infinite" : "none",
+              }} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                  <span style={{ fontSize: 13 }}>{monitor.step_emoji}</span>
+                  <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 12, fontWeight: 600 }}>
+                    {monitor.step_label}
+                  </p>
+                  <span style={{ fontFamily: "var(--font-dm-sans)", fontSize: 10, color: "var(--text-muted, #aaa)" }}>
+                    {MONITOR_TYPE_EMOJI[monitor.type]} {MONITOR_TYPE_LABEL[monitor.type] ?? monitor.type}
+                  </span>
+                </div>
+
+                {/* Alert message */}
+                {monitor.status === "triggered" && monitor.trigger_message && (
+                  <div style={{ marginTop: 5, padding: "6px 8px", borderRadius: 6, background: "rgba(220,38,38,0.06)", border: "0.5px solid rgba(220,38,38,0.2)" }}>
+                    <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 11, color: "rgba(185,28,28,0.9)", lineHeight: 1.45 }}>
+                      ⚠ {monitor.trigger_message}
+                    </p>
+                    {monitor.trigger_data && typeof (monitor.trigger_data as Record<string, unknown>).handoff_url === "string" && (
+                      <a
+                        href={(monitor.trigger_data as Record<string, string>).handoff_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{
+                          display: "inline-block", marginTop: 5,
+                          fontFamily: "var(--font-dm-sans)", fontSize: 11, fontWeight: 600,
+                          color: "rgba(185,28,28,0.9)",
+                        }}
+                      >
+                        Book now →
+                      </a>
+                    )}
+                  </div>
+                )}
+
+                {/* Last checked */}
+                {monitor.last_checked_at && monitor.status === "active" && (
+                  <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 10, color: "var(--text-muted, #aaa)", marginTop: 3 }}>
+                    Last checked {formatTime(monitor.last_checked_at)}
+                    {" · "} Next check {formatTime(monitor.next_check_at)}
+                  </p>
+                )}
+              </div>
+
+              {/* Cancel button */}
+              {(monitor.status === "active" || monitor.status === "triggered") && (
+                <button
+                  onClick={() => cancelMonitor(monitor.id)}
+                  style={{
+                    flexShrink: 0, background: "none",
+                    border: "0.5px solid var(--border, #e5e7eb)",
+                    borderRadius: 6, padding: "2px 7px",
+                    fontFamily: "var(--font-dm-sans)", fontSize: 10,
+                    color: "var(--text-muted, #aaa)", cursor: "pointer",
+                  }}
+                >
+                  Stop
+                </button>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -1084,7 +1252,7 @@ export default function TripsPage() {
           </div>
         )}
 
-        {jobs.map((job) => <JobCard key={job.id} job={job} onRefresh={loadJobs} />)}
+        {jobs.map((job) => <JobCard key={job.id} job={job} onRefresh={loadJobs} sessionId={sessionId} />)}
 
         {/* Agent Insights — always show at the bottom */}
         {!loading && sessionId && (

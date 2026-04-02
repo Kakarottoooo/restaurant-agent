@@ -41,6 +41,8 @@ import {
   computeReplan,
   applyReplan,
 } from "@/lib/replan";
+import { buildAutoMonitors } from "@/lib/monitors";
+import { createBookingMonitor } from "@/lib/db";
 import { sendPushNotification } from "@/lib/push";
 import type { PushSubscription } from "web-push";
 import type { AutopilotResult } from "@/lib/booking-autopilot/types";
@@ -361,6 +363,17 @@ export async function POST(_req: NextRequest, { params }: Params) {
   const doneCount = steps.filter((s) => s.status === "done").length;
   const finalStatus = doneCount > 0 ? "done" : "failed";
   await updateBookingJobStatus(id, finalStatus, new Date());
+
+  // ── Auto-create monitors ──────────────────────────────────────────────
+  // Availability watches for failed steps, reservation checks for booked ones,
+  // weather alerts for trips within 14 days. Fire-and-forget.
+  try {
+    const monitors = buildAutoMonitors(
+      { id, session_id: job.session_id, trip_label: job.trip_label },
+      steps
+    );
+    await Promise.allSettled(monitors.map((m) => createBookingMonitor(m)));
+  } catch { /* monitor setup never blocks the job response */ }
 
   // ── Push notification ────────────────────────────────────────────────
   try {

@@ -990,6 +990,123 @@ export async function getAgentFeedbackEvents(
 
 // ─── End Agent Feedback ────────────────────────────────────────────────────────
 
+// ─── Booking Monitors ─────────────────────────────────────────────────────────
+
+let bookingMonitorsTableReady: Promise<void> | null = null;
+
+async function ensureBookingMonitorsTable() {
+  if (!bookingMonitorsTableReady) {
+    bookingMonitorsTableReady = (async () => {
+      await sql`
+        CREATE TABLE IF NOT EXISTS booking_monitors (
+          id              TEXT PRIMARY KEY,
+          job_id          TEXT NOT NULL,
+          session_id      TEXT NOT NULL,
+          step_index      INTEGER NOT NULL,
+          step_label      TEXT NOT NULL,
+          step_emoji      TEXT NOT NULL DEFAULT '',
+          type            TEXT NOT NULL,
+          config          JSONB NOT NULL,
+          status          TEXT NOT NULL DEFAULT 'active',
+          last_checked_at TIMESTAMPTZ,
+          next_check_at   TIMESTAMPTZ NOT NULL,
+          triggered_at    TIMESTAMPTZ,
+          trigger_data    JSONB,
+          trigger_message TEXT,
+          created_at      TIMESTAMPTZ DEFAULT NOW()
+        )
+      `;
+      await sql`CREATE INDEX IF NOT EXISTS booking_monitors_session ON booking_monitors(session_id)`;
+      await sql`CREATE INDEX IF NOT EXISTS booking_monitors_job ON booking_monitors(job_id)`;
+      await sql`CREATE INDEX IF NOT EXISTS booking_monitors_active ON booking_monitors(status, next_check_at)`;
+    })().catch((err) => {
+      bookingMonitorsTableReady = null;
+      throw err;
+    });
+  }
+  await bookingMonitorsTableReady;
+}
+
+export type { BookingMonitor } from "./monitors";
+
+export async function createBookingMonitor(
+  monitor: Omit<import("./monitors").BookingMonitor, "created_at">
+): Promise<void> {
+  await ensureBookingMonitorsTable();
+  const configJson = JSON.stringify(monitor.config);
+  const triggerDataJson = monitor.trigger_data ? JSON.stringify(monitor.trigger_data) : null;
+  await sql`
+    INSERT INTO booking_monitors
+      (id, job_id, session_id, step_index, step_label, step_emoji, type, config,
+       status, last_checked_at, next_check_at, triggered_at, trigger_data, trigger_message)
+    VALUES
+      (${monitor.id}, ${monitor.job_id}, ${monitor.session_id}, ${monitor.step_index},
+       ${monitor.step_label}, ${monitor.step_emoji}, ${monitor.type}, ${configJson}::jsonb,
+       ${monitor.status}, ${monitor.last_checked_at ?? null}, ${monitor.next_check_at},
+       ${monitor.triggered_at ?? null}, ${triggerDataJson}::jsonb, ${monitor.trigger_message ?? null})
+    ON CONFLICT (id) DO NOTHING
+  `;
+}
+
+export async function getBookingMonitorsBySession(
+  sessionId: string
+): Promise<import("./monitors").BookingMonitor[]> {
+  await ensureBookingMonitorsTable();
+  const result = await sql<import("./monitors").BookingMonitor>`
+    SELECT id, job_id, session_id, step_index, step_label, step_emoji,
+           type, config, status, last_checked_at, next_check_at,
+           triggered_at, trigger_data, trigger_message, created_at
+    FROM booking_monitors
+    WHERE session_id = ${sessionId}
+    ORDER BY created_at DESC
+  `;
+  return result.rows;
+}
+
+export async function getActiveMonitorsDue(): Promise<import("./monitors").BookingMonitor[]> {
+  await ensureBookingMonitorsTable();
+  const result = await sql<import("./monitors").BookingMonitor>`
+    SELECT id, job_id, session_id, step_index, step_label, step_emoji,
+           type, config, status, last_checked_at, next_check_at,
+           triggered_at, trigger_data, trigger_message, created_at
+    FROM booking_monitors
+    WHERE status = 'active' AND next_check_at <= NOW()
+    ORDER BY next_check_at ASC
+    LIMIT 50
+  `;
+  return result.rows;
+}
+
+export async function updateMonitor(
+  id: string,
+  patch: {
+    status?: import("./monitors").MonitorStatus;
+    last_checked_at?: string;
+    next_check_at?: string;
+    triggered_at?: string | null;
+    trigger_data?: Record<string, unknown> | null;
+    trigger_message?: string | null;
+  }
+): Promise<void> {
+  await ensureBookingMonitorsTable();
+  const triggerDataJson = patch.trigger_data !== undefined
+    ? (patch.trigger_data ? JSON.stringify(patch.trigger_data) : null)
+    : undefined;
+
+  await sql`
+    UPDATE booking_monitors SET
+      status          = COALESCE(${patch.status ?? null}, status),
+      last_checked_at = COALESCE(${patch.last_checked_at ?? null}, last_checked_at),
+      next_check_at   = COALESCE(${patch.next_check_at ?? null}, next_check_at),
+      triggered_at    = CASE WHEN ${patch.triggered_at !== undefined} THEN ${patch.triggered_at ?? null} ELSE triggered_at END,
+      trigger_data    = CASE WHEN ${triggerDataJson !== undefined} THEN ${triggerDataJson ?? null}::jsonb ELSE trigger_data END,
+      trigger_message = CASE WHEN ${patch.trigger_message !== undefined} THEN ${patch.trigger_message ?? null} ELSE trigger_message END
+    WHERE id = ${id}
+  `;
+}
+
+// ─── End Booking Monitors ──────────────────────────────────────────────────────
+
 // ─── End Booking Jobs ─────────────────────────────────────────────────────────
 
 export async function mergeSessionPreferences(
