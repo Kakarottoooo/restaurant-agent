@@ -1107,6 +1107,97 @@ export async function updateMonitor(
 
 // ─── End Booking Monitors ──────────────────────────────────────────────────────
 
+// ─── Relationship Profiles ────────────────────────────────────────────────────
+
+let relationshipProfilesTableReady: Promise<void> | null = null;
+
+async function ensureRelationshipProfilesTable() {
+  if (!relationshipProfilesTableReady) {
+    relationshipProfilesTableReady = (async () => {
+      await sql`
+        CREATE TABLE IF NOT EXISTS relationship_profiles (
+          id          TEXT PRIMARY KEY,
+          name        TEXT NOT NULL,
+          type        TEXT NOT NULL DEFAULT 'solo',
+          session_ids JSONB NOT NULL DEFAULT '[]',
+          constraints JSONB NOT NULL DEFAULT '[]',
+          avoid_types JSONB NOT NULL DEFAULT '[]',
+          notes       TEXT NOT NULL DEFAULT '',
+          created_at  TIMESTAMPTZ DEFAULT NOW(),
+          updated_at  TIMESTAMPTZ DEFAULT NOW()
+        )
+      `;
+      await sql`CREATE INDEX IF NOT EXISTS rel_profiles_sessions ON relationship_profiles USING GIN(session_ids)`;
+    })().catch((err) => {
+      relationshipProfilesTableReady = null;
+      throw err;
+    });
+  }
+  await relationshipProfilesTableReady;
+}
+
+export type { RelationshipProfile, RelationshipType } from "./memory";
+
+export async function getRelationshipBySession(
+  sessionId: string
+): Promise<import("./memory").RelationshipProfile | null> {
+  await ensureRelationshipProfilesTable();
+  const result = await sql<import("./memory").RelationshipProfile>`
+    SELECT id, name, type, session_ids, constraints, avoid_types, notes, created_at, updated_at
+    FROM relationship_profiles
+    WHERE session_ids @> ${JSON.stringify([sessionId])}::jsonb
+    ORDER BY updated_at DESC
+    LIMIT 1
+  `;
+  return result.rows[0] ?? null;
+}
+
+export async function createRelationshipProfile(
+  profile: Omit<import("./memory").RelationshipProfile, "created_at" | "updated_at">
+): Promise<import("./memory").RelationshipProfile> {
+  await ensureRelationshipProfilesTable();
+  const result = await sql<import("./memory").RelationshipProfile>`
+    INSERT INTO relationship_profiles (id, name, type, session_ids, constraints, avoid_types, notes)
+    VALUES (
+      ${profile.id}, ${profile.name}, ${profile.type},
+      ${JSON.stringify(profile.session_ids)}::jsonb,
+      ${JSON.stringify(profile.constraints)}::jsonb,
+      ${JSON.stringify(profile.avoid_types)}::jsonb,
+      ${profile.notes}
+    )
+    RETURNING *
+  `;
+  return result.rows[0];
+}
+
+export async function updateRelationshipProfile(
+  id: string,
+  patch: Partial<Pick<import("./memory").RelationshipProfile, "name" | "type" | "constraints" | "avoid_types" | "notes" | "session_ids">>
+): Promise<void> {
+  await ensureRelationshipProfilesTable();
+  // Build partial update — only update provided fields
+  if (patch.name !== undefined) {
+    await sql`UPDATE relationship_profiles SET name = ${patch.name}, updated_at = NOW() WHERE id = ${id}`;
+  }
+  if (patch.type !== undefined) {
+    await sql`UPDATE relationship_profiles SET type = ${patch.type}, updated_at = NOW() WHERE id = ${id}`;
+  }
+  if (patch.notes !== undefined) {
+    await sql`UPDATE relationship_profiles SET notes = ${patch.notes}, updated_at = NOW() WHERE id = ${id}`;
+  }
+  if (patch.constraints !== undefined) {
+    await sql`UPDATE relationship_profiles SET constraints = ${JSON.stringify(patch.constraints)}::jsonb, updated_at = NOW() WHERE id = ${id}`;
+  }
+  if (patch.avoid_types !== undefined) {
+    await sql`UPDATE relationship_profiles SET avoid_types = ${JSON.stringify(patch.avoid_types)}::jsonb, updated_at = NOW() WHERE id = ${id}`;
+  }
+  if (patch.session_ids !== undefined) {
+    await sql`UPDATE relationship_profiles SET session_ids = ${JSON.stringify(patch.session_ids)}::jsonb, updated_at = NOW() WHERE id = ${id}`;
+  }
+}
+
+// ─── End Relationship Profiles ─────────────────────────────────────────────────
+
 // ─── End Booking Jobs ─────────────────────────────────────────────────────────
 
 export async function mergeSessionPreferences(

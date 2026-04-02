@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import type { BookingJob, BookingJobStep, DecisionLogEntry, AgentFeedbackStats } from "@/lib/db";
 import type { PolicyBias, UserPreferenceProfile } from "@/lib/policy";
 import type { BookingMonitor } from "@/lib/monitors";
+import type { ScenarioMemory, PatternMemory, RelationshipProfile, RelationshipType } from "@/lib/memory";
 import {
   computeJobSemanticStatus,
   computeStepSemanticStatus,
@@ -778,28 +779,79 @@ function ProgressBar({ value, color }: { value: number; color: string }) {
   );
 }
 
+type InsightsTab = "overview" | "task" | "patterns" | "relationship";
+
 function InsightsPanel({ sessionId }: { sessionId: string }) {
   const [open, setOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<InsightsTab>("overview");
   const [stats, setStats] = useState<AgentFeedbackStats | null>(null);
   const [policy, setPolicy] = useState<PolicyBias | null>(null);
   const [profile, setProfile] = useState<UserPreferenceProfile | null>(null);
+  const [taskMemory, setTaskMemory] = useState<ScenarioMemory[]>([]);
+  const [patternMemory, setPatternMemory] = useState<PatternMemory | null>(null);
+  const [relationship, setRelationship] = useState<RelationshipProfile | null>(null);
   const [loading, setLoading] = useState(false);
+  const [relEditMode, setRelEditMode] = useState(false);
+  const [relForm, setRelForm] = useState({ name: "", type: "solo" as RelationshipType, constraints: "", avoid_types: "", notes: "" });
 
   useEffect(() => {
     if (!open || stats) return;
     setLoading(true);
     Promise.all([
       fetch(`/api/booking-feedback?session_id=${encodeURIComponent(sessionId)}`).then((r) => r.json()),
-      fetch(`/api/policy?session_id=${encodeURIComponent(sessionId)}`).then((r) => r.json()),
+      fetch(`/api/memory?session_id=${encodeURIComponent(sessionId)}`).then((r) => r.json()),
     ])
-      .then(([feedbackData, policyData]) => {
+      .then(([feedbackData, memoryData]) => {
         setStats(feedbackData.stats ?? null);
-        setPolicy(policyData.bias ?? null);
-        setProfile(policyData.profile ?? null);
+        setPolicy(memoryData.bias ?? null);
+        setProfile(memoryData.profile ?? null);
+        setTaskMemory(memoryData.taskMemory ?? []);
+        setPatternMemory(memoryData.patternMemory ?? null);
+        setRelationship(memoryData.relationship ?? null);
+        if (memoryData.relationship) {
+          const rel = memoryData.relationship as RelationshipProfile;
+          setRelForm({
+            name: rel.name,
+            type: rel.type,
+            constraints: rel.constraints.join(", "),
+            avoid_types: rel.avoid_types.join(", "),
+            notes: rel.notes,
+          });
+        }
       })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, [open, sessionId, stats]);
+
+  async function saveRelationship() {
+    const id = relationship?.id ?? crypto.randomUUID();
+    const payload: RelationshipProfile = {
+      id,
+      name: relForm.name,
+      type: relForm.type,
+      session_ids: [sessionId],
+      constraints: relForm.constraints.split(",").map((s) => s.trim()).filter(Boolean),
+      avoid_types: relForm.avoid_types.split(",").map((s) => s.trim()).filter(Boolean),
+      notes: relForm.notes,
+      created_at: relationship?.created_at ?? new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    if (relationship) {
+      await fetch(`/api/relationships/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      }).catch(() => {});
+    } else {
+      await fetch("/api/relationships", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      }).catch(() => {});
+    }
+    setRelationship(payload);
+    setRelEditMode(false);
+  }
 
   if (!stats && !open) {
     return (
@@ -814,8 +866,16 @@ function InsightsPanel({ sessionId }: { sessionId: string }) {
     );
   }
 
+  const TABS: Array<{ id: InsightsTab; label: string }> = [
+    { id: "overview",      label: "Overview"      },
+    { id: "task",          label: "Scenarios"     },
+    { id: "patterns",      label: "Patterns"      },
+    { id: "relationship",  label: "Profile"       },
+  ];
+
   return (
     <div style={{ borderRadius: 16, border: "0.5px solid var(--border, #e5e7eb)", backgroundColor: "var(--card, #fff)", overflow: "hidden" }}>
+      {/* Header */}
       <button onClick={() => setOpen((o) => !o)} style={{
         width: "100%", padding: "14px 16px", background: "none", border: "none",
         display: "flex", alignItems: "center", justifyContent: "space-between",
@@ -826,24 +886,346 @@ function InsightsPanel({ sessionId }: { sessionId: string }) {
           <p style={{ fontFamily: "var(--font-dm-sans)", fontWeight: 700, fontSize: 13 }}>Agent Insights</p>
           {stats && (
             <span style={{ fontFamily: "var(--font-dm-sans)", fontSize: 11, color: "var(--text-muted, #aaa)" }}>
-              {stats.totalEvents} feedback events
+              {stats.totalEvents} events
             </span>
           )}
         </div>
         <span style={{ color: "var(--text-muted, #aaa)", fontSize: 12 }}>{open ? "▲" : "▼"}</span>
       </button>
 
+      {/* Tab bar */}
       {open && (
-        <div style={{ borderTop: "0.5px solid var(--border, #e5e7eb)", padding: "14px 16px" }}>
+        <div style={{ borderTop: "0.5px solid var(--border, #e5e7eb)", display: "flex", gap: 0, overflowX: "auto" }}>
+          {TABS.map((tab) => (
+            <button key={tab.id} onClick={() => setActiveTab(tab.id)} style={{
+              flex: 1, padding: "8px 4px", background: "none", border: "none",
+              borderBottom: activeTab === tab.id ? "2px solid var(--gold, #D4A34B)" : "2px solid transparent",
+              fontFamily: "var(--font-dm-sans)", fontSize: 11, fontWeight: activeTab === tab.id ? 700 : 400,
+              color: activeTab === tab.id ? "var(--gold, #D4A34B)" : "var(--text-muted, #aaa)",
+              cursor: "pointer", whiteSpace: "nowrap",
+            }}>
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {open && (
+        <div style={{ padding: "14px 16px" }}>
           {loading && <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 12, color: "var(--text-muted, #aaa)", textAlign: "center" }}>Loading…</p>}
 
-          {stats && stats.totalEvents === 0 && (
+          {/* ── Task memory tab ── */}
+          {!loading && activeTab === "task" && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 11, color: "var(--text-secondary, #666)", fontStyle: "italic" }}>
+                How your preferences differ by booking context.
+              </p>
+              {taskMemory.length === 0 && (
+                <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 12, color: "var(--text-muted, #aaa)" }}>
+                  Complete a few trips with feedback to build scenario memory.
+                </p>
+              )}
+              {taskMemory.map((mem) => (
+                <div key={`${mem.scenario}-${mem.stepType}`} style={{
+                  padding: "10px 12px", borderRadius: 10,
+                  border: "0.5px solid var(--border, #e5e7eb)",
+                  background: "var(--card-2, #f9f9f9)",
+                }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+                    <div style={{ display: "flex", gap: 6 }}>
+                      <span style={{
+                        fontFamily: "var(--font-dm-sans)", fontSize: 10, fontWeight: 700,
+                        color: "#8b5cf6", background: "rgba(139,92,246,0.08)",
+                        borderRadius: 4, padding: "1px 5px",
+                      }}>
+                        {mem.scenarioLabel}
+                      </span>
+                      <span style={{
+                        fontFamily: "var(--font-dm-sans)", fontSize: 10, fontWeight: 600,
+                        color: "var(--text-secondary, #666)", background: "var(--border, #e5e7eb)",
+                        borderRadius: 4, padding: "1px 5px", textTransform: "capitalize",
+                      }}>
+                        {mem.stepType}
+                      </span>
+                    </div>
+                    <span style={{ fontFamily: "var(--font-dm-sans)", fontSize: 10, color: "var(--text-muted, #aaa)" }}>
+                      {mem.totalEvents} events
+                    </span>
+                  </div>
+                  <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 12, color: "var(--text-primary, #111)", marginBottom: 8, lineHeight: 1.4 }}>
+                    {mem.keyInsight}
+                  </p>
+                  <div style={{ display: "flex", gap: 12 }}>
+                    {mem.timeAdjustAcceptance !== null && (
+                      <div style={{ flex: 1 }}>
+                        <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 10, color: "var(--text-muted, #aaa)", marginBottom: 3 }}>Time adjust</p>
+                        <ProgressBar value={mem.timeAdjustAcceptance} color="rgba(234,88,12,0.7)" />
+                        <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 10, color: "rgba(234,88,12,0.8)", marginTop: 2 }}>
+                          {Math.round(mem.timeAdjustAcceptance * 100)}% accepted
+                        </p>
+                      </div>
+                    )}
+                    {mem.venueSwitchAcceptance !== null && (
+                      <div style={{ flex: 1 }}>
+                        <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 10, color: "var(--text-muted, #aaa)", marginBottom: 3 }}>Venue switch</p>
+                        <ProgressBar value={mem.venueSwitchAcceptance} color="#6366f1" />
+                        <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 10, color: "#6366f1", marginTop: 2 }}>
+                          {Math.round(mem.venueSwitchAcceptance * 100)}% accepted
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* ── Patterns tab ── */}
+          {!loading && activeTab === "patterns" && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              {!patternMemory && (
+                <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 12, color: "var(--text-muted, #aaa)" }}>
+                  Complete a few trips with feedback to build behavioral patterns.
+                </p>
+              )}
+
+              {patternMemory && (
+                <>
+                  {/* Stated vs actual */}
+                  <div>
+                    <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 11, fontWeight: 700, color: "var(--text-muted, #aaa)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>
+                      Stated vs actual tolerance
+                    </p>
+                    <div style={{
+                      padding: "10px 12px", borderRadius: 10, lineHeight: 1.5,
+                      background: patternMemory.statedVsActual.conclusion === "more_strict"
+                        ? "rgba(220,38,38,0.04)" : patternMemory.statedVsActual.conclusion === "more_liberal"
+                        ? "rgba(22,163,74,0.04)" : "var(--card-2, #f9f9f9)",
+                      border: `0.5px solid ${patternMemory.statedVsActual.conclusion === "more_strict"
+                        ? "rgba(220,38,38,0.15)" : patternMemory.statedVsActual.conclusion === "more_liberal"
+                        ? "rgba(22,163,74,0.15)" : "var(--border, #e5e7eb)"}`,
+                    }}>
+                      <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 12, color: "var(--text-primary, #111)" }}>
+                        {patternMemory.statedVsActual.insight}
+                      </p>
+                      {patternMemory.statedVsActual.actualAcceptanceRate !== null && (
+                        <div style={{ marginTop: 8 }}>
+                          <ProgressBar
+                            value={patternMemory.statedVsActual.actualAcceptanceRate}
+                            color={patternMemory.statedVsActual.conclusion === "more_strict"
+                              ? "rgba(220,38,38,0.6)" : "rgba(22,163,74,0.7)"}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Satisfaction predictors */}
+                  {patternMemory.satisfactionPredictors.length > 0 && (
+                    <div>
+                      <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 11, fontWeight: 700, color: "var(--text-muted, #aaa)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>
+                        What drives your satisfaction
+                      </p>
+                      {patternMemory.satisfactionPredictors.map((pred) => (
+                        <div key={pred.agentDecision} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+                          <div style={{ flex: 1 }}>
+                            <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 11, color: "var(--text-secondary, #666)" }}>{pred.insight}</p>
+                          </div>
+                          {pred.avgScore !== null && (
+                            <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+                              <div style={{ width: 60 }}>
+                                <ProgressBar
+                                  value={pred.avgScore}
+                                  color={pred.avgScore >= 0.7 ? "rgba(22,163,74,0.7)" : pred.avgScore >= 0.4 ? "var(--gold, #D4A34B)" : "rgba(220,38,38,0.6)"}
+                                />
+                              </div>
+                              <span style={{ fontFamily: "var(--font-dm-sans)", fontSize: 11, fontWeight: 600, color: "var(--text-secondary, #666)" }}>
+                                {Math.round(pred.avgScore * 100)}%
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Override triggers */}
+                  {patternMemory.overrideTriggers.length > 0 && (
+                    <div>
+                      <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 11, fontWeight: 700, color: "var(--text-muted, #aaa)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>
+                        When you take control
+                      </p>
+                      {patternMemory.overrideTriggers.map((t, i) => (
+                        <div key={i} style={{
+                          display: "flex", justifyContent: "space-between", alignItems: "center",
+                          padding: "5px 0", borderBottom: "0.5px solid var(--border, #e5e7eb)",
+                        }}>
+                          <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 11, color: "var(--text-secondary, #666)" }}>{t.description}</p>
+                          <span style={{
+                            fontFamily: "var(--font-dm-sans)", fontSize: 10, fontWeight: 700,
+                            color: "rgba(220,38,38,0.8)", flexShrink: 0, marginLeft: 8,
+                          }}>
+                            {Math.round(t.overrideRate * 100)}%
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+
+          {/* ── Relationship / Profile tab ── */}
+          {!loading && activeTab === "relationship" && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 11, color: "var(--text-secondary, #666)", fontStyle: "italic" }}>
+                Who are you booking for? The agent remembers your group&apos;s preferences and history.
+              </p>
+
+              {!relEditMode && relationship && (
+                <>
+                  <div style={{ padding: "12px 14px", borderRadius: 12, border: "0.5px solid var(--border, #e5e7eb)", background: "var(--card-2, #f9f9f9)" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
+                      <div>
+                        <p style={{ fontFamily: "var(--font-dm-sans)", fontWeight: 700, fontSize: 14 }}>{relationship.name}</p>
+                        <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 11, color: "var(--text-muted, #aaa)", textTransform: "capitalize" }}>{relationship.type}</p>
+                      </div>
+                      <button onClick={() => setRelEditMode(true)} style={{
+                        background: "none", border: "0.5px solid var(--border, #e5e7eb)",
+                        borderRadius: 6, padding: "3px 8px", fontFamily: "var(--font-dm-sans)",
+                        fontSize: 11, color: "var(--text-secondary, #666)", cursor: "pointer",
+                      }}>Edit</button>
+                    </div>
+                    {relationship.constraints.length > 0 && (
+                      <div style={{ marginBottom: 8 }}>
+                        <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 10, fontWeight: 600, color: "var(--text-muted, #aaa)", marginBottom: 4 }}>NEEDS</p>
+                        <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+                          {relationship.constraints.map((c) => (
+                            <span key={c} style={{
+                              fontFamily: "var(--font-dm-sans)", fontSize: 11,
+                              color: "rgba(22,163,74,0.85)", background: "rgba(22,163,74,0.08)",
+                              borderRadius: 6, padding: "2px 7px",
+                            }}>{c}</span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {relationship.avoid_types.length > 0 && (
+                      <div style={{ marginBottom: 8 }}>
+                        <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 10, fontWeight: 600, color: "var(--text-muted, #aaa)", marginBottom: 4 }}>AVOIDS</p>
+                        <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+                          {relationship.avoid_types.map((a) => (
+                            <span key={a} style={{
+                              fontFamily: "var(--font-dm-sans)", fontSize: 11,
+                              color: "rgba(220,38,38,0.75)", background: "rgba(220,38,38,0.06)",
+                              borderRadius: 6, padding: "2px 7px",
+                            }}>{a}</span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {relationship.notes && (
+                      <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 11, color: "var(--text-secondary, #666)", lineHeight: 1.5, fontStyle: "italic" }}>
+                        {relationship.notes}
+                      </p>
+                    )}
+                  </div>
+                </>
+              )}
+
+              {(!relationship || relEditMode) && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                  <input
+                    value={relForm.name}
+                    onChange={(e) => setRelForm((f) => ({ ...f, name: e.target.value }))}
+                    placeholder={relEditMode ? "Profile name" : "Give this profile a name (e.g. 'Alex & Jordan')"}
+                    style={{
+                      width: "100%", padding: "8px 10px", borderRadius: 8,
+                      border: "0.5px solid var(--border, #e5e7eb)", background: "var(--card, #fff)",
+                      fontFamily: "var(--font-dm-sans)", fontSize: 12,
+                      boxSizing: "border-box",
+                    }}
+                  />
+                  <div style={{ display: "flex", gap: 6 }}>
+                    {(["solo", "couple", "friends", "family"] as RelationshipType[]).map((t) => (
+                      <button key={t} onClick={() => setRelForm((f) => ({ ...f, type: t }))} style={{
+                        flex: 1, padding: "5px 2px", borderRadius: 8, cursor: "pointer",
+                        border: `0.5px solid ${relForm.type === t ? "var(--gold, #D4A34B)" : "var(--border, #e5e7eb)"}`,
+                        background: relForm.type === t ? "rgba(212,163,75,0.1)" : "transparent",
+                        fontFamily: "var(--font-dm-sans)", fontSize: 11,
+                        color: relForm.type === t ? "var(--gold, #D4A34B)" : "var(--text-secondary, #666)",
+                        fontWeight: relForm.type === t ? 700 : 400, textTransform: "capitalize",
+                      }}>
+                        {t}
+                      </button>
+                    ))}
+                  </div>
+                  <input
+                    value={relForm.constraints}
+                    onChange={(e) => setRelForm((f) => ({ ...f, constraints: e.target.value }))}
+                    placeholder="Must-haves (comma separated): quiet venue, needs parking, vegetarian"
+                    style={{
+                      width: "100%", padding: "8px 10px", borderRadius: 8,
+                      border: "0.5px solid var(--border, #e5e7eb)", background: "var(--card, #fff)",
+                      fontFamily: "var(--font-dm-sans)", fontSize: 12,
+                      boxSizing: "border-box",
+                    }}
+                  />
+                  <input
+                    value={relForm.avoid_types}
+                    onChange={(e) => setRelForm((f) => ({ ...f, avoid_types: e.target.value }))}
+                    placeholder="Things to avoid: chain hotels, loud restaurants, outdoor in rain"
+                    style={{
+                      width: "100%", padding: "8px 10px", borderRadius: 8,
+                      border: "0.5px solid var(--border, #e5e7eb)", background: "var(--card, #fff)",
+                      fontFamily: "var(--font-dm-sans)", fontSize: 12,
+                      boxSizing: "border-box",
+                    }}
+                  />
+                  <textarea
+                    value={relForm.notes}
+                    onChange={(e) => setRelForm((f) => ({ ...f, notes: e.target.value }))}
+                    placeholder="Free notes: 'She doesn't like spicy food. He hates jazz bars.'"
+                    rows={2}
+                    style={{
+                      width: "100%", padding: "8px 10px", borderRadius: 8,
+                      border: "0.5px solid var(--border, #e5e7eb)", background: "var(--card, #fff)",
+                      fontFamily: "var(--font-dm-sans)", fontSize: 12, resize: "none",
+                      boxSizing: "border-box",
+                    }}
+                  />
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button onClick={saveRelationship} disabled={!relForm.name.trim()} style={{
+                      flex: 1, padding: "8px", borderRadius: 8, border: "none",
+                      background: "var(--gold, #D4A34B)", color: "#fff",
+                      fontFamily: "var(--font-dm-sans)", fontSize: 12, fontWeight: 700,
+                      cursor: relForm.name.trim() ? "pointer" : "not-allowed", opacity: relForm.name.trim() ? 1 : 0.5,
+                    }}>
+                      {relEditMode ? "Save changes" : "Create profile"}
+                    </button>
+                    {relEditMode && (
+                      <button onClick={() => setRelEditMode(false)} style={{
+                        padding: "8px 12px", borderRadius: 8,
+                        border: "0.5px solid var(--border, #e5e7eb)", background: "transparent",
+                        fontFamily: "var(--font-dm-sans)", fontSize: 12, cursor: "pointer",
+                      }}>
+                        Cancel
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {!loading && activeTab === "overview" && stats && stats.totalEvents === 0 && (
             <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 12, color: "var(--text-secondary, #666)", textAlign: "center" }}>
               No data yet — insights appear after you complete trips and give feedback.
             </p>
           )}
 
-          {stats && stats.totalEvents > 0 && (
+          {activeTab === "overview" && stats && stats.totalEvents > 0 && (
             <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
 
               {/* Acceptance rate */}
