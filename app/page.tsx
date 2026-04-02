@@ -1,6 +1,7 @@
 "use client";
 
-import { useRef, useEffect, useState } from "react";
+import { useRef, useEffect, useState, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import RecommendationCard from "@/components/RecommendationCard";
 import HotelCard from "@/components/HotelCard";
@@ -72,7 +73,7 @@ const WEIGHT_LABELS: Record<string, string> = {
   preference_match: "Preference match",
 };
 
-export default function Home() {
+function HomeInner() {
   const { profile, updateProfile, learnFromFavorite, learnFromSearch, resetProfile, learnedWeights, learnWeightsFromFeedback, learnFromFeedback, learnFromAgentResponse, updateDiscoveredPreference, removeDiscoveredPreference } =
     usePreferences();
   const profileContext = formatProfileForPrompt(profile);
@@ -105,6 +106,18 @@ export default function Home() {
   const bottomRef = useRef<HTMLDivElement>(null);
   const chatInputRef = useRef("");
   const isComposingRef = useRef(false);
+  const searchParams = useSearchParams();
+
+  // Pre-fill chat from ?q= param (used by Tasks page "Continue in chat" button)
+  useEffect(() => {
+    const q = searchParams.get("q");
+    if (q) {
+      chat.setInput(decodeURIComponent(q));
+      // Remove param from URL without re-render
+      window.history.replaceState({}, "", "/");
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   // Tracks the plan ID that triggered a refine action, for parent_plan_id lineage
   const refinedFromPlanIdRef = useRef<string | null>(null);
   const [prefModalOpen, setPrefModalOpen] = useState(false);
@@ -2207,5 +2220,13 @@ export default function Home() {
         />
       )}
     </main>
+  );
+}
+
+export default function Home() {
+  return (
+    <Suspense>
+      <HomeInner />
+    </Suspense>
   );
 }

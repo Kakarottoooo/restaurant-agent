@@ -209,6 +209,103 @@ function WhatsNext({ job }: { job: BookingJob }) {
 
 // ── Step card ──────────────────────────────────────────────────────────────────
 
+// ── NeedsHelpCard ─────────────────────────────────────────────────────────────
+
+function diagnoseFail(step: BookingJobStep): { reason: string; suggestion: string; chatPrompt: string } {
+  const err = (step.error ?? "").toLowerCase();
+  const lastLog = step.decisionLog?.filter(e => e.type === "failed" || e.type === "skipped").at(-1);
+  const logMsg = (lastLog?.message ?? "").toLowerCase();
+
+  if (err.includes("captcha") || err.includes("cloudflare") || err.includes("blocked") || logMsg.includes("blocked")) {
+    return {
+      reason: "The booking site blocked the agent (bot protection).",
+      suggestion: "Try booking manually, or ask the agent to try a different booking platform.",
+      chatPrompt: `I tried to book ${step.label} but the site blocked the agent. Can you find an alternative way to book this?`,
+    };
+  }
+  if (err.includes("login") || err.includes("sign in") || logMsg.includes("login")) {
+    return {
+      reason: "The site requires you to log in before booking.",
+      suggestion: "Open the booking link, sign in, then ask the agent to continue.",
+      chatPrompt: `I need to book ${step.label}. The site requires a login. Can you help me complete this booking after I sign in?`,
+    };
+  }
+  if (err.includes("no availability") || step.status === "no_availability" || logMsg.includes("no availability")) {
+    return {
+      reason: "No availability found for your requested dates or party size.",
+      suggestion: "Try different dates, fewer guests, or ask the agent to find alternatives.",
+      chatPrompt: `${step.label} has no availability. Can you suggest alternatives or different dates?`,
+    };
+  }
+  if (err.includes("timeout") || err.includes("timed out")) {
+    return {
+      reason: "The agent timed out — the booking site was too slow.",
+      suggestion: "Retry now, or try booking manually.",
+      chatPrompt: `The agent timed out booking ${step.label}. Can you retry or suggest a faster way?`,
+    };
+  }
+  return {
+    reason: "The agent couldn't complete the booking automatically.",
+    suggestion: "Tell the agent what you'd like to do — it can retry with more context or find alternatives.",
+    chatPrompt: `I'm trying to book ${step.label}. The agent failed. What information do you need to complete this booking?`,
+  };
+}
+
+function NeedsHelpCard({ step, onManualLink }: {
+  step: BookingJobStep;
+  onManualLink: (label: string, url: string, idx: number) => void;
+}) {
+  const { reason, suggestion, chatPrompt } = diagnoseFail(step);
+  const encodedPrompt = encodeURIComponent(chatPrompt);
+
+  return (
+    <div style={{ borderTop: "0.5px solid rgba(220,38,38,0.15)", backgroundColor: "rgba(220,38,38,0.03)" }}>
+      {/* What happened */}
+      <div style={{ padding: "12px 14px 0" }}>
+        <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 12, fontWeight: 700, color: "rgba(185,28,28,0.85)", marginBottom: 4 }}>
+          What happened
+        </p>
+        <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 12, color: "var(--text-secondary, #666)", lineHeight: 1.6, marginBottom: 8 }}>
+          {reason}
+        </p>
+        <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 11, color: "var(--text-muted, #aaa)", lineHeight: 1.5, marginBottom: 12 }}>
+          {suggestion}
+        </p>
+      </div>
+
+      {/* Primary CTA: continue in chat */}
+      <div style={{ padding: "0 14px 12px", display: "flex", flexDirection: "column", gap: 8 }}>
+        <a href={`/?q=${encodedPrompt}`} style={{
+          display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+          padding: "10px 14px", borderRadius: 10,
+          backgroundColor: "var(--gold, #C9A84C)", textDecoration: "none",
+          fontFamily: "var(--font-dm-sans)", fontSize: 13, fontWeight: 700, color: "#fff",
+        }}>
+          <span>💬</span>
+          <span>Continue in chat</span>
+        </a>
+
+        {/* Manual fallbacks */}
+        {step.actionItem?.options.map((opt, j) => (
+          <button key={j} onClick={() => onManualLink(opt.label, opt.url, j)} style={{
+            padding: "8px 14px", borderRadius: 10,
+            border: "0.5px solid var(--border, #e5e7eb)",
+            background: "transparent",
+            color: "var(--text-secondary, #666)",
+            fontFamily: "var(--font-dm-sans)", fontSize: 12,
+            cursor: "pointer", textAlign: "left", display: "flex", gap: 8, alignItems: "center",
+          }}>
+            <span style={{ color: "var(--text-muted, #aaa)" }}>↗</span>
+            <span>Book manually: {opt.label}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── RetryScheduler ─────────────────────────────────────────────────────────────
+
 function RetryScheduler({ step, stepIndex, jobId, onScheduled }: {
   step: BookingJobStep; stepIndex: number; jobId: string; onScheduled: () => void;
 }) {
@@ -455,28 +552,9 @@ function StepCard({ step, stepIndex, jobId, onRefresh }: {
         </div>
       )}
 
-      {/* Action item banner */}
+      {/* Action item — needs help card */}
       {step.actionItem && (
-        <div style={{ borderTop: "0.5px solid rgba(220,38,38,0.2)", padding: "10px 12px", backgroundColor: "rgba(220,38,38,0.04)" }}>
-          <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 12, fontWeight: 600, color: "rgba(185,28,28,0.9)", marginBottom: 8 }}>
-            ⚠ {step.actionItem.message}
-          </p>
-          <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-            {step.actionItem.options.map((opt, j) => (
-              <button key={j} onClick={() => handleManualLink(opt.label, opt.url, j)} style={{
-                padding: "8px 12px", borderRadius: 8,
-                border: `0.5px solid ${j === 0 ? "rgba(220,38,38,0.4)" : "var(--border, #e5e7eb)"}`,
-                background: j === 0 ? "rgba(220,38,38,0.07)" : "transparent",
-                color: j === 0 ? "rgba(185,28,28,0.9)" : "var(--text-secondary, #666)",
-                fontFamily: "var(--font-dm-sans)", fontSize: 12, fontWeight: j === 0 ? 600 : 400,
-                cursor: "pointer", textAlign: "left", display: "flex", gap: 6,
-              }}>
-                <span>{j === 0 ? "→" : "↗"}</span>
-                <span>Book manually: {opt.label}</span>
-              </button>
-            ))}
-          </div>
-        </div>
+        <NeedsHelpCard step={step} onManualLink={handleManualLink} />
       )}
 
       {/* Human intervention banner — awaiting_confirmation or needs_login */}
