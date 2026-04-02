@@ -76,8 +76,10 @@ export default function Home() {
     usePreferences();
   const profileContext = formatProfileForPrompt(profile);
   const { userId } = useAuth();
-  const { lang, setLang, current: currentLang, aiInstruction: languageInstruction } = useLanguage();
+  const { lang, setLang, current: currentLang, aiInstruction: languageInstruction, t } = useLanguage();
   const [langMenuOpen, setLangMenuOpen] = useState(false);
+  const th = t.home;
+  const tn = t.nav;
 
   const location = useLocation();
   const subs = useSubscriptions();
@@ -1382,7 +1384,7 @@ export default function Home() {
               flexShrink: 0,
             }}
           >
-            ✈ Trips
+            {tn.trips}
           </a>
 
           {/* Preferences button */}
@@ -1482,7 +1484,7 @@ export default function Home() {
                         cursor: "pointer",
                       }}
                     >
-                      Preferences
+                      {tn.preferences}
                     </button>
 
                     {/* Language picker */}
@@ -1496,7 +1498,7 @@ export default function Home() {
                           color: "var(--text-primary)", background: "none", border: "none", cursor: "pointer",
                         }}
                       >
-                        <span>{currentLang.flag} Language</span>
+                        <span>{currentLang.flag} {tn.language}</span>
                         <span style={{ fontSize: 11, color: "var(--text-secondary)" }}>{currentLang.label} {langMenuOpen ? "▲" : "▼"}</span>
                       </button>
                       {langMenuOpen && (
@@ -1539,7 +1541,7 @@ export default function Home() {
                         borderTop: "0.5px solid var(--border)",
                       }}
                     >
-                      Sign out
+                      {tn.signOut}
                     </button>
                   </div>
                 )}
@@ -1608,7 +1610,7 @@ export default function Home() {
                     whiteSpace: "nowrap",
                   }}
                 >
-                  Sign in
+                  {tn.signIn}
                 </button>
               </div>
             )}
@@ -1661,7 +1663,7 @@ export default function Home() {
               flexShrink: 0,
             }}
           >
-            Sign in
+            {tn.signIn}
           </button>
           <button
             onClick={() => setUpgradePromptShown(false)}
@@ -1722,8 +1724,8 @@ export default function Home() {
                     transition: "opacity 0.5s ease, transform 0.5s ease",
                   }}
                 >
-                  {HERO_TAGLINES[heroIdx].headline[0]}<br />
-                  {HERO_TAGLINES[heroIdx].headline[1]}
+                  {th.taglines[heroIdx].headline[0]}<br />
+                  {th.taglines[heroIdx].headline[1]}
                 </h2>
                 <p
                   style={{
@@ -1738,16 +1740,11 @@ export default function Home() {
                     transition: "opacity 0.5s ease 0.06s, transform 0.5s ease 0.06s",
                   }}
                 >
-                  {HERO_TAGLINES[heroIdx].sub}
+                  {th.taglines[heroIdx].sub}
                 </p>
                 {/* Scenario quick-start cards */}
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, width: "100%", maxWidth: 440, marginBottom: 24 }}>
-                  {[
-                    { emoji: "🕯", label: "Date Night", desc: "Dinner & after-plans", msg: "Plan a romantic date night — dinner for two, intimate vibe, ~$100/person, then something fun after" },
-                    { emoji: "🏙", label: "Weekend Trip", desc: "Hotel + things to do", msg: "Plan a weekend trip, 2 nights, great hotel + local activities for a couple, budget-conscious" },
-                    { emoji: "🍽", label: "Group Dinner", desc: "Private dining for groups", msg: "Find a great restaurant for a group of 8, private dining room preferred, ~$60/person" },
-                    { emoji: "🎯", label: "Local Activity", desc: "Experiences near you", msg: "Find a fun local activity for this weekend, something unique or adventurous" },
-                  ].map((s) => (
+                  {th.scenarios.map((s) => (
                     <button
                       key={s.label}
                       onClick={() => { learnFromSearch(s.msg); chat.sendMessage(s.msg); }}
@@ -1768,7 +1765,7 @@ export default function Home() {
 
                 {/* Example prompts */}
                 <div className="flex flex-col gap-2 w-full max-w-sm">
-                  {DEFAULT_EXAMPLES.map((ex) => (
+                  {th.examples.map((ex) => (
                     <button
                       key={ex}
                       onClick={() => {
@@ -1801,20 +1798,20 @@ export default function Home() {
                   <div style={{ width: "100%", maxWidth: 440, marginTop: 28 }}>
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
                       <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 12, fontWeight: 600, color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
-                        Recent trips
+                        {th.recentTrips}
                       </p>
                       <a href="/trips" style={{ fontFamily: "var(--font-dm-sans)", fontSize: 12, color: "var(--gold)", textDecoration: "none" }}>
-                        View all →
+                        {th.viewAll}
                       </a>
                     </div>
                     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                       {recentJobs.map((job) => {
                         const statusMeta: Record<string, { dot: string; label: string }> = {
-                          pending:    { dot: "#aaa",      label: "Pending" },
-                          running:    { dot: "#C9A84C",   label: "In progress" },
-                          done:       { dot: "#22c55e",   label: "Completed" },
-                          partial:    { dot: "#f59e0b",   label: "Partial" },
-                          failed:     { dot: "#ef4444",   label: "Failed" },
+                          pending:    { dot: "#aaa",      label: th.pending },
+                          running:    { dot: "#C9A84C",   label: th.inProgress },
+                          done:       { dot: "#22c55e",   label: th.completed },
+                          partial:    { dot: "#f59e0b",   label: th.partial },
+                          failed:     { dot: "#ef4444",   label: th.failed },
                         };
                         const sm = statusMeta[job.status] ?? statusMeta.pending;
                         return (

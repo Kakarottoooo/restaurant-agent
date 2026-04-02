@@ -1,18 +1,8 @@
 "use client";
 
-/**
- * /monitoring — Active monitoring center
- *
- * Shows all BookingMonitors for the current session:
- *   availability_watch  — waiting for a slot to open
- *   reservation_check   — watching for cancellations
- *   weather_alert       — watching destination weather
- *
- * Grouped by job. Each monitor shows status, last check, trigger alert.
- */
-
 import { useState, useEffect, useCallback } from "react";
 import GlobalNav from "@/components/GlobalNav";
+import { useLanguage } from "@/app/hooks/useLanguage";
 import type { BookingMonitor } from "@/lib/monitors";
 
 function getSessionId() {
@@ -22,24 +12,8 @@ function getSessionId() {
   return id;
 }
 
-// ── Type meta ──────────────────────────────────────────────────────────────
-
-const TYPE_META: Record<string, { emoji: string; label: string; desc: string }> = {
-  availability_watch: { emoji: "🔍", label: "Availability watch", desc: "Watching for slot to open" },
-  reservation_check:  { emoji: "🔗", label: "Reservation check",  desc: "Watching for cancellation" },
-  weather_alert:      { emoji: "🌦",  label: "Weather alert",      desc: "Monitoring destination weather" },
-};
-
-const STATUS_META: Record<string, { color: string; dot: string; label: string }> = {
-  active:    { color: "var(--gold, #C9A84C)",     dot: "#C9A84C", label: "Active" },
-  triggered: { color: "#ef4444",                  dot: "#ef4444", label: "Alert triggered" },
-  paused:    { color: "var(--text-muted, #aaa)",  dot: "#aaa",    label: "Paused" },
-  cancelled: { color: "var(--text-muted, #aaa)",  dot: "#666",    label: "Cancelled" },
-  resolved:  { color: "#22c55e",                  dot: "#22c55e", label: "Resolved" },
-};
-
 function timeAgo(iso: string | null | undefined): string {
-  if (!iso) return "Never";
+  if (!iso) return "—";
   const diff = Date.now() - new Date(iso).getTime();
   const m = Math.floor(diff / 60000);
   if (m < 1) return "Just now";
@@ -51,10 +25,18 @@ function timeAgo(iso: string | null | undefined): string {
 
 // ── Monitor card ───────────────────────────────────────────────────────────
 
-function MonitorCard({ monitor, onCancel }: { monitor: BookingMonitor; onCancel: (id: string) => void }) {
-  const type   = TYPE_META[monitor.type] ?? TYPE_META.availability_watch;
-  const status = STATUS_META[monitor.status] ?? STATUS_META.active;
-  const isLive = monitor.status === "active";
+interface MonitorCardProps {
+  monitor: BookingMonitor;
+  onCancel: (id: string) => void;
+  typeMeta: Record<string, { emoji: string; label: string; desc: string }>;
+  statusMeta: Record<string, { color: string; dot: string; label: string }>;
+  t: { lastChecked: string; nextCheck: string; stopWatching: string; alertLabel: string };
+}
+
+function MonitorCard({ monitor, onCancel, typeMeta, statusMeta, t }: MonitorCardProps) {
+  const type   = typeMeta[monitor.type] ?? typeMeta.availability_watch;
+  const status = statusMeta[monitor.status] ?? statusMeta.active;
+  const isLive  = monitor.status === "active";
   const isAlert = monitor.status === "triggered";
 
   return (
@@ -97,7 +79,7 @@ function MonitorCard({ monitor, onCancel }: { monitor: BookingMonitor; onCancel:
           backgroundColor: "rgba(239,68,68,0.08)", border: "0.5px solid rgba(239,68,68,0.2)",
         }}>
           <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 12,
-            fontWeight: 600, color: "#ef4444", marginBottom: 2 }}>⚠ Alert</p>
+            fontWeight: 600, color: "#ef4444", marginBottom: 2 }}>{t.alertLabel}</p>
           <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 12, color: "var(--text-secondary, #666)" }}>
             {monitor.trigger_message}
           </p>
@@ -109,7 +91,7 @@ function MonitorCard({ monitor, onCancel }: { monitor: BookingMonitor; onCancel:
         <div>
           <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 10,
             color: "var(--text-muted, #aaa)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 2 }}>
-            Last checked
+            {t.lastChecked}
           </p>
           <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 12, color: "var(--text-secondary, #666)" }}>
             {timeAgo(monitor.last_checked_at)}
@@ -118,7 +100,7 @@ function MonitorCard({ monitor, onCancel }: { monitor: BookingMonitor; onCancel:
         <div>
           <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 10,
             color: "var(--text-muted, #aaa)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 2 }}>
-            Next check
+            {t.nextCheck}
           </p>
           <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 12, color: "var(--text-secondary, #666)" }}>
             {monitor.next_check_at ? timeAgo(monitor.next_check_at).replace("ago", "from now") : "—"}
@@ -136,7 +118,7 @@ function MonitorCard({ monitor, onCancel }: { monitor: BookingMonitor; onCancel:
             borderRadius: 6, padding: "3px 10px", cursor: "pointer",
           }}
         >
-          Stop watching
+          {t.stopWatching}
         </button>
       )}
     </div>
@@ -150,6 +132,22 @@ interface JobGroup { tripLabel: string; jobId: string; monitors: BookingMonitor[
 export default function MonitoringPage() {
   const [groups, setGroups] = useState<JobGroup[]>([]);
   const [loading, setLoading] = useState(true);
+  const { t } = useLanguage();
+  const tm = t.monitoring;
+
+  const typeMeta = {
+    availability_watch: { emoji: "🔍", label: tm.typeAvailabilityLabel, desc: tm.typeAvailabilityDesc },
+    reservation_check:  { emoji: "🔗", label: tm.typeReservationLabel,  desc: tm.typeReservationDesc },
+    weather_alert:      { emoji: "🌦",  label: tm.typeWeatherLabel,      desc: tm.typeWeatherDesc },
+  };
+
+  const statusMeta = {
+    active:    { color: "var(--gold, #C9A84C)",    dot: "#C9A84C", label: tm.statusActive },
+    triggered: { color: "#ef4444",                 dot: "#ef4444", label: tm.statusTriggered },
+    paused:    { color: "var(--text-muted, #aaa)", dot: "#aaa",    label: tm.statusPaused },
+    cancelled: { color: "var(--text-muted, #aaa)", dot: "#666",    label: tm.statusCancelled },
+    resolved:  { color: "#22c55e",                 dot: "#22c55e", label: tm.statusResolved },
+  };
 
   const load = useCallback(async () => {
     const sid = getSessionId();
@@ -163,7 +161,6 @@ export default function MonitoringPage() {
     const monitors: BookingMonitor[] = (monRes.status === "fulfilled" ? monRes.value?.monitors : null) ?? [];
     const jobs: { id: string; trip_label: string }[] = (jobRes.status === "fulfilled" ? jobRes.value?.jobs : null) ?? [];
 
-    // Group monitors by job
     const map = new Map<string, JobGroup>();
     for (const m of monitors) {
       if (!map.has(m.job_id)) {
@@ -178,10 +175,9 @@ export default function MonitoringPage() {
 
   useEffect(() => { load(); }, [load]);
 
-  // Refresh every 60s
   useEffect(() => {
-    const t = setInterval(load, 60000);
-    return () => clearInterval(t);
+    const timer = setInterval(load, 60000);
+    return () => clearInterval(timer);
   }, [load]);
 
   async function cancelMonitor(id: string) {
@@ -193,9 +189,16 @@ export default function MonitoringPage() {
     load();
   }
 
-  const total   = groups.reduce((n, g) => n + g.monitors.length, 0);
-  const active  = groups.reduce((n, g) => n + g.monitors.filter((m) => m.status === "active").length, 0);
-  const alerts  = groups.reduce((n, g) => n + g.monitors.filter((m) => m.status === "triggered").length, 0);
+  const total  = groups.reduce((n, g) => n + g.monitors.length, 0);
+  const active = groups.reduce((n, g) => n + g.monitors.filter((m) => m.status === "active").length, 0);
+  const alerts = groups.reduce((n, g) => n + g.monitors.filter((m) => m.status === "triggered").length, 0);
+
+  const cardT = {
+    lastChecked: tm.lastChecked,
+    nextCheck: tm.nextCheck,
+    stopWatching: tm.stopWatching,
+    alertLabel: tm.alertLabel,
+  };
 
   return (
     <div style={{ minHeight: "100vh", backgroundColor: "var(--bg, #fafaf9)" }}>
@@ -211,13 +214,13 @@ export default function MonitoringPage() {
         <div style={{ marginBottom: 24 }}>
           <h1 style={{ fontFamily: "var(--font-playfair, serif)", fontSize: 26, fontWeight: 700,
             color: "var(--text-primary, #111)", marginBottom: 4 }}>
-            Monitoring
+            {tm.title}
           </h1>
           {!loading && (
             <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 13, color: "var(--text-secondary, #666)" }}>
               {total === 0
-                ? "No active monitors — they start automatically after booking"
-                : `${active} active · ${alerts > 0 ? `${alerts} alert${alerts > 1 ? "s" : ""} · ` : ""}${total} total`}
+                ? tm.noMonitors
+                : `${active} ${tm.active} · ${alerts > 0 ? `${alerts} ${tm.alert}${alerts > 1 ? "s" : ""} · ` : ""}${total} ${tm.total}`}
             </p>
           )}
         </div>
@@ -230,10 +233,10 @@ export default function MonitoringPage() {
           }}>
             <p style={{ fontFamily: "var(--font-dm-sans)", fontWeight: 700, fontSize: 13,
               color: "#ef4444", marginBottom: 4 }}>
-              ⚠ {alerts} monitor{alerts > 1 ? "s" : ""} triggered
+              {tm.alertBannerTitle(alerts)}
             </p>
             <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 12, color: "var(--text-secondary, #666)" }}>
-              Scroll down to review alerts and take action.
+              {tm.alertBannerDesc}
             </p>
           </div>
         )}
@@ -242,9 +245,9 @@ export default function MonitoringPage() {
         {!loading && total === 0 && (
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             {[
-              { emoji: "🔍", title: "Availability watch", desc: "When a booking step fails, the agent keeps checking every 3 hours for an opening." },
-              { emoji: "🔗", title: "Reservation check",  desc: "After a successful booking, the agent checks daily that the reservation link is still valid." },
-              { emoji: "🌦",  title: "Weather alert",      desc: "For trips within 14 days, the agent monitors the destination and alerts you to rain or severe weather." },
+              { emoji: "🔍", title: tm.typeAvailabilityLabel, desc: tm.emptyAvailabilityDesc },
+              { emoji: "🔗", title: tm.typeReservationLabel,  desc: tm.emptyReservationDesc },
+              { emoji: "🌦",  title: tm.typeWeatherLabel,      desc: tm.emptyWeatherDesc },
             ].map((item) => (
               <div key={item.title} style={{
                 padding: "14px 16px", borderRadius: 12,
@@ -267,14 +270,14 @@ export default function MonitoringPage() {
               color: "#fff", textDecoration: "none",
               fontFamily: "var(--font-dm-sans)", fontSize: 13, fontWeight: 600, marginTop: 8,
             }}>
-              Start a trip to activate monitoring →
+              {tm.startTrip}
             </a>
           </div>
         )}
 
         {loading && (
           <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 13, color: "var(--text-muted, #aaa)" }}>
-            Loading…
+            {tm.loading}
           </p>
         )}
 
@@ -288,12 +291,13 @@ export default function MonitoringPage() {
               </p>
               <a href="/trips" style={{ fontFamily: "var(--font-dm-sans)", fontSize: 12,
                 color: "var(--gold, #C9A84C)", textDecoration: "none" }}>
-                View trip →
+                {tm.viewTrip}
               </a>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
               {group.monitors.map((m) => (
-                <MonitorCard key={m.id} monitor={m} onCancel={cancelMonitor} />
+                <MonitorCard key={m.id} monitor={m} onCancel={cancelMonitor}
+                  typeMeta={typeMeta} statusMeta={statusMeta} t={cardT} />
               ))}
             </div>
           </div>

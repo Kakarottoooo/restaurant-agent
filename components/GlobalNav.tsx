@@ -24,7 +24,7 @@ function getSessionId() {
 export default function GlobalNav({ active }: Props) {
   const [actionCount, setActionCount] = useState(0);
   const [monitorCount, setMonitorCount] = useState(0);
-  const { lang, setLang, current: currentLang } = useLanguage();
+  const { lang, setLang, current: currentLang, t } = useLanguage();
   const [langMenuOpen, setLangMenuOpen] = useState(false);
 
   useEffect(() => {
@@ -53,9 +53,9 @@ export default function GlobalNav({ active }: Props) {
   }, []);
 
   const links: { href: string; label: string; id: Page; badge?: number }[] = [
-    { href: "/trips",      label: "My Trips",   id: "trips",      badge: actionCount || undefined },
-    { href: "/monitoring", label: "Monitoring",  id: "monitoring", badge: monitorCount || undefined },
-    { href: "/insights",   label: "Insights",    id: "insights" },
+    { href: "/trips",      label: t.nav.myTrips,    id: "trips",      badge: actionCount || undefined },
+    { href: "/monitoring", label: t.nav.monitoring,  id: "monitoring", badge: monitorCount || undefined },
+    { href: "/insights",   label: t.nav.insights,    id: "insights" },
   ];
 
   return (

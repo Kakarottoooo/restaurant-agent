@@ -1,18 +1,9 @@
 "use client";
 
-/**
- * /insights — Learned Preferences & Memory
- *
- * Full-page version of the InsightsPanel from My Trips.
- * Four sections:
- *   Overview    — policy bias, negative memory, preference pills
- *   Scenarios   — per-context acceptance rates
- *   Patterns    — stated vs actual, satisfaction predictors, override triggers
- *   Profile     — group/relationship editor
- */
-
 import { useState, useEffect } from "react";
 import GlobalNav from "@/components/GlobalNav";
+import { useLanguage } from "@/app/hooks/useLanguage";
+import type { Translations } from "@/lib/i18n";
 import type { PolicyBias, UserPreferenceProfile } from "@/lib/policy";
 import type { ScenarioMemory, PatternMemory, RelationshipProfile, RelationshipType } from "@/lib/memory";
 import type { AgentFeedbackStats } from "@/lib/db";
@@ -75,10 +66,11 @@ function Pill({ children, color, bg }: { children: string; color: string; bg: st
 
 // ── Overview tab ───────────────────────────────────────────────────────────
 
-function OverviewTab({ stats, policy, profile }: {
+function OverviewTab({ stats, policy, profile, ti }: {
   stats: AgentFeedbackStats | null;
   policy: PolicyBias | null;
   profile: UserPreferenceProfile | null;
+  ti: Translations["insights"];
 }) {
   if (!stats && !policy) {
     return (
@@ -86,10 +78,10 @@ function OverviewTab({ stats, policy, profile }: {
         <p style={{ fontSize: 32, marginBottom: 12 }}>🧠</p>
         <p style={{ fontFamily: "var(--font-dm-sans)", fontWeight: 700, fontSize: 14,
           color: "var(--text-primary, #111)", marginBottom: 6 }}>
-          Nothing learned yet
+          {ti.nothingLearned}
         </p>
         <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 13, color: "var(--text-secondary, #666)", lineHeight: 1.6 }}>
-          Complete a few trips and give feedback — Onegent will start building your personal preference profile.
+          {ti.nothingLearnedDesc}
         </p>
       </div>
     );
@@ -102,9 +94,9 @@ function OverviewTab({ stats, policy, profile }: {
       {stats && (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
           {[
-            { label: "Feedback events", value: stats.totalEvents },
-            { label: "Accepted",        value: stats.accepted ?? 0 },
-            { label: "Overridden",      value: stats.manual_override ?? 0 },
+            { label: ti.feedbackEvents, value: stats.totalEvents },
+            { label: ti.accepted,       value: stats.accepted ?? 0 },
+            { label: ti.overridden,     value: stats.manual_override ?? 0 },
           ].map(({ label, value }) => (
             <div key={label} style={{
               padding: "12px", borderRadius: 10, textAlign: "center",
@@ -126,18 +118,16 @@ function OverviewTab({ stats, policy, profile }: {
       {/* Confidence */}
       {profile && (
         <Card accent={profile.confidenceLevel === "high" ? "green" : profile.confidenceLevel === "low" ? "red" : undefined}>
-          <SectionLabel>Profile confidence</SectionLabel>
+          <SectionLabel>{ti.profileConfidence}</SectionLabel>
           <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 14, fontWeight: 700,
             color: "var(--text-primary, #111)", marginBottom: 4, textTransform: "capitalize" }}>
             {profile.confidenceLevel}
           </p>
           <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 12,
             color: "var(--text-secondary, #666)", lineHeight: 1.5 }}>
-            {profile.confidenceLevel === "high"
-              ? "The agent has a strong picture of your preferences and makes confident adjustments."
-              : profile.confidenceLevel === "medium"
-              ? "The agent is building your profile. A few more trips will sharpen its decisions."
-              : "Not enough data yet. The agent defaults to conservative behaviour until it learns more."}
+            {profile.confidenceLevel === "high" ? ti.confHighDesc
+              : profile.confidenceLevel === "medium" ? ti.confMidDesc
+              : ti.confLowDesc}
           </p>
         </Card>
       )}
@@ -145,13 +135,13 @@ function OverviewTab({ stats, policy, profile }: {
       {/* Negative memory */}
       {profile && profile.negatives.length > 0 && (
         <div>
-          <SectionLabel>Venues & providers the agent deprioritises</SectionLabel>
+          <SectionLabel>{ti.deprioritised}</SectionLabel>
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
             {profile.negatives.map((n) => (
               <Pill key={n.entity}
                 color={n.severity === "strong" ? "rgba(220,38,38,0.85)" : "rgba(234,88,12,0.8)"}
                 bg={n.severity === "strong" ? "rgba(220,38,38,0.07)" : "rgba(234,88,12,0.07)"}>
-                {n.entity} ({Math.round(n.overrideRate * 100)}% override)
+                {n.entity} ({Math.round(n.overrideRate * 100)}% {ti.overridePct.replace("% ", "")})
               </Pill>
             ))}
           </div>
@@ -161,7 +151,7 @@ function OverviewTab({ stats, policy, profile }: {
       {/* Preferred providers */}
       {profile && profile.preferredProviders.length > 0 && (
         <div>
-          <SectionLabel>Preferred providers</SectionLabel>
+          <SectionLabel>{ti.preferredProviders}</SectionLabel>
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
             {profile.preferredProviders.map((p) => (
               <Pill key={p} color="rgba(22,163,74,0.85)" bg="rgba(22,163,74,0.07)">{p}</Pill>
@@ -173,11 +163,11 @@ function OverviewTab({ stats, policy, profile }: {
       {/* Tolerance summary */}
       {profile && (
         <div>
-          <SectionLabel>Tolerance</SectionLabel>
+          <SectionLabel>{ti.tolerance}</SectionLabel>
           <div style={{ display: "flex", gap: 10 }}>
             {[
-              { label: "Time adjust",  value: profile.timeAdjustTolerance,  color: "rgba(234,88,12,0.7)" },
-              { label: "Venue switch", value: profile.venueSwitchTolerance, color: "#6366f1" },
+              { label: ti.timeAdjust,  value: profile.timeAdjustTolerance,  color: "rgba(234,88,12,0.7)" },
+              { label: ti.venueSwitch, value: profile.venueSwitchTolerance, color: "#6366f1" },
             ].map(({ label, value, color }) => (
               <div key={label} style={{ flex: 1 }}>
                 <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 11,
@@ -185,7 +175,7 @@ function OverviewTab({ stats, policy, profile }: {
                 <Bar value={value} color={color} />
                 <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 11,
                   color: "var(--text-secondary, #666)", marginTop: 3 }}>
-                  {Math.round(value * 100)}% acceptance
+                  {Math.round(value * 100)}% {ti.acceptancePct.replace("% ", "")}
                 </p>
               </div>
             ))}
@@ -202,7 +192,7 @@ function OverviewTab({ stats, policy, profile }: {
       }}>
         <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 13, fontWeight: 600,
           color: "var(--text-primary, #111)" }}>
-          📊 View full KPI dashboard
+          {ti.kpiLink}
         </p>
         <span style={{ color: "var(--gold, #C9A84C)", fontSize: 13 }}>→</span>
       </a>
@@ -212,12 +202,12 @@ function OverviewTab({ stats, policy, profile }: {
 
 // ── Scenarios tab ──────────────────────────────────────────────────────────
 
-function ScenariosTab({ taskMemory }: { taskMemory: ScenarioMemory[] }) {
+function ScenariosTab({ taskMemory, ti }: { taskMemory: ScenarioMemory[]; ti: Translations["insights"] }) {
   if (taskMemory.length === 0) {
     return (
       <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 13,
         color: "var(--text-muted, #aaa)", fontStyle: "italic" }}>
-        Complete trips across different scenarios to see how your preferences vary by context.
+        {ti.scenariosEmpty}
       </p>
     );
   }
@@ -226,7 +216,7 @@ function ScenariosTab({ taskMemory }: { taskMemory: ScenarioMemory[] }) {
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 12,
         color: "var(--text-secondary, #666)", lineHeight: 1.5 }}>
-        Your preferences aren&apos;t global — they shift by scenario. Here&apos;s what the agent has learned per context.
+        {ti.scenariosIntro}
       </p>
       {taskMemory.map((mem) => (
         <Card key={`${mem.scenario}-${mem.stepType}`}>
@@ -237,7 +227,7 @@ function ScenariosTab({ taskMemory }: { taskMemory: ScenarioMemory[] }) {
             </div>
             <span style={{ fontFamily: "var(--font-dm-sans)", fontSize: 11,
               color: "var(--text-muted, #aaa)" }}>
-              {mem.totalEvents} events
+              {mem.totalEvents} {ti.events}
             </span>
           </div>
           <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 13,
@@ -248,7 +238,7 @@ function ScenariosTab({ taskMemory }: { taskMemory: ScenarioMemory[] }) {
             {mem.timeAdjustAcceptance !== null && (
               <div style={{ flex: 1 }}>
                 <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 10,
-                  color: "var(--text-muted, #aaa)", marginBottom: 4 }}>Time adjust acceptance</p>
+                  color: "var(--text-muted, #aaa)", marginBottom: 4 }}>{ti.timeAdjustAcceptance}</p>
                 <Bar value={mem.timeAdjustAcceptance} color="rgba(234,88,12,0.7)" />
                 <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 11,
                   color: "rgba(234,88,12,0.8)", marginTop: 3 }}>
@@ -259,7 +249,7 @@ function ScenariosTab({ taskMemory }: { taskMemory: ScenarioMemory[] }) {
             {mem.venueSwitchAcceptance !== null && (
               <div style={{ flex: 1 }}>
                 <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 10,
-                  color: "var(--text-muted, #aaa)", marginBottom: 4 }}>Venue switch acceptance</p>
+                  color: "var(--text-muted, #aaa)", marginBottom: 4 }}>{ti.venueSwitchAcceptance}</p>
                 <Bar value={mem.venueSwitchAcceptance} color="#6366f1" />
                 <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 11,
                   color: "#6366f1", marginTop: 3 }}>
@@ -276,12 +266,12 @@ function ScenariosTab({ taskMemory }: { taskMemory: ScenarioMemory[] }) {
 
 // ── Patterns tab ───────────────────────────────────────────────────────────
 
-function PatternsTab({ patternMemory }: { patternMemory: PatternMemory | null }) {
+function PatternsTab({ patternMemory, ti }: { patternMemory: PatternMemory | null; ti: Translations["insights"] }) {
   if (!patternMemory) {
     return (
       <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 13,
         color: "var(--text-muted, #aaa)", fontStyle: "italic" }}>
-        Complete more trips with feedback to build your behavioural fingerprint.
+        {ti.patternsEmpty}
       </p>
     );
   }
@@ -293,7 +283,7 @@ function PatternsTab({ patternMemory }: { patternMemory: PatternMemory | null })
 
       {/* Stated vs actual */}
       <div>
-        <SectionLabel>Stated vs actual tolerance</SectionLabel>
+        <SectionLabel>{ti.statedVsActual}</SectionLabel>
         <Card accent={statedVsActual.conclusion === "more_strict" ? "red"
                    : statedVsActual.conclusion === "more_liberal" ? "green" : undefined}>
           <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 13,
@@ -304,7 +294,7 @@ function PatternsTab({ patternMemory }: { patternMemory: PatternMemory | null })
             <div>
               <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
                 <span style={{ fontFamily: "var(--font-dm-sans)", fontSize: 11,
-                  color: "var(--text-muted, #aaa)" }}>Actual acceptance rate</span>
+                  color: "var(--text-muted, #aaa)" }}>{ti.actualAcceptance}</span>
                 <span style={{ fontFamily: "var(--font-dm-sans)", fontSize: 11,
                   fontWeight: 700, color: "var(--text-primary, #111)" }}>
                   {Math.round(statedVsActual.actualAcceptanceRate * 100)}%
@@ -323,7 +313,7 @@ function PatternsTab({ patternMemory }: { patternMemory: PatternMemory | null })
       {/* Satisfaction predictors */}
       {satisfactionPredictors.length > 0 && (
         <div>
-          <SectionLabel>What drives your satisfaction</SectionLabel>
+          <SectionLabel>{ti.satisfactionDrivers}</SectionLabel>
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {satisfactionPredictors.map((pred) => (
               <div key={pred.agentDecision} style={{
@@ -339,7 +329,7 @@ function PatternsTab({ patternMemory }: { patternMemory: PatternMemory | null })
                   </p>
                   <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 10,
                     color: "var(--text-muted, #aaa)", marginTop: 2 }}>
-                    {pred.count} events
+                    {pred.count} {ti.events}
                   </p>
                 </div>
                 {pred.avgScore !== null && (
@@ -363,9 +353,9 @@ function PatternsTab({ patternMemory }: { patternMemory: PatternMemory | null })
       {/* Override triggers */}
       {overrideTriggers.length > 0 && (
         <div>
-          <SectionLabel>When you take control</SectionLabel>
+          <SectionLabel>{ti.whenYouTakeControl}</SectionLabel>
           <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
-            {overrideTriggers.map((t, i) => (
+            {overrideTriggers.map((tr, i) => (
               <div key={i} style={{
                 display: "flex", justifyContent: "space-between", alignItems: "center",
                 padding: "10px 0",
@@ -374,11 +364,11 @@ function PatternsTab({ patternMemory }: { patternMemory: PatternMemory | null })
               }}>
                 <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 12,
                   color: "var(--text-secondary, #666)", flex: 1, paddingRight: 12 }}>
-                  {t.description}
+                  {tr.description}
                 </p>
                 <span style={{ fontFamily: "var(--font-dm-sans)", fontSize: 12, fontWeight: 700,
                   color: "rgba(220,38,38,0.8)", flexShrink: 0 }}>
-                  {Math.round(t.overrideRate * 100)}% override
+                  {Math.round(tr.overrideRate * 100)}% {ti.overridePct.replace("% ", "")}
                 </span>
               </div>
             ))}
@@ -391,10 +381,11 @@ function PatternsTab({ patternMemory }: { patternMemory: PatternMemory | null })
 
 // ── Profile tab ────────────────────────────────────────────────────────────
 
-function ProfileTab({ sessionId, relationship, onSave }: {
+function ProfileTab({ sessionId, relationship, onSave, ti }: {
   sessionId: string;
   relationship: RelationshipProfile | null;
   onSave: (r: RelationshipProfile) => void;
+  ti: Translations["insights"];
 }) {
   const [form, setForm] = useState({
     name: relationship?.name ?? "",
@@ -406,6 +397,9 @@ function ProfileTab({ sessionId, relationship, onSave }: {
   const [saving, setSaving] = useState(false);
 
   const TYPES: RelationshipType[] = ["solo", "couple", "friends", "family"];
+  const TYPE_LABELS: Record<RelationshipType, string> = {
+    solo: ti.solo, couple: ti.couple, friends: ti.friends, family: ti.family,
+  };
 
   async function save() {
     setSaving(true);
@@ -435,81 +429,71 @@ function ProfileTab({ sessionId, relationship, onSave }: {
     outline: "none",
   };
 
+  const labelStyle: React.CSSProperties = {
+    fontFamily: "var(--font-dm-sans)", fontSize: 11, fontWeight: 600,
+    color: "var(--text-muted, #aaa)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6,
+  };
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 13,
         color: "var(--text-secondary, #666)", lineHeight: 1.5 }}>
-        Tell Onegent who you&apos;re booking for. It uses this to filter venues, respect constraints, and remember what worked.
+        {ti.profileHint}
       </p>
 
       <div>
-        <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 11, fontWeight: 600,
-          color: "var(--text-muted, #aaa)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>
-          Profile name
-        </p>
+        <p style={labelStyle}>{ti.profileName}</p>
         <input
           value={form.name}
           onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-          placeholder="e.g. Alex & Jordan, Family trip, College crew"
+          placeholder={ti.profileNamePlaceholder}
           style={inputStyle}
         />
       </div>
 
       <div>
-        <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 11, fontWeight: 600,
-          color: "var(--text-muted, #aaa)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>
-          Group type
-        </p>
+        <p style={labelStyle}>{ti.groupType}</p>
         <div style={{ display: "flex", gap: 6 }}>
-          {TYPES.map((t) => (
-            <button key={t} onClick={() => setForm((f) => ({ ...f, type: t }))} style={{
-              flex: 1, padding: "7px 4px", borderRadius: 8, cursor: "pointer", textTransform: "capitalize",
-              fontFamily: "var(--font-dm-sans)", fontSize: 12, fontWeight: form.type === t ? 700 : 400,
-              border: form.type === t ? "1.5px solid var(--gold, #C9A84C)" : "0.5px solid var(--border, #e5e7eb)",
-              background: form.type === t ? "rgba(201,168,76,0.08)" : "var(--card, #fff)",
-              color: form.type === t ? "var(--gold, #C9A84C)" : "var(--text-secondary, #666)",
+          {TYPES.map((tp) => (
+            <button key={tp} onClick={() => setForm((f) => ({ ...f, type: tp }))} style={{
+              flex: 1, padding: "7px 4px", borderRadius: 8, cursor: "pointer",
+              fontFamily: "var(--font-dm-sans)", fontSize: 12, fontWeight: form.type === tp ? 700 : 400,
+              border: form.type === tp ? "1.5px solid var(--gold, #C9A84C)" : "0.5px solid var(--border, #e5e7eb)",
+              background: form.type === tp ? "rgba(201,168,76,0.08)" : "var(--card, #fff)",
+              color: form.type === tp ? "var(--gold, #C9A84C)" : "var(--text-secondary, #666)",
             }}>
-              {t}
+              {TYPE_LABELS[tp]}
             </button>
           ))}
         </div>
       </div>
 
       <div>
-        <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 11, fontWeight: 600,
-          color: "var(--text-muted, #aaa)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>
-          Always needs (comma-separated)
-        </p>
+        <p style={labelStyle}>{ti.alwaysNeeds}</p>
         <input
           value={form.constraints}
           onChange={(e) => setForm((f) => ({ ...f, constraints: e.target.value }))}
-          placeholder="e.g. parking, quiet venue, vegetarian option"
+          placeholder={ti.alwaysNeedsPlaceholder}
           style={inputStyle}
         />
       </div>
 
       <div>
-        <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 11, fontWeight: 600,
-          color: "var(--text-muted, #aaa)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>
-          Always avoids (comma-separated)
-        </p>
+        <p style={labelStyle}>{ti.alwaysAvoids}</p>
         <input
           value={form.avoid_types}
           onChange={(e) => setForm((f) => ({ ...f, avoid_types: e.target.value }))}
-          placeholder="e.g. chains, loud music, late nights"
+          placeholder={ti.alwaysAvoidsPlaceholder}
           style={inputStyle}
         />
       </div>
 
       <div>
-        <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 11, fontWeight: 600,
-          color: "var(--text-muted, #aaa)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>
-          Notes
-        </p>
+        <p style={labelStyle}>{ti.notes}</p>
         <textarea
           value={form.notes}
           onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
-          placeholder="Anything else the agent should know…"
+          placeholder={ti.notesPlaceholder}
           rows={3}
           style={{ ...inputStyle, resize: "vertical" }}
         />
@@ -525,7 +509,7 @@ function ProfileTab({ sessionId, relationship, onSave }: {
           opacity: !form.name ? 0.5 : 1,
         }}
       >
-        {saving ? "Saving…" : relationship ? "Update profile" : "Save profile"}
+        {saving ? ti.saving : relationship ? ti.updateProfile : ti.saveProfile}
       </button>
     </div>
   );
@@ -543,6 +527,8 @@ export default function InsightsPage() {
   const [patternMemory, setPatternMemory] = useState<PatternMemory | null>(null);
   const [relationship, setRelationship] = useState<RelationshipProfile | null>(null);
   const [sessionId] = useState(getSessionId);
+  const { t } = useLanguage();
+  const ti = t.insights;
 
   useEffect(() => {
     if (!sessionId) { setLoading(false); return; }
@@ -563,10 +549,10 @@ export default function InsightsPage() {
   }, [sessionId]);
 
   const TABS: { id: Tab; label: string }[] = [
-    { id: "overview",  label: "Overview"  },
-    { id: "scenarios", label: "Scenarios" },
-    { id: "patterns",  label: "Patterns"  },
-    { id: "profile",   label: "Profile"   },
+    { id: "overview",  label: ti.tabOverview  },
+    { id: "scenarios", label: ti.tabScenarios },
+    { id: "patterns",  label: ti.tabPatterns  },
+    { id: "profile",   label: ti.tabProfile   },
   ];
 
   return (
@@ -579,12 +565,12 @@ export default function InsightsPage() {
         <div style={{ marginBottom: 24 }}>
           <h1 style={{ fontFamily: "var(--font-playfair, serif)", fontSize: 26, fontWeight: 700,
             color: "var(--text-primary, #111)", marginBottom: 4 }}>
-            Insights
+            {ti.title}
           </h1>
           <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 13, color: "var(--text-secondary, #666)" }}>
-            {loading ? "Loading…" : stats
-              ? `${stats.totalEvents} feedback events · Onegent is learning your preferences`
-              : "Complete trips and give feedback to build your profile"}
+            {loading ? ti.loading : stats
+              ? `${stats.totalEvents} ${ti.feedbackEvents}`
+              : ti.emptyHint}
           </p>
         </div>
 
@@ -606,18 +592,19 @@ export default function InsightsPage() {
 
         {loading ? (
           <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 13, color: "var(--text-muted, #aaa)" }}>
-            Loading…
+            {ti.loading}
           </p>
         ) : (
           <>
-            {activeTab === "overview"  && <OverviewTab stats={stats} policy={policy} profile={profile} />}
-            {activeTab === "scenarios" && <ScenariosTab taskMemory={taskMemory} />}
-            {activeTab === "patterns"  && <PatternsTab patternMemory={patternMemory} />}
+            {activeTab === "overview"  && <OverviewTab stats={stats} policy={policy} profile={profile} ti={ti} />}
+            {activeTab === "scenarios" && <ScenariosTab taskMemory={taskMemory} ti={ti} />}
+            {activeTab === "patterns"  && <PatternsTab patternMemory={patternMemory} ti={ti} />}
             {activeTab === "profile"   && (
               <ProfileTab
                 sessionId={sessionId}
                 relationship={relationship}
                 onSave={setRelationship}
+                ti={ti}
               />
             )}
           </>

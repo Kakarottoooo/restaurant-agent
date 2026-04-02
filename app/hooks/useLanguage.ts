@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { getT, type Translations } from "@/lib/i18n";
 
 export interface LangOption {
   code: string;
@@ -49,5 +50,7 @@ export function useLanguage() {
     ? ""
     : `IMPORTANT: Always respond in ${current.labelEn} (${current.label}). All recommendations, explanations, and messages must be written in ${current.label}.`;
 
-  return { lang, setLang, current, aiInstruction };
+  const t: Translations = getT(lang);
+
+  return { lang, setLang, current, aiInstruction, t };
 }
