@@ -784,7 +784,7 @@ export default function Home() {
       )}
 
       {/* ─── Taste Profile Modal ──────────────────── */}
-      {prefModalOpen && (
+      {false && prefModalOpen && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-4"
           style={{ backgroundColor: "rgba(0,0,0,0.5)" }}
@@ -1447,23 +1447,6 @@ export default function Home() {
                     >
                       {auth.userDisplayName ?? "Signed in"}
                     </div>
-                    <button
-                      onClick={() => { setPrefModalOpen(true); setAccountMenuOpen(false); }}
-                      style={{
-                        display: "block",
-                        width: "100%",
-                        textAlign: "left",
-                        padding: "8px 14px",
-                        fontFamily: "var(--font-dm-sans)",
-                        fontSize: "13px",
-                        color: "var(--text-primary)",
-                        background: "none",
-                        border: "none",
-                        cursor: "pointer",
-                      }}
-                    >
-                      {tn.preferences}
-                    </button>
                     <a
                       href="/permissions"
                       onClick={() => setAccountMenuOpen(false)}
@@ -1476,10 +1459,9 @@ export default function Home() {
                         fontSize: "13px",
                         color: "var(--text-primary)",
                         textDecoration: "none",
-                        borderTop: "0.5px solid var(--border)",
                       }}
                     >
-                      {tn.permissions}
+                      {tn.preferences}
                     </a>
 
                     {/* Language picker */}
