@@ -63,6 +63,76 @@ Scenario decision engine (`lib/scenario2.ts`):
 - Dark mode (system preference)
 - PWA-installable with offline support
 - Internal analytics dashboard (`/internal/scenario-events`, Clerk-gated)
+- **Autopilot booking** — one click books everything in the background; push notification when done
+- **Decision Room** — shared two-party decision platform with voting and merge logic
+
+## Autopilot Booking
+
+Onegent can autonomously fill out booking forms across multiple platforms so you only have to pay.
+
+### How it works
+
+1. **Select a plan** — pick flights, hotel, and restaurant from the scenario plan view
+2. **"Book everything →"** — fires a background job (up to 5 min) that runs a Playwright headless browser for each step
+3. **Real-time task view** (`/trips`) — watch progress step-by-step; push notification on completion
+4. **Open and pay** — click the pre-filled booking pages and confirm payment
+
+### In-task decision making
+
+The agent doesn't just execute — it makes autonomous local decisions when things go wrong:
+
+| Problem | Agent response |
+|---|---|
+| Restaurant full at 7:00pm | Auto-tries 7:30pm → 6:30pm → 8:00pm → 6:00pm before giving up |
+| Primary hotel unavailable | Switches to next-best alternative from the backup plan |
+| Transient error | Retries up to 3× with 2s / 5s backoff |
+| All options fail | Generates manual action items with direct booking links |
+
+Every decision is logged with timestamp and outcome — the full agent decision log is visible in `/trips`.
+
+### Failure recovery
+
+- **Retry with backoff** — transient errors retried up to 3 times (2s, 5s delays)
+- **Time fallbacks** — restaurant time slots: ±30, ±60, ±90 minutes from requested time
+- **Fallback candidates** — backup hotels/restaurants from the plan's alternate options
+- **Action items** — when all automation fails, surfaces manual booking links with clear "what to do next"
+
+### Session persistence (cookie-based auth)
+
+Log in to OTAs once in a visible browser session; cookies are saved and injected into future headless runs so the agent lands on authenticated pages:
+
+```
+POST /api/booking-autopilot/connect   # opens visible browser, waits for login, saves cookies
+DELETE /api/booking-autopilot/connect # clears saved cookies for a service
+GET  /api/booking-autopilot/status   # which services are currently connected
+```
+
+### Agent feedback loop
+
+The system learns from every booking outcome:
+
+| Signal | Captured when |
+|---|---|
+| **Accepted** | User clicks "Open →" on an agent-chosen booking |
+| **Manual override** | User clicks "Book manually" action item |
+| **Satisfaction** | 😊 / 👍 / 😕 widget shown after each completed trip |
+
+The **Agent Insights** panel in `/trips` surfaces:
+- Adjustment acceptance rate (how often you trust the agent's decisions)
+- Provider success rates by platform (OpenTable, Booking.com, Kayak, Expedia)
+- Which step types most often need manual intervention
+- Venues where the agent's pick is most often rejected
+
+Over time these signals feed back into ranking fallback candidates and improving decision strategy.
+
+### Additional env vars (autopilot)
+
+| Variable | Description |
+|---|---|
+| `NEXT_PUBLIC_APP_URL` | Base URL used by the job runner to call autopilot endpoints internally |
+| `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` | Optional: path to a custom Chromium binary |
+
+---
 
 ## Prerequisites
 
@@ -146,7 +216,29 @@ app/
   globals.css           # Design tokens, dark mode, animations
   layout.tsx            # Fonts, metadata, service worker registration
 
+app/
+  api/
+    booking-autopilot/
+      flight/route.ts            # Kayak autopilot — finds cheapest flight, returns pre-filled checkout URL
+      hotel/route.ts             # Booking.com autopilot — navigates to hotel page, returns handoff URL
+      restaurant/route.ts        # OpenTable autopilot — selects time slot, returns reservation URL
+      connect/route.ts           # Cookie session management — opens visible browser for OTA login
+      status/route.ts            # GET — which services have saved cookie sessions
+    booking-jobs/
+      route.ts                   # POST (create job) / GET (list by session)
+      [id]/route.ts              # GET — poll job status + step progress
+      [id]/start/route.ts        # POST — long-running job executor (maxDuration=300s, recovery logic)
+    booking-feedback/
+      route.ts                   # POST (log feedback event) / GET (aggregate stats)
+  trips/page.tsx                 # My Trips task center — timeline, decision log, action items, insights
+
 lib/
+  booking-autopilot/
+    kayak-flights.ts     # Playwright scraper — Kayak flight search + expanded booking panel
+    booking-com.ts       # Playwright scraper — Booking.com hotel page (stealth mode + cookie injection)
+    opentable.ts         # Playwright scraper — OpenTable time slot selection
+    cookie-store.ts      # Cookie persistence — save/load/inject per-service browser cookies
+    types.ts             # AutopilotResult, BookingJobStep shared types
   agent.ts              # Thin orchestrator — routes to sub-modules, runs restaurant pipeline inline
   agent/
     parse/              # Intent parsers per category (restaurant, hotel, flight, credit-card, city-trip, concert-event, gift, fitness, …)
@@ -161,7 +253,7 @@ lib/
   tools.ts              # Google Places, SerpAPI, Tavily, Geocoding API wrappers
   schemas.ts            # Zod schemas for request/response validation
   types.ts              # TypeScript interfaces (DecisionPlan, SessionPreferences, UserPreferenceProfile, etc.)
-  db.ts                 # Neon DB helpers (9 tables)
+  db.ts                 # Neon DB helpers (11 tables: includes booking_jobs + agent_feedback)
   push.ts               # Web Push helper — wraps web-push with VAPID setup
   ticketmaster.ts       # Ticketmaster Discovery API client
   serpapi-shopping.ts   # SerpAPI Google Shopping client
@@ -169,6 +261,8 @@ lib/
   outputCopy.ts         # Output language copy helpers
 
 components/
+  AutopilotRunnerModal.tsx # Booking runner modal — live step progress, background job handoff
+  ConnectAccountsModal.tsx # OTA account connection UI — login status, connect/disconnect per service
   ScenarioPlanView.tsx     # Scenario plan composite (Brief + Primary + Backups + ActionRail + Evidence)
   PrimaryPlanCard.tsx      # Primary plan display with swap + approve actions
   BackupPlanCard.tsx       # Backup option cards
@@ -187,6 +281,23 @@ public/
 Deploy to Vercel — it's a standard Next.js app. Set the environment variables in your project settings.
 
 **Note:** The rate limiter in `app/api/chat/route.ts` is in-memory (10 req/min per IP). For multi-replica deployments, replace it with `@upstash/ratelimit` backed by Redis.
+
+## Database tables
+
+| Table | Purpose |
+|---|---|
+| `preference_profiles` | Persistent per-user preference profiles |
+| `favorites` | Saved restaurants/venues |
+| `feedback` | Post-experience structured feedback |
+| `scenario_events` | Telemetry (plan_approved, option_swap, action_rail_click, …) |
+| `decision_plans` | Persisted DecisionPlan JSON for share URLs |
+| `plan_outcomes` | Outcome tracking (went, partner_approved, …) |
+| `plan_votes` | Group voting tallies |
+| `price_watches` | Registered price drop alerts |
+| `user_preferences` | Per-session and per-user learned preference constraints |
+| `user_notifications` | Web Push subscriptions |
+| `booking_jobs` | Autopilot job queue — status, steps, decision logs |
+| `agent_feedback` | Feedback events — accepted/override/satisfaction per step |
 
 ## Known limitations
 
