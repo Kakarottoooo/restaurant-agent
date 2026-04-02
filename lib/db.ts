@@ -722,6 +722,189 @@ export async function updateBookingJobSteps(id: string, steps: BookingJobStep[])
   `;
 }
 
+// ─── Agent Feedback ───────────────────────────────────────────────────────────
+
+let agentFeedbackTableReady: Promise<void> | null = null;
+
+async function ensureAgentFeedbackTable() {
+  if (!agentFeedbackTableReady) {
+    agentFeedbackTableReady = (async () => {
+      await sql`
+        CREATE TABLE IF NOT EXISTS agent_feedback (
+          id          TEXT PRIMARY KEY,
+          session_id  TEXT NOT NULL,
+          job_id      TEXT NOT NULL,
+          step_index  INTEGER NOT NULL,
+          step_type   TEXT NOT NULL,
+          -- What the agent decided: "primary" | "time_adjusted" | "venue_switched" | "failed"
+          agent_decision TEXT NOT NULL,
+          venue_name  TEXT,
+          -- Which booking provider was used (opentable / booking_com / kayak / expedia)
+          provider    TEXT,
+          -- "accepted" = user opened agent's link; "manual_override" = used manual link
+          -- "satisfied" / "ok" / "unsatisfied" = job-level satisfaction
+          outcome     TEXT NOT NULL,
+          metadata    JSONB,
+          created_at  TIMESTAMPTZ DEFAULT NOW()
+        )
+      `;
+      await sql`CREATE INDEX IF NOT EXISTS agent_feedback_session ON agent_feedback(session_id)`;
+      await sql`CREATE INDEX IF NOT EXISTS agent_feedback_job ON agent_feedback(job_id)`;
+    })().catch((err) => {
+      agentFeedbackTableReady = null;
+      throw err;
+    });
+  }
+  await agentFeedbackTableReady;
+}
+
+export interface AgentFeedbackEvent {
+  id: string;
+  session_id: string;
+  job_id: string;
+  step_index: number;
+  step_type: "flight" | "hotel" | "restaurant" | "job";
+  agent_decision: "primary" | "time_adjusted" | "venue_switched" | "failed" | "n/a";
+  venue_name?: string | null;
+  provider?: string | null;
+  outcome: "accepted" | "manual_override" | "satisfied" | "ok" | "unsatisfied";
+  metadata?: Record<string, unknown>;
+}
+
+export async function logAgentFeedback(event: AgentFeedbackEvent): Promise<void> {
+  await ensureAgentFeedbackTable();
+  const meta = event.metadata ? JSON.stringify(event.metadata) : null;
+  await sql`
+    INSERT INTO agent_feedback
+      (id, session_id, job_id, step_index, step_type, agent_decision, venue_name, provider, outcome, metadata)
+    VALUES
+      (${event.id}, ${event.session_id}, ${event.job_id}, ${event.step_index},
+       ${event.step_type}, ${event.agent_decision}, ${event.venue_name ?? null},
+       ${event.provider ?? null}, ${event.outcome}, ${meta}::jsonb)
+    ON CONFLICT (id) DO NOTHING
+  `;
+}
+
+export interface AgentFeedbackStats {
+  /** How often agent-adjusted steps (time or venue) were accepted vs overridden */
+  adjustmentAcceptanceRate: number; // 0–1
+  /** Breakdown of outcomes */
+  outcomeBreakdown: {
+    accepted: number;
+    manual_override: number;
+    satisfied: number;
+    ok: number;
+    unsatisfied: number;
+  };
+  /** Success/acceptance rate per provider */
+  providerStats: Array<{
+    provider: string;
+    total: number;
+    accepted: number;
+    rate: number;
+  }>;
+  /** Venues with most manual overrides (user didn't trust agent's pick) */
+  topOverriddenVenues: Array<{ venue_name: string; overrides: number }>;
+  /** Step types with most manual interventions */
+  manualByType: Array<{ step_type: string; manual: number; total: number }>;
+  /** How often each agent decision type was used */
+  decisionTypeUsage: Array<{ agent_decision: string; count: number }>;
+  totalEvents: number;
+}
+
+export async function getAgentFeedbackStats(sessionId?: string): Promise<AgentFeedbackStats> {
+  await ensureAgentFeedbackTable();
+
+  const scopeWhere = sessionId ? sql`WHERE session_id = ${sessionId}` : sql`WHERE 1=1`;
+
+  const [totals, providers, venues, byType, decisions] = await Promise.all([
+    // Outcome breakdown
+    sql<{ outcome: string; cnt: string }>`
+      SELECT outcome, COUNT(*) AS cnt FROM agent_feedback ${scopeWhere} GROUP BY outcome
+    `,
+    // Provider stats (only for step-level events)
+    sql<{ provider: string; total: string; accepted: string }>`
+      SELECT
+        provider,
+        COUNT(*) AS total,
+        SUM(CASE WHEN outcome = 'accepted' THEN 1 ELSE 0 END) AS accepted
+      FROM agent_feedback
+      ${scopeWhere} AND provider IS NOT NULL AND step_type != 'job'
+      GROUP BY provider
+      ORDER BY total DESC
+    `,
+    // Top overridden venues
+    sql<{ venue_name: string; overrides: string }>`
+      SELECT venue_name, COUNT(*) AS overrides
+      FROM agent_feedback
+      ${scopeWhere} AND outcome = 'manual_override' AND venue_name IS NOT NULL
+      GROUP BY venue_name
+      ORDER BY overrides DESC
+      LIMIT 5
+    `,
+    // Manual interventions by step type
+    sql<{ step_type: string; manual: string; total: string }>`
+      SELECT
+        step_type,
+        SUM(CASE WHEN outcome = 'manual_override' THEN 1 ELSE 0 END) AS manual,
+        COUNT(*) AS total
+      FROM agent_feedback
+      ${scopeWhere} AND step_type != 'job'
+      GROUP BY step_type
+    `,
+    // Decision type usage
+    sql<{ agent_decision: string; cnt: string }>`
+      SELECT agent_decision, COUNT(*) AS cnt
+      FROM agent_feedback
+      ${scopeWhere} AND step_type != 'job'
+      GROUP BY agent_decision
+      ORDER BY cnt DESC
+    `,
+  ]);
+
+  const outcomeMap = Object.fromEntries(
+    totals.rows.map((r) => [r.outcome, parseInt(r.cnt)])
+  ) as Record<string, number>;
+
+  const adjustmentEvents = (outcomeMap["accepted"] ?? 0) + (outcomeMap["manual_override"] ?? 0);
+  const adjustmentAcceptanceRate = adjustmentEvents > 0
+    ? (outcomeMap["accepted"] ?? 0) / adjustmentEvents
+    : 0;
+
+  return {
+    adjustmentAcceptanceRate,
+    outcomeBreakdown: {
+      accepted: outcomeMap["accepted"] ?? 0,
+      manual_override: outcomeMap["manual_override"] ?? 0,
+      satisfied: outcomeMap["satisfied"] ?? 0,
+      ok: outcomeMap["ok"] ?? 0,
+      unsatisfied: outcomeMap["unsatisfied"] ?? 0,
+    },
+    providerStats: providers.rows.map((r) => ({
+      provider: r.provider,
+      total: parseInt(r.total),
+      accepted: parseInt(r.accepted),
+      rate: parseInt(r.total) > 0 ? parseInt(r.accepted) / parseInt(r.total) : 0,
+    })),
+    topOverriddenVenues: venues.rows.map((r) => ({
+      venue_name: r.venue_name,
+      overrides: parseInt(r.overrides),
+    })),
+    manualByType: byType.rows.map((r) => ({
+      step_type: r.step_type,
+      manual: parseInt(r.manual),
+      total: parseInt(r.total),
+    })),
+    decisionTypeUsage: decisions.rows.map((r) => ({
+      agent_decision: r.agent_decision,
+      count: parseInt(r.cnt),
+    })),
+    totalEvents: Object.values(outcomeMap).reduce((s, n) => s + n, 0),
+  };
+}
+
+// ─── End Agent Feedback ────────────────────────────────────────────────────────
+
 // ─── End Booking Jobs ─────────────────────────────────────────────────────────
 
 export async function mergeSessionPreferences(
