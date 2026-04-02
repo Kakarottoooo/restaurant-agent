@@ -646,6 +646,11 @@ export interface BookingJobStep {
   actionItem?: StepActionItem;
   /** Full log of every decision the agent made for this step */
   decisionLog?: DecisionLogEntry[];
+  /**
+   * ISO timestamp — when this step should be automatically retried.
+   * Set by the user via the "Retry later" UI. The cron job picks it up.
+   */
+  retryScheduledFor?: string;
 }
 
 export interface BookingJob {
@@ -719,6 +724,48 @@ export async function updateBookingJobStatus(
       WHERE id = ${id}
     `;
   }
+}
+
+/** Update a single step within a job (by index). */
+export async function updateBookingJobStep(
+  id: string,
+  stepIndex: number,
+  patch: Partial<BookingJobStep>
+): Promise<void> {
+  await ensureBookingJobsTable();
+  // Read current steps, patch the target, write back
+  const result = await sql<{ steps: string }>`
+    SELECT steps FROM booking_jobs WHERE id = ${id}
+  `;
+  if (!result.rows[0]) return;
+  const steps: BookingJobStep[] = JSON.parse(result.rows[0].steps);
+  if (stepIndex < 0 || stepIndex >= steps.length) return;
+  steps[stepIndex] = { ...steps[stepIndex], ...patch };
+  await sql`
+    UPDATE booking_jobs
+    SET steps = ${JSON.stringify(steps)}::jsonb, updated_at = NOW()
+    WHERE id = ${id}
+  `;
+}
+
+/** Find jobs that have steps with retryScheduledFor in the past — ready to trigger. */
+export async function getJobsWithPendingRetries(): Promise<BookingJob[]> {
+  await ensureBookingJobsTable();
+  const now = new Date().toISOString();
+  // Find jobs where any step has retryScheduledFor set (we'll filter in JS)
+  const result = await sql<BookingJob>`
+    SELECT id, session_id, user_id, trip_label, status, steps,
+           autonomy_settings, created_at, updated_at, completed_at
+    FROM booking_jobs
+    WHERE status IN ('pending','failed')
+      AND steps::text LIKE '%retryScheduledFor%'
+  `;
+  // Filter to only those where at least one step's retryScheduledFor <= now
+  return result.rows.filter((job) =>
+    job.steps.some(
+      (s) => s.retryScheduledFor && s.retryScheduledFor <= now
+    )
+  );
 }
 
 export async function updateBookingJobSteps(id: string, steps: BookingJobStep[]): Promise<void> {

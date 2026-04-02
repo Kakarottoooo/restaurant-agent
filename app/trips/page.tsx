@@ -2,7 +2,13 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import type { BookingJob, BookingJobStep, DecisionLogEntry, AgentFeedbackStats } from "@/lib/db";
-import type { PolicyBias } from "@/lib/policy";
+import type { PolicyBias, UserPreferenceProfile } from "@/lib/policy";
+import {
+  computeJobSemanticStatus,
+  computeStepSemanticStatus,
+  JOB_SEMANTIC_DISPLAY,
+  STEP_SEMANTIC_DISPLAY,
+} from "@/lib/status";
 import { AutonomySettingsModal } from "@/components/AutonomySettingsModal";
 
 function getSessionId(): string {
@@ -47,35 +53,19 @@ function inferAgentDecision(step: BookingJobStep): string {
 
 // ── Visual helpers ─────────────────────────────────────────────────────────────
 
-const JOB_STATUS_COLOR: Record<BookingJob["status"], string> = {
-  pending: "var(--text-muted, #aaa)",
-  running: "var(--gold, #D4A34B)",
-  done: "rgba(22,163,74,0.85)",
-  failed: "rgba(220,38,38,0.8)",
-};
-
-const JOB_STATUS_LABEL: Record<BookingJob["status"], string> = {
-  pending: "Queued",
-  running: "Agent working…",
-  done: "Done",
-  failed: "Needs attention",
-};
-
 function stepStatusColor(step: BookingJobStep): string {
-  if (step.status === "done")
-    return step.timeAdjusted || step.usedFallback ? "rgba(234,88,12,0.85)" : "rgba(22,163,74,0.85)";
-  if (step.actionItem) return "rgba(220,38,38,0.85)";
-  if (step.status === "loading") return "var(--gold, #D4A34B)";
-  if (step.status === "error" || step.status === "no_availability") return "rgba(220,38,38,0.75)";
-  return "var(--text-muted, #aaa)";
+  const sem = computeStepSemanticStatus(step);
+  return STEP_SEMANTIC_DISPLAY[sem].color;
 }
 
 function stepStatusIcon(step: BookingJobStep): string {
-  if (step.status === "done") return step.timeAdjusted || step.usedFallback ? "↻" : "✓";
-  if (step.status === "loading") return "…";
-  if (step.actionItem) return "!";
-  if (step.status === "error") return "✗";
-  if (step.status === "no_availability") return "⚠";
+  const sem = computeStepSemanticStatus(step);
+  if (sem === "succeeded_first_try") return "✓";
+  if (sem === "succeeded_with_adjustment") return "↻";
+  if (sem === "running") return "…";
+  if (sem === "blocked_needs_input" || sem === "failed_terminal") return "!";
+  if (sem === "failed_recoverable") return "✗";
+  if (sem === "retrying") return "↺";
   return "○";
 }
 
@@ -85,6 +75,7 @@ function stepStatusLabel(step: BookingJobStep): string {
     if (step.usedFallback) return "Booked (alternative venue)";
     return "Pre-filled — ready to pay";
   }
+  if (step.retryScheduledFor) return `Retry scheduled for ${formatTime(step.retryScheduledFor)}`;
   if (step.actionItem) return "Needs your choice";
   if (step.status === "loading") return "Agent working…";
   if (step.status === "no_availability") return "No availability found";
@@ -213,7 +204,71 @@ function WhatsNext({ job }: { job: BookingJob }) {
 
 // ── Step card ──────────────────────────────────────────────────────────────────
 
-function StepCard({ step, stepIndex, jobId }: { step: BookingJobStep; stepIndex: number; jobId: string }) {
+function RetryScheduler({ step, stepIndex, jobId, onScheduled }: {
+  step: BookingJobStep; stepIndex: number; jobId: string; onScheduled: () => void;
+}) {
+  const [scheduling, setScheduling] = useState(false);
+
+  async function scheduleRetry(hoursFromNow: number | null) {
+    setScheduling(true);
+    const retryAfter = hoursFromNow === null ? null
+      : new Date(Date.now() + hoursFromNow * 60 * 60 * 1000).toISOString();
+    await fetch(`/api/booking-jobs/${jobId}/schedule-retry`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ stepIndex, retryAfter }),
+    }).catch(() => {});
+    setScheduling(false);
+    onScheduled();
+  }
+
+  if (step.retryScheduledFor) {
+    const retryDate = new Date(step.retryScheduledFor);
+    return (
+      <div style={{ borderTop: "0.5px solid rgba(212,163,75,0.25)", padding: "8px 12px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, backgroundColor: "rgba(212,163,75,0.05)" }}>
+        <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 11, color: "var(--gold, #D4A34B)" }}>
+          ↺ Retry scheduled for {retryDate.toLocaleString()}
+        </p>
+        <button onClick={() => scheduleRetry(null)} disabled={scheduling} style={{
+          background: "none", border: "0.5px solid var(--border, #e5e7eb)",
+          borderRadius: 6, padding: "2px 8px", fontFamily: "var(--font-dm-sans)",
+          fontSize: 10, color: "var(--text-muted, #aaa)", cursor: "pointer",
+        }}>
+          Cancel
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ borderTop: "0.5px solid var(--border, #e5e7eb)", padding: "8px 12px", backgroundColor: "var(--card-2, #f9f9f9)" }}>
+      <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 11, color: "var(--text-muted, #aaa)", marginBottom: 6 }}>
+        Try again automatically:
+      </p>
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+        {[
+          { label: "In 2 hours", hours: 2 },
+          { label: "In 6 hours", hours: 6 },
+          { label: "Tomorrow", hours: 24 },
+        ].map(({ label, hours }) => (
+          <button key={hours} onClick={() => scheduleRetry(hours)} disabled={scheduling} style={{
+            padding: "4px 10px", borderRadius: 8,
+            border: "0.5px solid var(--border, #e5e7eb)",
+            background: "var(--card, #fff)",
+            fontFamily: "var(--font-dm-sans)", fontSize: 11,
+            color: "var(--text-secondary, #666)", cursor: "pointer",
+          }}>
+            {label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function StepCard({ step, stepIndex, jobId, onRefresh }: {
+  step: BookingJobStep; stepIndex: number; jobId: string; onRefresh?: () => void;
+}) {
   const [logOpen, setLogOpen] = useState(false);
   const feedbackSent = useRef(false);
   const hasLog = (step.decisionLog?.length ?? 0) > 0;
@@ -369,19 +424,32 @@ function StepCard({ step, stepIndex, jobId }: { step: BookingJobStep; stepIndex:
           </div>
         </div>
       )}
+
+      {/* Retry scheduling — shown for failed steps without an action item */}
+      {(step.status === "error" || step.status === "no_availability") && (
+        <RetryScheduler
+          step={step}
+          stepIndex={stepIndex}
+          jobId={jobId}
+          onScheduled={onRefresh ?? (() => {})}
+        />
+      )}
     </div>
   );
 }
 
 // ── Job card ───────────────────────────────────────────────────────────────────
 
-function JobCard({ job }: { job: BookingJob }) {
+function JobCard({ job, onRefresh }: { job: BookingJob; onRefresh?: () => void }) {
   const [expanded, setExpanded] = useState(job.status !== "pending");
   const doneCount = job.steps.filter((s) => s.status === "done").length;
   const actionCount = job.steps.filter((s) => s.actionItem).length;
   const adjustedCount = job.steps.filter((s) => s.timeAdjusted || s.usedFallback).length;
   const isRunning = job.status === "running" || job.status === "pending";
   const isComplete = job.status === "done" || job.status === "failed";
+
+  const semanticStatus = computeJobSemanticStatus(job);
+  const statusDisplay = JOB_SEMANTIC_DISPLAY[semanticStatus];
 
   function openAll() {
     for (const s of job.steps.filter((s) => s.status === "done" && s.handoff_url)) {
@@ -392,20 +460,26 @@ function JobCard({ job }: { job: BookingJob }) {
   return (
     <div style={{
       borderRadius: 16,
-      border: `0.5px solid ${actionCount > 0 ? "rgba(220,38,38,0.3)" : job.status === "done" ? "rgba(22,163,74,0.25)" : "var(--border, #e5e7eb)"}`,
+      border: `0.5px solid ${
+        semanticStatus === "blocked_needs_user_input" || semanticStatus === "partially_completed"
+          ? "rgba(220,38,38,0.3)"
+          : semanticStatus.startsWith("succeeded")
+          ? "rgba(22,163,74,0.25)"
+          : "var(--border, #e5e7eb)"
+      }`,
       backgroundColor: "var(--card, #fff)",
       overflow: "hidden",
     }}>
       {/* Header */}
       <div onClick={() => setExpanded((e) => !e)} style={{ padding: "14px 16px", cursor: "pointer", display: "flex", alignItems: "center", gap: 12 }}>
-        <div style={{ flexShrink: 0, width: 9, height: 9, borderRadius: "50%", backgroundColor: JOB_STATUS_COLOR[job.status], animation: isRunning ? "jobpulse 1.4s ease-in-out infinite" : "none" }} />
+        <div style={{ flexShrink: 0, width: 9, height: 9, borderRadius: "50%", backgroundColor: statusDisplay.color, animation: statusDisplay.animate ? "jobpulse 1.4s ease-in-out infinite" : "none" }} />
         <div style={{ flex: 1, minWidth: 0 }}>
           <p style={{ fontFamily: "var(--font-dm-sans)", fontWeight: 700, fontSize: 14, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {job.trip_label}
           </p>
           <div style={{ display: "flex", flexWrap: "wrap", gap: "3px 8px", marginTop: 2 }}>
-            <span style={{ fontFamily: "var(--font-dm-sans)", fontSize: 11, color: JOB_STATUS_COLOR[job.status], fontWeight: 500 }}>
-              {JOB_STATUS_LABEL[job.status]}
+            <span style={{ fontFamily: "var(--font-dm-sans)", fontSize: 11, color: statusDisplay.color, fontWeight: 500 }}>
+              {statusDisplay.label}
             </span>
             {isComplete && (
               <span style={{ fontFamily: "var(--font-dm-sans)", fontSize: 11, color: "var(--text-secondary, #666)" }}>
@@ -452,7 +526,7 @@ function JobCard({ job }: { job: BookingJob }) {
                   Needs your decision
                 </p>
                 {job.steps.filter((s) => s.actionItem).map((step, i) => (
-                  <StepCard key={`a-${i}`} step={step} stepIndex={job.steps.indexOf(step)} jobId={job.id} />
+                  <StepCard key={`a-${i}`} step={step} stepIndex={job.steps.indexOf(step)} jobId={job.id} onRefresh={onRefresh} />
                 ))}
                 <div style={{ height: 2 }} />
               </>
@@ -464,7 +538,7 @@ function JobCard({ job }: { job: BookingJob }) {
               </p>
             )}
             {job.steps.filter((s) => !s.actionItem).map((step, i) => (
-              <StepCard key={`s-${i}`} step={step} stepIndex={job.steps.indexOf(step)} jobId={job.id} />
+              <StepCard key={`s-${i}`} step={step} stepIndex={job.steps.indexOf(step)} jobId={job.id} onRefresh={onRefresh} />
             ))}
           </div>
 
@@ -506,6 +580,7 @@ function InsightsPanel({ sessionId }: { sessionId: string }) {
   const [open, setOpen] = useState(false);
   const [stats, setStats] = useState<AgentFeedbackStats | null>(null);
   const [policy, setPolicy] = useState<PolicyBias | null>(null);
+  const [profile, setProfile] = useState<UserPreferenceProfile | null>(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -518,6 +593,7 @@ function InsightsPanel({ sessionId }: { sessionId: string }) {
       .then(([feedbackData, policyData]) => {
         setStats(feedbackData.stats ?? null);
         setPolicy(policyData.bias ?? null);
+        setProfile(policyData.profile ?? null);
       })
       .catch(() => {})
       .finally(() => setLoading(false));
@@ -800,6 +876,79 @@ function InsightsPanel({ sessionId }: { sessionId: string }) {
                   )}
                 </div>
               )}
+
+              {/* ── Negative memory / preference profile ── */}
+              {profile && profile.totalInteractions >= 5 && (
+                <div style={{ borderTop: "0.5px solid var(--border, #e5e7eb)", paddingTop: 16, display: "flex", flexDirection: "column", gap: 14 }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                    <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 11, fontWeight: 700, color: "rgba(220,38,38,0.75)", letterSpacing: "0.06em", textTransform: "uppercase" }}>
+                      Negative memory
+                    </p>
+                    <span style={{
+                      fontFamily: "var(--font-dm-sans)", fontSize: 10,
+                      color: profile.confidenceLevel === "high" ? "rgba(22,163,74,0.85)" : profile.confidenceLevel === "medium" ? "var(--gold, #D4A34B)" : "var(--text-muted, #aaa)",
+                      background: profile.confidenceLevel === "high" ? "rgba(22,163,74,0.08)" : profile.confidenceLevel === "medium" ? "rgba(212,163,75,0.1)" : "rgba(0,0,0,0.04)",
+                      borderRadius: 4, padding: "1px 5px",
+                    }}>
+                      {profile.confidenceLevel} confidence
+                    </span>
+                  </div>
+                  <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 11, color: "var(--text-secondary, #666)", fontStyle: "italic" }}>
+                    Things the agent now avoids based on your overrides:
+                  </p>
+
+                  {profile.negatives.length === 0 && (
+                    <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 11, color: "var(--text-muted, #aaa)" }}>
+                      No strong negative patterns detected yet.
+                    </p>
+                  )}
+
+                  {profile.negatives.map((neg) => (
+                    <div key={neg.entity} style={{
+                      padding: "8px 10px", borderRadius: 8,
+                      background: "rgba(220,38,38,0.04)",
+                      border: "0.5px solid rgba(220,38,38,0.15)",
+                      display: "flex", alignItems: "center", justifyContent: "space-between",
+                    }}>
+                      <div>
+                        <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 12, fontWeight: 600, color: "rgba(185,28,28,0.85)" }}>
+                          {neg.entity}
+                        </p>
+                        <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 10, color: "var(--text-muted, #aaa)", marginTop: 1 }}>
+                          {neg.entityType} · overridden {neg.overrideCount}/{neg.totalSeen}×
+                        </p>
+                      </div>
+                      <span style={{
+                        fontFamily: "var(--font-dm-sans)", fontSize: 10, fontWeight: 700,
+                        color: neg.severity === "strong" ? "rgba(220,38,38,0.85)" : "rgba(234,88,12,0.85)",
+                        background: neg.severity === "strong" ? "rgba(220,38,38,0.08)" : "rgba(234,88,12,0.08)",
+                        borderRadius: 4, padding: "2px 6px",
+                      }}>
+                        {neg.severity === "strong" ? "avoid" : "deprioritize"}
+                      </span>
+                    </div>
+                  ))}
+
+                  {profile.avoidedProviders.length > 0 && (
+                    <div>
+                      <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 11, fontWeight: 600, color: "var(--text-secondary, #666)", marginBottom: 4 }}>
+                        Providers you tend to override
+                      </p>
+                      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                        {profile.avoidedProviders.map((p) => (
+                          <span key={p} style={{
+                            fontFamily: "var(--font-dm-sans)", fontSize: 11,
+                            color: "rgba(220,38,38,0.75)", background: "rgba(220,38,38,0.06)",
+                            borderRadius: 6, padding: "2px 7px",
+                          }}>
+                            {PROVIDER_NAMES[p] ?? p}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -901,7 +1050,7 @@ export default function TripsPage() {
           </div>
         )}
 
-        {jobs.map((job) => <JobCard key={job.id} job={job} />)}
+        {jobs.map((job) => <JobCard key={job.id} job={job} onRefresh={loadJobs} />)}
 
         {/* Agent Insights — always show at the bottom */}
         {!loading && sessionId && (

@@ -194,6 +194,138 @@ export function computePolicyBias(events: AgentFeedbackEvent[]): PolicyBias {
   };
 }
 
+// ── Preference profile (per-user memory) ──────────────────────────────────
+
+/**
+ * A negative signal: something the user consistently rejects / overrides.
+ * The agent uses these to de-prioritize or skip flagged entities.
+ */
+export interface NegativeSignal {
+  entity: string;
+  entityType: "venue" | "provider" | "step_type";
+  overrideCount: number;
+  overrideRate: number;    // fraction of interactions that were overrides
+  totalSeen: number;
+  severity: "strong" | "moderate"; // strong ≥ 0.7, moderate ≥ 0.5
+}
+
+/**
+ * Structured preference model derived from accumulated feedback.
+ * Negative memory is often more actionable than positive memory:
+ * users know what they don't want faster than what they do.
+ */
+export interface UserPreferenceProfile {
+  /** Venues / providers / step types the user consistently rejects */
+  negatives: NegativeSignal[];
+  /** Providers ranked best-to-worst by acceptance rate */
+  preferredProviders: string[];
+  /** Providers the user most often overrides */
+  avoidedProviders: string[];
+  /** Time-adjustment tolerance derived from history */
+  timeAdjustTolerance: Tolerance | null;
+  /** Venue-switch tolerance derived from history */
+  venueSwitchTolerance: Tolerance | null;
+  /** How reliable the profile is */
+  confidenceLevel: "high" | "medium" | "low" | "insufficient";
+  totalInteractions: number;
+}
+
+/** Build a structured preference profile from raw feedback events. */
+export function buildPreferenceProfile(events: AgentFeedbackEvent[]): UserPreferenceProfile {
+  const stepEvents = events.filter((e) => e.step_type !== "job");
+  const total = stepEvents.length;
+
+  // ── Venue override tracking ──
+  const venueMap = new Map<string, { overrides: number; total: number }>();
+  const providerMap = new Map<string, { overrides: number; total: number }>();
+  const typeMap = new Map<string, { overrides: number; total: number }>();
+
+  for (const e of stepEvents) {
+    const isOverride = e.outcome === "manual_override";
+
+    if (e.venue_name) {
+      const v = venueMap.get(e.venue_name) ?? { overrides: 0, total: 0 };
+      v.total++;
+      if (isOverride) v.overrides++;
+      venueMap.set(e.venue_name, v);
+    }
+    if (e.provider) {
+      const p = providerMap.get(e.provider) ?? { overrides: 0, total: 0 };
+      p.total++;
+      if (isOverride) p.overrides++;
+      providerMap.set(e.provider, p);
+    }
+    {
+      const t = typeMap.get(e.step_type) ?? { overrides: 0, total: 0 };
+      t.total++;
+      if (isOverride) t.overrides++;
+      typeMap.set(e.step_type, t);
+    }
+  }
+
+  // ── Negative signals: entities with high override rates ──
+  const negatives: NegativeSignal[] = [];
+  const NEGATIVE_MIN_EVENTS = 2;
+
+  for (const [name, { overrides, total: t }] of venueMap) {
+    const rate = overrides / t;
+    if (t >= NEGATIVE_MIN_EVENTS && rate >= 0.5) {
+      negatives.push({ entity: name, entityType: "venue", overrideCount: overrides,
+        overrideRate: rate, totalSeen: t, severity: rate >= 0.7 ? "strong" : "moderate" });
+    }
+  }
+  for (const [name, { overrides, total: t }] of typeMap) {
+    const rate = overrides / t;
+    if (t >= 3 && rate >= 0.5) {
+      negatives.push({ entity: name, entityType: "step_type", overrideCount: overrides,
+        overrideRate: rate, totalSeen: t, severity: rate >= 0.7 ? "strong" : "moderate" });
+    }
+  }
+  negatives.sort((a, b) => b.overrideRate - a.overrideRate);
+
+  // ── Provider preference order ──
+  const providerEntries = [...providerMap.entries()]
+    .map(([provider, { overrides, total: t }]) => ({
+      provider,
+      overrideRate: overrides / t,
+      acceptanceRate: (t - overrides) / t,
+      total: t,
+    }))
+    .filter((p) => p.total >= 2);
+
+  providerEntries.sort((a, b) => a.overrideRate - b.overrideRate);
+  const preferredProviders = providerEntries.filter((p) => p.acceptanceRate >= 0.5).map((p) => p.provider);
+  const avoidedProviders = providerEntries.filter((p) => p.overrideRate >= 0.5).map((p) => p.provider);
+
+  // ── Tolerance ──
+  const timeEvents = stepEvents.filter((e) => e.agent_decision === "time_adjusted");
+  const venueEvents = stepEvents.filter((e) => e.agent_decision === "venue_switched");
+  const timeAccept = timeEvents.filter((e) => e.outcome === "accepted").length;
+  const venueAccept = venueEvents.filter((e) => e.outcome === "accepted").length;
+  const timeRate = timeEvents.length > 0 ? timeAccept / timeEvents.length : 0;
+  const venueRate = venueEvents.length > 0 ? venueAccept / venueEvents.length : 0;
+
+  const timeAdjustTolerance: Tolerance | null = timeEvents.length >= MIN_EVENTS
+    ? timeRate >= 0.7 ? "liberal" : timeRate >= 0.4 ? "moderate" : "strict"
+    : null;
+  const venueSwitchTolerance: Tolerance | null = venueEvents.length >= MIN_EVENTS
+    ? venueRate >= 0.7 ? "liberal" : venueRate >= 0.4 ? "moderate" : "strict"
+    : null;
+
+  const confidenceLevel: UserPreferenceProfile["confidenceLevel"] =
+    total >= 20 ? "high" : total >= 10 ? "medium" : total >= 5 ? "low" : "insufficient";
+
+  return {
+    negatives,
+    preferredProviders,
+    avoidedProviders,
+    timeAdjustTolerance,
+    venueSwitchTolerance,
+    confidenceLevel,
+    totalInteractions: total,
+  };
+}
+
 // ── Helpers for the execution engine ──────────────────────────────────────
 
 /**

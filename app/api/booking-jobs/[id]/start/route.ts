@@ -302,8 +302,9 @@ export async function POST(_req: NextRequest, { params }: Params) {
 
   const job = await getBookingJob(id);
   if (!job) return NextResponse.json({ error: "Job not found" }, { status: 404 });
-  if (job.status === "running" || job.status === "done") {
-    return NextResponse.json({ error: "Job already started" }, { status: 409 });
+  // Allow re-running failed jobs (e.g. after a scheduled retry or user-triggered retry)
+  if (job.status === "running") {
+    return NextResponse.json({ error: "Job already running" }, { status: 409 });
   }
 
   // Use the autonomy settings saved at job-creation time, fall back to defaults
@@ -323,6 +324,9 @@ export async function POST(_req: NextRequest, { params }: Params) {
   const steps: BookingJobStep[] = [...job.steps];
 
   for (let i = 0; i < steps.length; i++) {
+    // Skip steps that already succeeded — supports partial retry (cron/manual)
+    if (steps[i].status === "done") continue;
+
     const onProgress = async (updated: BookingJobStep) => {
       steps[i] = updated;
       await updateBookingJobSteps(id, steps);

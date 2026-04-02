@@ -7,14 +7,15 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { getAgentFeedbackEvents } from "@/lib/db";
-import { computePolicyBias } from "@/lib/policy";
+import { computePolicyBias, buildPreferenceProfile } from "@/lib/policy";
 
 export async function GET(req: NextRequest) {
   const sessionId = req.nextUrl.searchParams.get("session_id") ?? undefined;
   try {
     const events = await getAgentFeedbackEvents(sessionId, 500);
     const bias = computePolicyBias(events);
-    return NextResponse.json({ bias });
+    const profile = buildPreferenceProfile(events);
+    return NextResponse.json({ bias, profile });
   } catch (err) {
     console.error("policy GET error", err);
     return NextResponse.json({ error: "Failed to compute policy" }, { status: 500 });
