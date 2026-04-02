@@ -547,6 +547,155 @@ export async function recordVenueBaseline(
 }
 
 /** On Clerk sign-in: copy all session-keyed prefs to the user account (idempotent). */
+// ─── Booking Jobs (async autopilot execution) ─────────────────────────────────
+
+let bookingJobsTableReady: Promise<void> | null = null;
+
+export async function ensureBookingJobsTable(): Promise<void> {
+  if (!bookingJobsTableReady) {
+    bookingJobsTableReady = (async () => {
+      await sql`
+        CREATE TABLE IF NOT EXISTS booking_jobs (
+          id           TEXT PRIMARY KEY,
+          session_id   TEXT NOT NULL,
+          user_id      TEXT,
+          trip_label   TEXT NOT NULL,
+          status       TEXT NOT NULL DEFAULT 'pending',
+          steps        JSONB NOT NULL DEFAULT '[]',
+          created_at   TIMESTAMPTZ DEFAULT NOW(),
+          updated_at   TIMESTAMPTZ DEFAULT NOW(),
+          completed_at TIMESTAMPTZ
+        )
+      `;
+      await sql`CREATE INDEX IF NOT EXISTS booking_jobs_session_idx ON booking_jobs (session_id)`;
+      await sql`CREATE INDEX IF NOT EXISTS booking_jobs_user_idx ON booking_jobs (user_id) WHERE user_id IS NOT NULL`;
+    })().catch((err) => {
+      bookingJobsTableReady = null;
+      throw err;
+    });
+  }
+  await bookingJobsTableReady;
+}
+
+/** Alternative venue/provider to try when the primary fails. */
+export interface FallbackCandidate {
+  label: string;
+  body: Record<string, unknown>;
+  fallbackUrl: string;
+}
+
+/**
+ * Manual action item generated when autopilot fails for a step.
+ * Shown in My Trips so the user knows exactly what to do next.
+ */
+export interface StepActionItem {
+  message: string;
+  options: Array<{ label: string; url: string }>;
+}
+
+export interface BookingJobStep {
+  type: "flight" | "hotel" | "restaurant";
+  emoji: string;
+  label: string;
+  apiEndpoint: string;
+  body: Record<string, unknown>;
+  fallbackUrl: string;
+  /** Backup venues/hotels/restaurants tried if the primary fails */
+  fallbackCandidates?: FallbackCandidate[];
+  // ── Runtime fields (filled in as job runs) ──
+  status: "pending" | "loading" | "done" | "error" | "no_availability";
+  handoff_url?: string;
+  selected_time?: string;
+  error?: string;
+  /** How many autopilot attempts were made (1 = succeeded first try) */
+  attemptCount?: number;
+  /** True when a fallback candidate succeeded instead of the primary */
+  usedFallback?: boolean;
+  /** Populated when all attempts + fallbacks fail — tells user what to do manually */
+  actionItem?: StepActionItem;
+}
+
+export interface BookingJob {
+  id: string;
+  session_id: string;
+  user_id: string | null;
+  trip_label: string;
+  status: "pending" | "running" | "done" | "failed";
+  steps: BookingJobStep[];
+  created_at: string;
+  updated_at: string;
+  completed_at: string | null;
+}
+
+export async function createBookingJob(params: {
+  id: string;
+  sessionId: string;
+  userId?: string | null;
+  tripLabel: string;
+  steps: BookingJobStep[];
+}): Promise<BookingJob> {
+  await ensureBookingJobsTable();
+  const stepsJson = JSON.stringify(params.steps);
+  const result = await sql<BookingJob>`
+    INSERT INTO booking_jobs (id, session_id, user_id, trip_label, status, steps)
+    VALUES (${params.id}, ${params.sessionId}, ${params.userId ?? null}, ${params.tripLabel}, 'pending', ${stepsJson}::jsonb)
+    RETURNING *
+  `;
+  return result.rows[0];
+}
+
+export async function getBookingJob(id: string): Promise<BookingJob | null> {
+  await ensureBookingJobsTable();
+  const result = await sql<BookingJob>`
+    SELECT * FROM booking_jobs WHERE id = ${id}
+  `;
+  return result.rows[0] ?? null;
+}
+
+export async function getBookingJobsBySession(sessionId: string, limit = 20): Promise<BookingJob[]> {
+  await ensureBookingJobsTable();
+  const result = await sql<BookingJob>`
+    SELECT * FROM booking_jobs
+    WHERE session_id = ${sessionId}
+    ORDER BY created_at DESC
+    LIMIT ${limit}
+  `;
+  return result.rows;
+}
+
+export async function updateBookingJobStatus(
+  id: string,
+  status: BookingJob["status"],
+  completedAt?: Date
+): Promise<void> {
+  await ensureBookingJobsTable();
+  if (completedAt) {
+    await sql`
+      UPDATE booking_jobs
+      SET status = ${status}, updated_at = NOW(), completed_at = ${completedAt.toISOString()}
+      WHERE id = ${id}
+    `;
+  } else {
+    await sql`
+      UPDATE booking_jobs
+      SET status = ${status}, updated_at = NOW()
+      WHERE id = ${id}
+    `;
+  }
+}
+
+export async function updateBookingJobSteps(id: string, steps: BookingJobStep[]): Promise<void> {
+  await ensureBookingJobsTable();
+  const stepsJson = JSON.stringify(steps);
+  await sql`
+    UPDATE booking_jobs
+    SET steps = ${stepsJson}::jsonb, updated_at = NOW()
+    WHERE id = ${id}
+  `;
+}
+
+// ─── End Booking Jobs ─────────────────────────────────────────────────────────
+
 export async function mergeSessionPreferences(
   sessionId: string,
   userId: string

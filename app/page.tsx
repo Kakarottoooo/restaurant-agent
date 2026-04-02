@@ -71,7 +71,7 @@ const WEIGHT_LABELS: Record<string, string> = {
 };
 
 export default function Home() {
-  const { profile, updateProfile, learnFromFavorite, learnFromSearch, resetProfile, learnedWeights, learnWeightsFromFeedback, learnFromFeedback } =
+  const { profile, updateProfile, learnFromFavorite, learnFromSearch, resetProfile, learnedWeights, learnWeightsFromFeedback, learnFromFeedback, learnFromAgentResponse, updateDiscoveredPreference, removeDiscoveredPreference } =
     usePreferences();
   const profileContext = formatProfileForPrompt(profile);
   const { userId } = useAuth();
@@ -91,6 +91,9 @@ export default function Home() {
       else if (intent.action === "unsubscribe") subs.removeSubscription(intent);
       // "list" is handled by the chat message sentinel
     },
+    onAgentResponse: (requirements, userMessage) => {
+      learnFromAgentResponse(requirements, userMessage);
+    },
   });
   const { favorites, toggleFavorite } = useFavorites(learnFromFavorite);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -99,6 +102,8 @@ export default function Home() {
   // Tracks the plan ID that triggered a refine action, for parent_plan_id lineage
   const refinedFromPlanIdRef = useRef<string | null>(null);
   const [prefModalOpen, setPrefModalOpen] = useState(false);
+  const [editingPrefId, setEditingPrefId] = useState<string | null>(null);
+  const [editingPrefValue, setEditingPrefValue] = useState("");
 
   // Phase 5.3: Auth
   const auth = useAuth();
@@ -760,315 +765,282 @@ export default function Home() {
         </div>
       )}
 
-      {/* ─── Preferences Modal (Phase 3.3b + 4.6) ──────────────────── */}
+      {/* ─── Taste Profile Modal ──────────────────── */}
       {prefModalOpen && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-4"
           style={{ backgroundColor: "rgba(0,0,0,0.5)" }}
           onClick={(e) => {
-            if (e.target === e.currentTarget) setPrefModalOpen(false);
+            if (e.target === e.currentTarget) {
+              setPrefModalOpen(false);
+              setEditingPrefId(null);
+            }
           }}
         >
           <div
-            className="w-full max-w-sm rounded-2xl p-6 overflow-y-auto"
+            className="w-full max-w-sm rounded-2xl overflow-y-auto"
             style={{
               backgroundColor: "var(--card)",
-              maxHeight: "80dvh",
+              maxHeight: "85dvh",
+              display: "flex",
+              flexDirection: "column",
             }}
           >
-            <div className="flex items-center justify-between mb-5">
-              <h2
-                style={{
-                  fontFamily: "var(--font-playfair)",
-                  fontSize: "20px",
-                  fontWeight: 600,
-                  color: "var(--text-primary)",
-                }}
-              >
-                My Preferences
-              </h2>
+            {/* Header */}
+            <div
+              style={{
+                padding: "20px 20px 0",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+              }}
+            >
+              <div>
+                <h2
+                  style={{
+                    fontFamily: "var(--font-playfair)",
+                    fontSize: "20px",
+                    fontWeight: 600,
+                    color: "var(--text-primary)",
+                    marginBottom: "2px",
+                  }}
+                >
+                  Taste Profile
+                </h2>
+                <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: "11px", color: "var(--text-muted)" }}>
+                  {(profile.discovered ?? []).length > 0
+                    ? `${(profile.discovered ?? []).length} signals discovered from your conversations`
+                    : "Discovered automatically as you chat"}
+                </p>
+              </div>
               <button
-                onClick={() => setPrefModalOpen(false)}
-                style={{
-                  background: "none",
-                  border: "none",
-                  cursor: "pointer",
-                  color: "var(--text-secondary)",
-                  fontSize: "20px",
-                  lineHeight: 1,
-                }}
+                onClick={() => { setPrefModalOpen(false); setEditingPrefId(null); }}
+                style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-secondary)", fontSize: "20px", lineHeight: 1, padding: "4px" }}
               >
                 ×
               </button>
             </div>
 
-            {/* Dietary restrictions */}
-            <div style={{ marginBottom: "20px" }}>
-              <p
-                style={{
-                  fontFamily: "var(--font-dm-sans)",
-                  fontSize: "13px",
-                  fontWeight: 500,
-                  color: "var(--text-primary)",
-                  marginBottom: "8px",
-                }}
-              >
-                Dietary restrictions
-              </p>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
-                {DIETARY_OPTIONS.map((d) => {
-                  const active = profile.dietary_restrictions.includes(d);
-                  return (
-                    <button
-                      key={d}
-                      onClick={() => {
-                        const next = active
-                          ? profile.dietary_restrictions.filter((x) => x !== d)
-                          : [...profile.dietary_restrictions, d];
-                        updateProfile({ dietary_restrictions: next });
-                      }}
-                      style={{
-                        padding: "4px 12px",
-                        borderRadius: "20px",
-                        border: `0.5px solid ${active ? "var(--gold)" : "var(--border)"}`,
-                        backgroundColor: active ? "var(--gold)" : "var(--card-2)",
-                        color: active ? "#fff" : "var(--text-secondary)",
-                        cursor: "pointer",
-                        fontFamily: "var(--font-dm-sans)",
-                        fontSize: "12px",
-                      }}
-                    >
-                      {d}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
+            <div style={{ padding: "16px 20px 20px", overflowY: "auto", flex: 1 }}>
 
-            {/* Noise preference */}
-            <div style={{ marginBottom: "20px" }}>
-              <p
-                style={{
-                  fontFamily: "var(--font-dm-sans)",
-                  fontSize: "13px",
-                  fontWeight: 500,
-                  color: "var(--text-primary)",
-                  marginBottom: "8px",
-                }}
-              >
-                Noise preference
-              </p>
-              <div style={{ display: "flex", gap: "8px" }}>
-                {NOISE_OPTIONS.map(({ value, label }) => {
-                  const active = profile.noise_preference === value;
-                  return (
-                    <button
-                      key={value}
-                      onClick={() =>
-                        updateProfile({
-                          noise_preference: active ? undefined : value,
-                        })
-                      }
-                      style={{
-                        flex: 1,
-                        padding: "6px 0",
-                        borderRadius: "8px",
-                        border: `0.5px solid ${active ? "var(--gold)" : "var(--border)"}`,
-                        backgroundColor: active ? "var(--gold)" : "var(--card-2)",
-                        color: active ? "#fff" : "var(--text-secondary)",
-                        cursor: "pointer",
-                        fontFamily: "var(--font-dm-sans)",
-                        fontSize: "12px",
-                      }}
-                    >
-                      {label}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Exclude chains */}
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                marginBottom: "20px",
-              }}
-            >
-              <span
-                style={{
-                  fontFamily: "var(--font-dm-sans)",
-                  fontSize: "13px",
-                  fontWeight: 500,
-                  color: "var(--text-primary)",
-                }}
-              >
-                Exclude chain restaurants
-              </span>
-              <button
-                onClick={() =>
-                  updateProfile({ always_exclude_chains: !profile.always_exclude_chains })
-                }
-                style={{
-                  width: "44px",
-                  height: "24px",
-                  borderRadius: "12px",
-                  border: "none",
-                  cursor: "pointer",
-                  backgroundColor: profile.always_exclude_chains
-                    ? "var(--gold)"
-                    : "var(--card-2)",
-                  position: "relative",
-                  transition: "background-color 0.2s",
-                }}
-              >
-                <span
+              {/* Empty state */}
+              {(profile.discovered ?? []).length === 0 && (
+                <div
                   style={{
-                    position: "absolute",
-                    top: "3px",
-                    left: profile.always_exclude_chains ? "23px" : "3px",
-                    width: "18px",
-                    height: "18px",
-                    borderRadius: "50%",
-                    backgroundColor: "#fff",
-                    transition: "left 0.2s",
-                  }}
-                />
-              </button>
-            </div>
-
-            {/* Budget */}
-            <div style={{ marginBottom: "20px" }}>
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  marginBottom: "8px",
-                }}
-              >
-                <span
-                  style={{
-                    fontFamily: "var(--font-dm-sans)",
-                    fontSize: "13px",
-                    fontWeight: 500,
-                    color: "var(--text-primary)",
+                    textAlign: "center",
+                    padding: "32px 16px",
+                    backgroundColor: "var(--card-2)",
+                    borderRadius: "12px",
+                    marginBottom: "20px",
                   }}
                 >
-                  Max budget per person
-                </span>
-                <span
-                  style={{
-                    fontFamily: "var(--font-dm-sans)",
-                    fontSize: "13px",
-                    color: "var(--gold)",
-                  }}
-                >
-                  {profile.typical_budget_per_person
-                    ? `$${profile.typical_budget_per_person}`
-                    : "No limit"}
-                </span>
-              </div>
-              <input
-                type="range"
-                min={0}
-                max={200}
-                step={10}
-                value={profile.typical_budget_per_person ?? 0}
-                onChange={(e) => {
-                  const v = parseInt(e.target.value);
-                  updateProfile({ typical_budget_per_person: v || undefined });
-                }}
-                style={{ width: "100%", accentColor: "var(--gold)" }}
-              />
-            </div>
+                  <div style={{ fontSize: "32px", marginBottom: "10px" }}>✨</div>
+                  <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: "13px", color: "var(--text-secondary)", lineHeight: 1.5 }}>
+                    Start chatting — we&apos;ll build your taste profile automatically
+                  </p>
+                  <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: "11px", color: "var(--text-muted)", marginTop: "6px" }}>
+                    Ask about restaurants, hotels, flights, gifts...
+                  </p>
+                </div>
+              )}
 
-            {/* Phase 4.6: Learned weights section */}
-            {learnedWeights && (
-              <div style={{ marginBottom: "20px" }}>
-                <p
-                  style={{
-                    fontFamily: "var(--font-dm-sans)",
-                    fontSize: "13px",
-                    fontWeight: 500,
-                    color: "var(--text-primary)",
-                    marginBottom: "8px",
-                  }}
-                >
-                  Personalized weights
+              {/* Preference Map by category */}
+              {(["dining", "travel", "hotels", "shopping", "general"] as const).map((cat) => {
+                const catEmoji: Record<string, string> = { dining: "🍽", travel: "✈️", hotels: "🏨", shopping: "🛍", general: "⭐" };
+                const catLabel: Record<string, string> = { dining: "Dining", travel: "Travel", hotels: "Hotels", shopping: "Shopping", general: "General" };
+                const items = (profile.discovered ?? []).filter((p) => p.category === cat);
+                if (items.length === 0) return null;
+                return (
+                  <div key={cat} style={{ marginBottom: "18px" }}>
+                    <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: "11px", fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "8px" }}>
+                      {catEmoji[cat]} {catLabel[cat]}
+                    </p>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
+                      {items.map((pref) => {
+                        const isEditing = editingPrefId === pref.id;
+                        const confidence = pref.seen_count >= 3 ? "green" : pref.seen_count >= 2 ? "#f59e0b" : "var(--text-muted)";
+                        return (
+                          <div
+                            key={pref.id}
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "4px",
+                              padding: isEditing ? "3px 6px" : "4px 10px",
+                              borderRadius: "20px",
+                              border: `0.5px solid ${pref.user_confirmed ? "var(--gold)" : "var(--border)"}`,
+                              backgroundColor: pref.user_confirmed ? "rgba(var(--gold-rgb, 180,120,60),0.1)" : "var(--card-2)",
+                            }}
+                          >
+                            {/* Confidence dot */}
+                            <span style={{ width: "6px", height: "6px", borderRadius: "50%", backgroundColor: confidence, flexShrink: 0, display: "inline-block" }} />
+
+                            {isEditing ? (
+                              <input
+                                autoFocus
+                                value={editingPrefValue}
+                                onChange={(e) => setEditingPrefValue(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter" && editingPrefValue.trim()) {
+                                    updateDiscoveredPreference(pref.id, { value: editingPrefValue.trim(), user_confirmed: true });
+                                    setEditingPrefId(null);
+                                  } else if (e.key === "Escape") {
+                                    setEditingPrefId(null);
+                                  }
+                                }}
+                                style={{
+                                  fontFamily: "var(--font-dm-sans)",
+                                  fontSize: "12px",
+                                  color: "var(--text-primary)",
+                                  background: "none",
+                                  border: "none",
+                                  outline: "none",
+                                  width: "120px",
+                                }}
+                              />
+                            ) : (
+                              <span
+                                title={`${pref.label}: ${pref.value}\nSeen ${pref.seen_count}x · from ${pref.source}`}
+                                style={{ fontFamily: "var(--font-dm-sans)", fontSize: "12px", color: "var(--text-primary)", maxWidth: "160px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                              >
+                                {pref.label}: <span style={{ color: "var(--text-secondary)" }}>{pref.value}</span>
+                              </span>
+                            )}
+
+                            {/* Edit button */}
+                            {!isEditing && (
+                              <button
+                                onClick={() => { setEditingPrefId(pref.id); setEditingPrefValue(pref.value); }}
+                                style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", padding: "0 2px", fontSize: "11px", lineHeight: 1 }}
+                                title="Edit"
+                              >
+                                ✏️
+                              </button>
+                            )}
+                            {isEditing && (
+                              <button
+                                onClick={() => {
+                                  if (editingPrefValue.trim()) {
+                                    updateDiscoveredPreference(pref.id, { value: editingPrefValue.trim(), user_confirmed: true });
+                                  }
+                                  setEditingPrefId(null);
+                                }}
+                                style={{ background: "none", border: "none", cursor: "pointer", color: "var(--gold)", padding: "0 2px", fontSize: "11px", fontWeight: 600 }}
+                              >
+                                ✓
+                              </button>
+                            )}
+
+                            {/* Remove button */}
+                            <button
+                              onClick={() => removeDiscoveredPreference(pref.id)}
+                              style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", padding: "0 2px", fontSize: "10px", lineHeight: 1 }}
+                              title="Remove"
+                            >
+                              ×
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+
+              {/* Divider before manual settings */}
+              {(profile.discovered ?? []).length > 0 && (
+                <div style={{ height: "0.5px", backgroundColor: "var(--border)", margin: "4px 0 18px" }} />
+              )}
+
+              {/* Dietary restrictions — manual */}
+              <div style={{ marginBottom: "16px" }}>
+                <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: "11px", fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "8px" }}>
+                  🥗 Dietary restrictions
                 </p>
-                <p
-                  style={{
-                    fontFamily: "var(--font-dm-sans)",
-                    fontSize: "11px",
-                    color: "var(--text-muted)",
-                    marginBottom: "10px",
-                  }}
-                >
-                  Auto-learned from {learnedWeights.sample_size} feedback responses
-                </p>
-                <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                  {(["scene_match", "budget_match", "review_quality", "location_convenience", "preference_match"] as const).map((key) => {
-                    const val = learnedWeights[key];
-                    const pct = Math.round(val * 100);
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
+                  {DIETARY_OPTIONS.map((d) => {
+                    const active = profile.dietary_restrictions.includes(d);
                     return (
-                      <div key={key}>
-                        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "3px" }}>
-                          <span style={{ fontFamily: "var(--font-dm-sans)", fontSize: "11px", color: "var(--text-secondary)" }}>
-                            {WEIGHT_LABELS[key]}
-                          </span>
-                          <span style={{ fontFamily: "var(--font-dm-sans)", fontSize: "11px", color: "var(--gold)" }}>
-                            {pct}%
-                          </span>
-                        </div>
-                        <div style={{ height: "4px", backgroundColor: "var(--card-2)", borderRadius: "2px", overflow: "hidden" }}>
-                          <div style={{ width: `${pct}%`, height: "100%", backgroundColor: "var(--gold)", borderRadius: "2px" }} />
-                        </div>
-                      </div>
+                      <button
+                        key={d}
+                        onClick={() => {
+                          const next = active
+                            ? profile.dietary_restrictions.filter((x) => x !== d)
+                            : [...profile.dietary_restrictions, d];
+                          updateProfile({ dietary_restrictions: next });
+                        }}
+                        style={{
+                          padding: "4px 12px",
+                          borderRadius: "20px",
+                          border: `0.5px solid ${active ? "var(--gold)" : "var(--border)"}`,
+                          backgroundColor: active ? "var(--gold)" : "var(--card-2)",
+                          color: active ? "#fff" : "var(--text-secondary)",
+                          cursor: "pointer",
+                          fontFamily: "var(--font-dm-sans)",
+                          fontSize: "12px",
+                        }}
+                      >
+                        {d}
+                      </button>
                     );
                   })}
                 </div>
               </div>
-            )}
 
-            {/* Actions */}
-            <div style={{ display: "flex", gap: "8px", marginTop: "8px" }}>
-              <button
-                onClick={() => setPrefModalOpen(false)}
-                style={{
-                  flex: 1,
-                  padding: "10px 0",
-                  borderRadius: "10px",
-                  border: "none",
-                  backgroundColor: "var(--gold)",
-                  color: "#fff",
-                  cursor: "pointer",
-                  fontFamily: "var(--font-dm-sans)",
-                  fontSize: "13px",
-                  fontWeight: 500,
-                }}
-              >
-                Save
-              </button>
-              <button
-                onClick={() => {
-                  resetProfile();
-                  setPrefModalOpen(false);
-                }}
-                style={{
-                  padding: "10px 16px",
-                  borderRadius: "10px",
-                  border: "0.5px solid var(--border)",
-                  backgroundColor: "transparent",
-                  color: "var(--text-secondary)",
-                  cursor: "pointer",
-                  fontFamily: "var(--font-dm-sans)",
-                  fontSize: "13px",
-                }}
-              >
-                Reset
-              </button>
+            </div>
+
+            {/* Footer */}
+            <div
+              style={{
+                padding: "12px 20px 16px",
+                borderTop: "0.5px solid var(--border)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+              }}
+            >
+              <span style={{ fontFamily: "var(--font-dm-sans)", fontSize: "11px", color: "var(--text-muted)" }}>
+                {(profile.discovered ?? []).length > 0
+                  ? `Updated ${new Date(profile.updated_at).toLocaleDateString()}`
+                  : "No signals yet"}
+              </span>
+              <div style={{ display: "flex", gap: "8px" }}>
+                {(profile.discovered ?? []).length > 0 && (
+                  <button
+                    onClick={() => {
+                      updateProfile({ discovered: [] });
+                    }}
+                    style={{
+                      padding: "6px 12px",
+                      borderRadius: "8px",
+                      border: "0.5px solid var(--border)",
+                      backgroundColor: "transparent",
+                      color: "var(--text-muted)",
+                      cursor: "pointer",
+                      fontFamily: "var(--font-dm-sans)",
+                      fontSize: "12px",
+                    }}
+                  >
+                    Clear all
+                  </button>
+                )}
+                <button
+                  onClick={() => { setPrefModalOpen(false); setEditingPrefId(null); }}
+                  style={{
+                    padding: "6px 16px",
+                    borderRadius: "8px",
+                    border: "none",
+                    backgroundColor: "var(--gold)",
+                    color: "#fff",
+                    cursor: "pointer",
+                    fontFamily: "var(--font-dm-sans)",
+                    fontSize: "12px",
+                    fontWeight: 500,
+                  }}
+                >
+                  Done
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -1375,6 +1347,25 @@ export default function Home() {
               </div>
             )}
           </div>
+
+          {/* My Trips link */}
+          <a
+            href="/trips"
+            style={{
+              background: "none",
+              border: "0.5px solid var(--border)",
+              borderRadius: "8px",
+              padding: "4px 10px",
+              fontFamily: "var(--font-dm-sans)",
+              fontSize: "11px",
+              color: "var(--text-secondary)",
+              textDecoration: "none",
+              whiteSpace: "nowrap",
+              flexShrink: 0,
+            }}
+          >
+            ✈ Trips
+          </a>
 
           {/* Preferences button */}
           <button

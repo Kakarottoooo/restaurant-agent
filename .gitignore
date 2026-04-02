@@ -43,6 +43,9 @@ next-env.d.ts
 
 # Claude Code local settings (machine-specific permissions)
 .claude/settings.local.json
+# Booking autopilot saved cookies (sensitive — never commit)
+.booking-cookies/
+
 # Dev artifacts
 .next-dev.log
 .playwright-cli/
