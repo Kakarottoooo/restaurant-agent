@@ -91,6 +91,7 @@ function logEntryIcon(type: DecisionLogEntry["type"]): string {
     case "venue_switched": return "→";
     case "retry": return "↺";
     case "failed": return "✗";
+    case "scene_replan": return "⟳";
     default: return "·";
   }
 }
@@ -102,6 +103,7 @@ function logEntryColor(type: DecisionLogEntry["type"]): string {
     case "venue_switched": return "#6366f1";
     case "retry": return "var(--gold, #D4A34B)";
     case "failed": case "skipped": return "rgba(220,38,38,0.65)";
+    case "scene_replan": return "#8b5cf6"; // violet — signals orchestration-level thinking
     default: return "var(--text-secondary, #666)";
   }
 }
@@ -345,6 +347,26 @@ function StepCard({ step, stepIndex, jobId, onRefresh }: {
                 {step.timeAdjusted ? "⏰ time adjusted" : "🔄 alternative"}
               </span>
             )}
+            {step.replanAdjusted && (
+              <span style={{
+                fontSize: 10, fontFamily: "var(--font-dm-sans)",
+                color: "#8b5cf6", backgroundColor: "rgba(139,92,246,0.08)",
+                border: "0.5px solid rgba(139,92,246,0.25)",
+                borderRadius: 4, padding: "1px 5px", fontWeight: 500,
+              }}>
+                ⟳ scene-replanned
+              </span>
+            )}
+            {step.replanFlagged && !step.replanAdjusted && (
+              <span style={{
+                fontSize: 10, fontFamily: "var(--font-dm-sans)",
+                color: "rgba(234,88,12,0.85)", backgroundColor: "rgba(234,88,12,0.07)",
+                border: "0.5px solid rgba(234,88,12,0.2)",
+                borderRadius: 4, padding: "1px 5px", fontWeight: 500,
+              }}>
+                ⚠ review schedule
+              </span>
+            )}
           </div>
           <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 11, color, marginTop: 2 }}>
             {stepStatusLabel(step)}
@@ -385,12 +407,18 @@ function StepCard({ step, stepIndex, jobId, onRefresh }: {
             Agent decision log
           </p>
           {step.decisionLog.map((entry, i) => (
-            <div key={i} style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+            <div key={i} style={{
+              display: "flex", gap: 8, alignItems: "flex-start",
+              padding: entry.type === "scene_replan" ? "4px 6px" : "0",
+              borderRadius: entry.type === "scene_replan" ? 6 : 0,
+              background: entry.type === "scene_replan" ? "rgba(139,92,246,0.06)" : "transparent",
+              marginLeft: entry.type === "scene_replan" ? -6 : 0,
+            }}>
               <span style={{ flexShrink: 0, width: 16, fontFamily: "var(--font-dm-sans)", fontSize: 11, color: logEntryColor(entry.type), fontWeight: 700, textAlign: "center" }}>
                 {logEntryIcon(entry.type)}
               </span>
               <div style={{ flex: 1 }}>
-                <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 11, color: "var(--text-primary, #111)" }}>{entry.message}</p>
+                <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 11, color: entry.type === "scene_replan" ? "#7c3aed" : "var(--text-primary, #111)" }}>{entry.message}</p>
                 {entry.outcome && <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 10, color: logEntryColor(entry.type) }}>{entry.outcome}</p>}
               </div>
               <span style={{ flexShrink: 0, fontFamily: "var(--font-dm-sans)", fontSize: 10, color: "var(--text-muted, #aaa)" }}>
@@ -445,6 +473,7 @@ function JobCard({ job, onRefresh }: { job: BookingJob; onRefresh?: () => void }
   const doneCount = job.steps.filter((s) => s.status === "done").length;
   const actionCount = job.steps.filter((s) => s.actionItem).length;
   const adjustedCount = job.steps.filter((s) => s.timeAdjusted || s.usedFallback).length;
+  const replanCount = job.steps.filter((s) => s.replanAdjusted || s.replanFlagged).length;
   const isRunning = job.status === "running" || job.status === "pending";
   const isComplete = job.status === "done" || job.status === "failed";
 
@@ -489,6 +518,11 @@ function JobCard({ job, onRefresh }: { job: BookingJob; onRefresh?: () => void }
             {adjustedCount > 0 && (
               <span style={{ fontFamily: "var(--font-dm-sans)", fontSize: 11, color: "rgba(234,88,12,0.85)" }}>
                 {adjustedCount} agent adjustment{adjustedCount > 1 ? "s" : ""}
+              </span>
+            )}
+            {replanCount > 0 && (
+              <span style={{ fontFamily: "var(--font-dm-sans)", fontSize: 11, color: "#8b5cf6" }}>
+                ⟳ {replanCount} scene replan{replanCount > 1 ? "s" : ""}
               </span>
             )}
             {actionCount > 0 && (

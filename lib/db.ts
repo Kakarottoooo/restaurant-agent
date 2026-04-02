@@ -611,7 +611,8 @@ export interface DecisionLogEntry {
     | "venue_switched" // hotel/restaurant: switching to backup venue
     | "succeeded"      // terminal success
     | "failed"         // terminal failure for this option
-    | "skipped";       // no_availability — not retried
+    | "skipped"        // no_availability — not retried
+    | "scene_replan";  // cascaded change from another step's outcome
   message: string;     // human-readable, e.g. "Tried Le Bernardin at 7:00pm"
   outcome?: string;    // e.g. "No availability", "Network error", "Booked ✓"
 }
@@ -651,6 +652,10 @@ export interface BookingJobStep {
    * Set by the user via the "Retry later" UI. The cron job picks it up.
    */
   retryScheduledFor?: string;
+  /** True when a scene-level replan automatically adjusted this step's parameters */
+  replanAdjusted?: boolean;
+  /** True when a scene replan flagged this step for user review */
+  replanFlagged?: boolean;
 }
 
 export interface BookingJob {

@@ -36,6 +36,11 @@ import {
 } from "@/lib/policy";
 import type { PolicyBias } from "@/lib/policy";
 import { getAgentFeedbackEvents } from "@/lib/db";
+import {
+  detectReplanTriggers,
+  computeReplan,
+  applyReplan,
+} from "@/lib/replan";
 import { sendPushNotification } from "@/lib/push";
 import type { PushSubscription } from "web-push";
 import type { AutopilotResult } from "@/lib/booking-autopilot/types";
@@ -327,12 +332,30 @@ export async function POST(_req: NextRequest, { params }: Params) {
     // Skip steps that already succeeded — supports partial retry (cron/manual)
     if (steps[i].status === "done") continue;
 
+    // Snapshot before execution — needed for replan trigger detection
+    const stepBefore = { ...steps[i] };
+
     const onProgress = async (updated: BookingJobStep) => {
       steps[i] = updated;
       await updateBookingJobSteps(id, steps);
     };
     steps[i] = await runStepWithRecovery(steps[i], autonomy, policy, onProgress);
     await updateBookingJobSteps(id, steps);
+
+    // ── Scene-level replan ─────────────────────────────────────────────
+    // Check if this step's outcome should cascade to downstream steps.
+    const triggers = detectReplanTriggers(stepBefore, steps[i], i);
+    for (const trigger of triggers) {
+      const replan = computeReplan(steps, trigger, autonomy);
+      if (replan && replan.affectedCount > 0) {
+        // Reconstruct steps array with mutations applied
+        const replanned = applyReplan(steps, replan);
+        for (let j = 0; j < replanned.length; j++) {
+          steps[j] = replanned[j];
+        }
+        await updateBookingJobSteps(id, steps);
+      }
+    }
   }
 
   const doneCount = steps.filter((s) => s.status === "done").length;
