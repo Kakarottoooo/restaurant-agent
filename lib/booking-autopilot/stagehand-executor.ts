@@ -70,23 +70,28 @@ export async function runBrowserTask(
 
   try {
     await stagehand.init();
-    // v3 API: use resolvePage() instead of stagehand.page
-    const page = await stagehand.resolvePage();
+    // v3 API: get active page from context (resolvePage is private)
+    const page = stagehand.context.activePage() ?? await stagehand.context.newPage();
 
     // Navigate to the starting URL
-    await page.goto(input.startUrl, { waitUntil: "domcontentloaded", timeout: 30_000 });
+    await page.goto(input.startUrl, { waitUntil: "domcontentloaded", timeoutMs: 30_000 });
 
     // Build the agent instruction
     const instruction = buildInstruction(input);
 
-    // Run the agent — v3 uses "provider/model" format
-    // modelClientOptions passes the API key explicitly (required in LOCAL mode)
+    // Resolve model + API key — prefer user-supplied config, fall back to env defaults
+    const modelName = input.agentModel?.model ?? "google/gemini-2.0-flash";
+    const modelApiKey = input.agentModel?.apiKey
+      ?? (modelName.startsWith("google/")
+          ? process.env.GOOGLE_AI_API_KEY
+          : modelName.startsWith("openai/")
+          ? process.env.OPENAI_API_KEY
+          : process.env.ANTHROPIC_API_KEY);
+
+    // Run the agent — v3 AgentModelConfig allows apiKey as extra field
     const agent = stagehand.agent({
-      model: "anthropic/claude-sonnet-4-6",
-      modelClientOptions: {
-        apiKey: process.env.ANTHROPIC_API_KEY,
-      },
-      instructions: `You are a booking assistant helping a user complete a reservation.
+      model: { modelName, apiKey: modelApiKey },
+      systemPrompt: `You are a booking assistant helping a user complete a reservation.
 Follow the task exactly. Navigate the site, fill in all provided information.
 CRITICAL: Stop immediately when you reach ANY payment page, credit card form,
 or checkout confirmation that requires payment details. Do NOT enter payment info.`,

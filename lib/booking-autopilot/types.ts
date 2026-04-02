@@ -40,6 +40,14 @@ export interface AutopilotResult {
 
 // ── New browser-use types ────────────────────────────────────────────────────
 
+/** Which LLM the browser agent should use. */
+export interface AgentModelConfig {
+  /** Stagehand provider/model string, e.g. "google/gemini-2.0-flash" */
+  model: string;
+  /** User-supplied API key for the chosen provider. */
+  apiKey: string;
+}
+
 export interface BrowserTaskInput {
   /** Starting URL (search page or direct booking URL). */
   startUrl: string;
@@ -50,6 +58,8 @@ export interface BrowserTaskInput {
   /** For logging / job association. */
   jobId: string;
   stepIndex: number;
+  /** Which LLM to use for browser vision. Defaults to Gemini 2.0 Flash if omitted. */
+  agentModel?: AgentModelConfig;
 }
 
 export type BrowserTaskStatus =

@@ -90,6 +90,8 @@ export default function RecommendationCard({
         email: savedProfile.email ?? "",
         phone: savedProfile.phone ?? "",
       };
+      const savedModel = JSON.parse(localStorage.getItem("agent_model_config") ?? "{}");
+      const agentModel = savedModel.model && savedModel.apiKey ? savedModel : undefined;
       const startUrl =
         card.opentable_url ??
         `https://www.opentable.com/s?term=${encodeURIComponent(card.restaurant.name)}`;
@@ -102,6 +104,7 @@ export default function RecommendationCard({
           startUrl,
           task: `Make a reservation at ${card.restaurant.name}. Fill in the contact information and stop at the payment or confirmation page without completing payment.`,
           profile,
+          agentModel,
         },
         fallbackUrl: startUrl,
         status: "pending",

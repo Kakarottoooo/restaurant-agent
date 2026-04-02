@@ -26,6 +26,8 @@ export default function HotelCard({ card, index }: HotelCardProps) {
         email: savedProfile.email ?? "",
         phone: savedProfile.phone ?? "",
       };
+      const savedModel = JSON.parse(localStorage.getItem("agent_model_config") ?? "{}");
+      const agentModel = savedModel.model && savedModel.apiKey ? savedModel : undefined;
       const step = {
         type: "universal",
         emoji: "🏨",
@@ -35,6 +37,7 @@ export default function HotelCard({ card, index }: HotelCardProps) {
           startUrl: hotel.booking_link,
           task: `Book a room at ${hotel.name}. Select the best available option and stop at the payment page without completing payment.`,
           profile,
+          agentModel,
         },
         fallbackUrl: hotel.booking_link,
         status: "pending",

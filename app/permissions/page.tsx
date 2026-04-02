@@ -356,6 +356,171 @@ function BookingProfileTab() {
   );
 }
 
+// ── AI Model tab ────────────────────────────────────────────────────────────
+
+export interface AgentModelConfig {
+  model: string;
+  apiKey: string;
+}
+
+const MODEL_OPTIONS: { model: string; label: string; provider: string; hint: string }[] = [
+  {
+    model: "google/gemini-2.0-flash",
+    label: "Gemini 2.0 Flash",
+    provider: "Google",
+    hint: "Fast & free tier available — recommended for most users",
+  },
+  {
+    model: "anthropic/claude-sonnet-4-6",
+    label: "Claude Sonnet 4.6",
+    provider: "Anthropic",
+    hint: "Best reasoning & form-filling accuracy",
+  },
+  {
+    model: "openai/gpt-4o",
+    label: "GPT-4o",
+    provider: "OpenAI",
+    hint: "Widely available, strong vision capability",
+  },
+];
+
+export function loadAgentModelConfig(): AgentModelConfig {
+  try {
+    return JSON.parse(localStorage.getItem("agent_model_config") ?? "{}") as AgentModelConfig;
+  } catch { return { model: "", apiKey: "" }; }
+}
+
+function saveAgentModelConfig(cfg: AgentModelConfig) {
+  localStorage.setItem("agent_model_config", JSON.stringify(cfg));
+}
+
+function AgentModelTab() {
+  const [cfg, setCfg] = useState<AgentModelConfig>({ model: "", apiKey: "" });
+  const [showKey, setShowKey] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => { setCfg(loadAgentModelConfig()); }, []);
+
+  function selectModel(model: string) {
+    const next = { ...cfg, model };
+    setCfg(next);
+    saveAgentModelConfig(next);
+    setSaved(true);
+    setTimeout(() => setSaved(false), 1800);
+  }
+
+  function setApiKey(apiKey: string) {
+    const next = { ...cfg, apiKey };
+    setCfg(next);
+    saveAgentModelConfig(next);
+    setSaved(true);
+    setTimeout(() => setSaved(false), 1800);
+  }
+
+  const selectedOption = MODEL_OPTIONS.find((o) => o.model === cfg.model);
+  const isReady = !!cfg.model && !!cfg.apiKey;
+
+  const inputStyle: React.CSSProperties = {
+    width: "100%", padding: "10px 12px", borderRadius: 10, boxSizing: "border-box",
+    border: "0.5px solid var(--border, #e5e7eb)", backgroundColor: "var(--card, #fff)",
+    fontFamily: "var(--font-dm-sans)", fontSize: 14, color: "var(--text-primary, #111)",
+    outline: "none",
+  };
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+
+      {/* Status banner */}
+      <div style={{
+        display: "flex", alignItems: "center", gap: 10,
+        padding: "12px 14px", borderRadius: 12, marginBottom: 24,
+        backgroundColor: isReady ? "rgba(201,168,76,0.08)" : "var(--card, #fff)",
+        border: `0.5px solid ${isReady ? "var(--gold, #C9A84C)" : "var(--border, #e5e7eb)"}`,
+      }}>
+        <span style={{ fontSize: 20 }}>{isReady ? "✅" : "🤖"}</span>
+        <div>
+          <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 13, color: "var(--text-primary, #111)", fontWeight: 600 }}>
+            {isReady ? `Using ${selectedOption?.label} for browser automation` : "Choose your AI model"}
+          </p>
+          <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 11, color: "var(--text-muted, #aaa)" }}>
+            {isReady ? "Agent will use this model to navigate booking sites" : "The agent needs a vision model to navigate websites"}
+          </p>
+        </div>
+      </div>
+
+      {/* Model cards */}
+      <SectionLabel>Browser Agent Model</SectionLabel>
+      <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 24 }}>
+        {MODEL_OPTIONS.map((opt) => {
+          const active = cfg.model === opt.model;
+          return (
+            <div key={opt.model} onClick={() => selectModel(opt.model)} style={{
+              padding: "14px 16px", borderRadius: 12, cursor: "pointer",
+              border: active ? "1.5px solid var(--gold, #C9A84C)" : "0.5px solid var(--border, #e5e7eb)",
+              backgroundColor: active ? "rgba(201,168,76,0.06)" : "var(--card, #fff)",
+              transition: "border-color 0.15s, background 0.15s",
+            }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                <p style={{
+                  fontFamily: "var(--font-dm-sans)", fontSize: 14, fontWeight: 700,
+                  color: active ? "var(--gold, #C9A84C)" : "var(--text-primary, #111)",
+                }}>
+                  {opt.label}
+                </p>
+                <span style={{
+                  fontSize: 10, fontFamily: "var(--font-dm-sans)", fontWeight: 600,
+                  padding: "2px 8px", borderRadius: 20,
+                  backgroundColor: active ? "var(--gold, #C9A84C)" : "var(--card-2, #f5f5f4)",
+                  color: active ? "#fff" : "var(--text-muted, #aaa)",
+                }}>
+                  {opt.provider}
+                </span>
+              </div>
+              <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 11.5, color: "var(--text-secondary, #666)" }}>
+                {opt.hint}
+              </p>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* API key input — shown once a model is selected */}
+      {cfg.model && (
+        <>
+          <SectionLabel>API Key</SectionLabel>
+          <FieldLabel>{`${selectedOption?.provider ?? ""} API key`}</FieldLabel>
+          <div style={{ position: "relative" }}>
+            <input
+              style={{ ...inputStyle, paddingRight: 44 }}
+              type={showKey ? "text" : "password"}
+              value={cfg.apiKey}
+              placeholder="Paste your API key here"
+              onChange={(e) => setApiKey(e.target.value)}
+            />
+            <button onClick={() => setShowKey((v) => !v)} style={{
+              position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)",
+              background: "none", border: "none", cursor: "pointer",
+              fontFamily: "var(--font-dm-sans)", fontSize: 11, color: "var(--text-muted, #aaa)",
+            }}>
+              {showKey ? "Hide" : "Show"}
+            </button>
+          </div>
+          <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 11, color: "var(--text-muted, #aaa)", marginTop: 10, lineHeight: 1.6 }}>
+            Stored locally on your device and sent directly to the browser agent. Never stored on our servers.
+          </p>
+        </>
+      )}
+
+      <p style={{
+        fontFamily: "var(--font-dm-sans)", fontSize: 12, textAlign: "center", marginTop: 20,
+        color: saved ? "var(--gold, #C9A84C)" : "transparent", transition: "color 0.3s",
+      }}>
+        ✓ Saved
+      </p>
+    </div>
+  );
+}
+
 // ── Taste Profile tab ──────────────────────────────────────────────────────
 
 function TasteProfileTab() {
@@ -648,7 +813,7 @@ function PermissionsTab({ settings, update, tp }: {
 
 // ── Main page ──────────────────────────────────────────────────────────────
 
-type TabId = "profile" | "taste" | "permissions";
+type TabId = "profile" | "model" | "taste" | "permissions";
 
 export default function PermissionsPage() {
   const [activeTab, setActiveTab] = useState<TabId>("profile");
@@ -675,6 +840,7 @@ export default function PermissionsPage() {
 
   const TABS: { id: TabId; label: string }[] = [
     { id: "profile",     label: "My Profile" },
+    { id: "model",       label: "AI Model" },
     { id: "taste",       label: "Taste Profile" },
     { id: "permissions", label: tp.title },
   ];
@@ -713,6 +879,7 @@ export default function PermissionsPage() {
 
         {/* Tab content */}
         {activeTab === "profile" && <BookingProfileTab />}
+        {activeTab === "model" && <AgentModelTab />}
         {activeTab === "taste" && <TasteProfileTab />}
         {activeTab === "permissions" && mounted && (
           <PermissionsTab settings={settings} update={update} tp={tp} />
