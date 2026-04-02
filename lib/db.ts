@@ -783,6 +783,112 @@ export async function updateBookingJobSteps(id: string, steps: BookingJobStep[])
   `;
 }
 
+export async function deleteBookingJob(id: string): Promise<void> {
+  await ensureBookingJobsTable();
+  await sql`DELETE FROM booking_jobs WHERE id = ${id}`;
+}
+
+// ─── Agent Logs ───────────────────────────────────────────────────────────────
+// Persistent log of agent actions, errors, and notable events.
+// Queryable via GET /api/agent-logs — can be read by Claude Code for debugging.
+
+export interface AgentLog {
+  id: number;
+  session_id: string;
+  job_id: string | null;
+  level: "info" | "warn" | "error";
+  source: string;       // e.g. "stagehand-executor", "universal-route", "start-route"
+  message: string;
+  details: Record<string, unknown> | null;
+  created_at: string;
+}
+
+let agentLogsTableReady: Promise<void> | null = null;
+
+async function ensureAgentLogsTable(): Promise<void> {
+  if (!agentLogsTableReady) {
+    agentLogsTableReady = (async () => {
+      await sql`
+        CREATE TABLE IF NOT EXISTS agent_logs (
+          id         BIGSERIAL PRIMARY KEY,
+          session_id TEXT NOT NULL DEFAULT '',
+          job_id     TEXT,
+          level      TEXT NOT NULL DEFAULT 'info',
+          source     TEXT NOT NULL DEFAULT 'unknown',
+          message    TEXT NOT NULL,
+          details    JSONB,
+          created_at TIMESTAMPTZ DEFAULT NOW()
+        )
+      `;
+      await sql`CREATE INDEX IF NOT EXISTS agent_logs_session_idx ON agent_logs (session_id)`;
+      await sql`CREATE INDEX IF NOT EXISTS agent_logs_job_idx ON agent_logs (job_id) WHERE job_id IS NOT NULL`;
+      await sql`CREATE INDEX IF NOT EXISTS agent_logs_level_idx ON agent_logs (level)`;
+      await sql`CREATE INDEX IF NOT EXISTS agent_logs_created_idx ON agent_logs (created_at DESC)`;
+    })().catch((err) => {
+      agentLogsTableReady = null;
+      throw err;
+    });
+  }
+  await agentLogsTableReady;
+}
+
+export async function writeAgentLog(entry: Omit<AgentLog, "id" | "created_at">): Promise<void> {
+  try {
+    await ensureAgentLogsTable();
+    const detailsJson = entry.details ? JSON.stringify(entry.details) : null;
+    await sql`
+      INSERT INTO agent_logs (session_id, job_id, level, source, message, details)
+      VALUES (
+        ${entry.session_id},
+        ${entry.job_id ?? null},
+        ${entry.level},
+        ${entry.source},
+        ${entry.message},
+        ${detailsJson}::jsonb
+      )
+    `;
+  } catch {
+    // Never let logging fail the caller
+  }
+}
+
+export async function getAgentLogs(params: {
+  sessionId?: string;
+  jobId?: string;
+  level?: AgentLog["level"];
+  limit?: number;
+}): Promise<AgentLog[]> {
+  await ensureAgentLogsTable();
+  const { sessionId, jobId, level, limit = 100 } = params;
+
+  if (jobId) {
+    const r = await sql<AgentLog>`
+      SELECT * FROM agent_logs WHERE job_id = ${jobId}
+      ORDER BY created_at DESC LIMIT ${limit}
+    `;
+    return r.rows;
+  }
+  if (sessionId && level) {
+    const r = await sql<AgentLog>`
+      SELECT * FROM agent_logs WHERE session_id = ${sessionId} AND level = ${level}
+      ORDER BY created_at DESC LIMIT ${limit}
+    `;
+    return r.rows;
+  }
+  if (sessionId) {
+    const r = await sql<AgentLog>`
+      SELECT * FROM agent_logs WHERE session_id = ${sessionId}
+      ORDER BY created_at DESC LIMIT ${limit}
+    `;
+    return r.rows;
+  }
+  // Global — errors only, most recent first
+  const r = await sql<AgentLog>`
+    SELECT * FROM agent_logs ORDER BY created_at DESC LIMIT ${limit}
+  `;
+  return r.rows;
+}
+
 // ─── Agent Feedback ───────────────────────────────────────────────────────────
 
 let agentFeedbackTableReady: Promise<void> | null = null;

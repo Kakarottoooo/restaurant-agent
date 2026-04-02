@@ -11,6 +11,7 @@
 
 import { Stagehand } from "@browserbasehq/stagehand";
 import type { BrowserTaskInput, BrowserTaskResult } from "./types";
+import { writeAgentLog } from "../db";
 
 /** URL patterns that indicate we've reached a payment/checkout page. */
 const PAYMENT_URL_PATTERNS = [
@@ -166,6 +167,22 @@ Take a screenshot just before stopping.`,
     };
   } catch (err) {
     const error = err instanceof Error ? err.message : String(err);
+    const stack = err instanceof Error ? err.stack : undefined;
+
+    // Write to persistent agent log for debugging
+    await writeAgentLog({
+      session_id: input.jobId ?? "",
+      job_id: input.jobId ?? null,
+      level: "error",
+      source: "stagehand-executor",
+      message: error,
+      details: {
+        startUrl: input.startUrl,
+        task: input.task.slice(0, 500),
+        stepIndex: input.stepIndex,
+        stack: stack?.slice(0, 1000),
+      },
+    });
 
     // Captcha detection
     if (

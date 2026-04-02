@@ -20,6 +20,7 @@ import {
   updateBookingJobStatus,
   updateBookingJobSteps,
   getPushSubscriptionsBySession,
+  writeAgentLog,
 } from "@/lib/db";
 import type { BookingJobStep, FallbackCandidate, DecisionLogEntry } from "@/lib/db";
 import {
@@ -325,7 +326,22 @@ async function runUniversalStep(
       body: JSON.stringify(step.body),
     });
 
-    const data = await res.json() as BrowserTaskResult;
+    let data: BrowserTaskResult;
+    try {
+      data = await res.json() as BrowserTaskResult;
+    } catch (parseErr) {
+      const rawText = await res.text().catch(() => "(empty body)");
+      const errMsg = `Autopilot API returned non-JSON (HTTP ${res.status}): ${rawText.slice(0, 400)}`;
+      await writeAgentLog({
+        session_id: "",
+        job_id: step.label,
+        level: "error",
+        source: "start-route/universal",
+        message: errMsg,
+        details: { status: res.status, rawText: rawText.slice(0, 1000) },
+      });
+      throw new Error(errMsg);
+    }
 
     if (data.status === "completed" || data.status === "paused_payment") {
       log.push({ ts: now(), type: "succeeded", message: data.summary, outcome: "Done ✓" });

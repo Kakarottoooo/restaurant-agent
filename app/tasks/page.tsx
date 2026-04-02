@@ -473,6 +473,7 @@ function StepCard({ step, stepIndex, jobId, onRefresh }: {
 
 function JobCard({ job, onRefresh, sessionId }: { job: BookingJob; onRefresh?: () => void; sessionId: string }) {
   const [expanded, setExpanded] = useState(job.status !== "pending");
+  const [deleting, setDeleting] = useState(false);
   const doneCount = job.steps.filter((s) => s.status === "done").length;
   const actionCount = job.steps.filter((s) => s.actionItem).length;
   const adjustedCount = job.steps.filter((s) => s.timeAdjusted || s.usedFallback).length;
@@ -486,6 +487,18 @@ function JobCard({ job, onRefresh, sessionId }: { job: BookingJob; onRefresh?: (
   function openAll() {
     for (const s of job.steps.filter((s) => s.status === "done" && s.handoff_url)) {
       window.open(s.handoff_url!, "_blank");
+    }
+  }
+
+  async function handleDelete(e: React.MouseEvent) {
+    e.stopPropagation();
+    if (deleting) return;
+    setDeleting(true);
+    try {
+      await fetch(`/api/booking-jobs/${job.id}`, { method: "DELETE" });
+      onRefresh?.();
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -551,6 +564,23 @@ function JobCard({ job, onRefresh, sessionId }: { job: BookingJob; onRefresh?: (
         <span style={{ color: "var(--text-muted, #aaa)", fontSize: 12, flexShrink: 0 }}>
           {expanded ? "▲" : "▼"}
         </span>
+        {!isRunning && (
+          <button
+            onClick={handleDelete}
+            disabled={deleting}
+            title="Delete task"
+            style={{
+              flexShrink: 0, background: "none", border: "none", padding: "2px 4px",
+              cursor: deleting ? "default" : "pointer", fontSize: 15, lineHeight: 1,
+              color: "var(--text-muted, #aaa)", opacity: deleting ? 0.4 : 1,
+              transition: "color 0.15s",
+            }}
+            onMouseEnter={(e) => { if (!deleting) (e.currentTarget as HTMLButtonElement).style.color = "rgba(220,38,38,0.7)"; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "var(--text-muted, #aaa)"; }}
+          >
+            ×
+          </button>
+        )}
       </div>
 
       {expanded && (
