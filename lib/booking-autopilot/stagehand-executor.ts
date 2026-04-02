@@ -60,11 +60,13 @@ export async function runBrowserTask(
 
   // Resolve model + key before creating Stagehand — needed for both constructor
   // (act/extract/observe tools) AND agent() call.
-  const modelName = input.agentModel?.model ?? "gpt-4o-2024-08-06";
+  // Stagehand v3 requires "provider/model" format: "openai/gpt-4o-2024-08-06",
+  // "anthropic/claude-sonnet-4-6", "google/gemini-2.0-flash", etc.
+  const modelName = input.agentModel?.model ?? "openai/gpt-4o-2024-08-06";
   const modelApiKey = input.agentModel?.apiKey
-    ?? (modelName.includes("gemini") || modelName.includes("google")
+    ?? (modelName.startsWith("google/") || modelName.includes("gemini")
         ? (process.env.GEMINI_API_KEY ?? process.env.GOOGLE_GENERATIVE_AI_API_KEY ?? process.env.GOOGLE_API_KEY)
-        : modelName.includes("claude") || modelName.includes("anthropic")
+        : modelName.startsWith("anthropic/") || modelName.includes("claude")
         ? process.env.ANTHROPIC_API_KEY
         : process.env.OPENAI_API_KEY);
 

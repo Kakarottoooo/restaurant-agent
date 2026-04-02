@@ -363,22 +363,22 @@ export interface AgentModelConfig {
   apiKey: string;
 }
 
-// Stagehand tool-based agent uses short model names (no "provider/" prefix)
+// Stagehand v3 requires "provider/model" format for all model identifiers
 const MODEL_OPTIONS: { model: string; label: string; provider: string; hint: string }[] = [
   {
-    model: "gpt-4o-2024-08-06",
+    model: "openai/gpt-4o-2024-08-06",
     label: "GPT-4o",
     provider: "OpenAI",
     hint: "Best overall — strong vision & form-filling, widely supported",
   },
   {
-    model: "gemini-2.0-flash",
+    model: "google/gemini-2.0-flash",
     label: "Gemini 2.0 Flash",
     provider: "Google",
     hint: "Fast & free tier available",
   },
   {
-    model: "claude-sonnet-4-6",
+    model: "anthropic/claude-sonnet-4-6",
     label: "Claude Sonnet 4.6",
     provider: "Anthropic",
     hint: "Best reasoning accuracy",
