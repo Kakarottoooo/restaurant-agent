@@ -83,14 +83,15 @@ export async function runBrowserTask(
     const modelName = input.agentModel?.model ?? "google/gemini-2.0-flash";
     const modelApiKey = input.agentModel?.apiKey
       ?? (modelName.startsWith("google/")
-          ? process.env.GOOGLE_AI_API_KEY
+          ? (process.env.GEMINI_API_KEY ?? process.env.GOOGLE_GENERATIVE_AI_API_KEY ?? process.env.GOOGLE_API_KEY)
           : modelName.startsWith("openai/")
           ? process.env.OPENAI_API_KEY
           : process.env.ANTHROPIC_API_KEY);
 
-    // Run the agent — v3 AgentModelConfig allows apiKey as extra field
+    // Run the agent — pass apiKey explicitly if available, otherwise use string format
+    // so Stagehand falls back to its own env var lookup (providerEnvVarMap)
     const agent = stagehand.agent({
-      model: { modelName, apiKey: modelApiKey },
+      model: modelApiKey ? { modelName, apiKey: modelApiKey } : modelName,
       systemPrompt: `You are a booking assistant helping a user complete a reservation.
 Follow the task exactly. Navigate the site, fill in all provided information.
 CRITICAL: Stop immediately when you reach ANY payment page, credit card form,

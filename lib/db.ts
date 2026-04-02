@@ -743,7 +743,8 @@ export async function updateBookingJobStep(
     SELECT steps FROM booking_jobs WHERE id = ${id}
   `;
   if (!result.rows[0]) return;
-  const steps: BookingJobStep[] = JSON.parse(result.rows[0].steps);
+  const raw = result.rows[0].steps;
+  const steps: BookingJobStep[] = typeof raw === "string" ? JSON.parse(raw) : raw as unknown as BookingJobStep[];
   if (stepIndex < 0 || stepIndex >= steps.length) return;
   steps[stepIndex] = { ...steps[stepIndex], ...patch };
   await sql`
