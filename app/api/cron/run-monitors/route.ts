@@ -75,7 +75,7 @@ export async function GET(req: NextRequest) {
             subscriptions.map((sub) =>
               sendPushNotification(
                 sub.push_subscription as PushSubscription,
-                { title, body, url: "/trips" }
+                { title, body, url: "/tasks" }
               )
             )
           );

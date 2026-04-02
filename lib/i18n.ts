@@ -158,7 +158,7 @@ export interface Translations {
 
 const en: Translations = {
   nav: {
-    myTrips: "My Trips",
+    myTrips: "Tasks",
     monitoring: "Monitoring",
     insights: "Insights",
     language: "Language",
@@ -322,7 +322,7 @@ const en: Translations = {
 
 const zhCN: Translations = {
   nav: {
-    myTrips: "我的行程",
+    myTrips: "任务",
     monitoring: "监控中心",
     insights: "偏好洞察",
     language: "语言",
@@ -486,7 +486,7 @@ const zhCN: Translations = {
 
 const zhTW: Translations = {
   nav: {
-    myTrips: "我的行程",
+    myTrips: "任务",
     monitoring: "監控中心",
     insights: "偏好洞察",
     language: "語言",
@@ -650,7 +650,7 @@ const zhTW: Translations = {
 
 const ja: Translations = {
   nav: {
-    myTrips: "マイトリップ",
+    myTrips: "タスク",
     monitoring: "モニタリング",
     insights: "インサイト",
     language: "言語",
@@ -814,7 +814,7 @@ const ja: Translations = {
 
 const ko: Translations = {
   nav: {
-    myTrips: "내 여행",
+    myTrips: "작업",
     monitoring: "모니터링",
     insights: "인사이트",
     language: "언어",
@@ -978,7 +978,7 @@ const ko: Translations = {
 
 const es: Translations = {
   nav: {
-    myTrips: "Mis viajes",
+    myTrips: "Tareas",
     monitoring: "Monitoreo",
     insights: "Perspectivas",
     language: "Idioma",
@@ -1142,7 +1142,7 @@ const es: Translations = {
 
 const fr: Translations = {
   nav: {
-    myTrips: "Mes voyages",
+    myTrips: "Tâches",
     monitoring: "Surveillance",
     insights: "Aperçus",
     language: "Langue",
@@ -1306,7 +1306,7 @@ const fr: Translations = {
 
 const de: Translations = {
   nav: {
-    myTrips: "Meine Reisen",
+    myTrips: "Aufgaben",
     monitoring: "Überwachung",
     insights: "Einblicke",
     language: "Sprache",

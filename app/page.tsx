@@ -27,7 +27,8 @@ import { useAuth } from "@/app/hooks/useAuth";
 import { PlanAction, PlanLinkAction, RecommendationCard as CardType, PostExperienceFeedback, FeedbackRecord } from "@/lib/types";
 import type { FeedbackPromptItem } from "@/app/api/feedback-prompts/route";
 import DecisionRoomModal from "@/components/DecisionRoomModal";
-import { useLanguage, LANGUAGES } from "@/app/hooks/useLanguage";
+import { useLanguage } from "@/app/hooks/useLanguage";
+import GlobalNav from "@/components/GlobalNav";
 
 // Leaflet is not SSR-compatible
 const MapView = dynamic(() => import("@/components/MapView"), { ssr: false });
@@ -76,8 +77,7 @@ export default function Home() {
     usePreferences();
   const profileContext = formatProfileForPrompt(profile);
   const { userId } = useAuth();
-  const { lang, setLang, current: currentLang, aiInstruction: languageInstruction, t } = useLanguage();
-  const [langMenuOpen, setLangMenuOpen] = useState(false);
+  const { aiInstruction: languageInstruction, t } = useLanguage();
   const th = t.home;
   const tn = t.nav;
 
@@ -113,7 +113,6 @@ export default function Home() {
 
   // Phase 5.3: Auth
   const auth = useAuth();
-  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const [upgradePromptShown, setUpgradePromptShown] = useState(false);
   const [planFeedbackMessage, setPlanFeedbackMessage] = useState<string | null>(null);
   const [pendingFeedbackPrompts, setPendingFeedbackPrompts] = useState<FeedbackPromptItem[]>([]);
@@ -1203,397 +1202,8 @@ export default function Home() {
         </div>
       )}
 
-      {/* ─── Header ─────────────────────────────────────────── */}
-      <header
-        className="flex-shrink-0 border-b z-20"
-        style={{
-          backgroundColor: "var(--card)",
-          borderColor: "var(--border)",
-          height: "52px",
-        }}
-      >
-        <div className="max-w-2xl mx-auto h-full flex items-center gap-3 px-4">
-          {/* Brand */}
-          <a
-            href="/"
-            style={{
-              fontFamily: "var(--font-playfair)",
-              fontSize: "18px",
-              fontWeight: 700,
-              color: "var(--text-primary)",
-              letterSpacing: "-0.01em",
-              flexShrink: 0,
-              textDecoration: "none",
-            }}
-          >
-            Onegent<span style={{ color: "var(--gold)" }}>.</span>
-          </a>
-
-          {/* Location Input with Dropdown */}
-          <div className="relative flex-shrink-0">
-            <div className="relative">
-              <input
-                type="text"
-                value={
-                  location.locationOpen
-                    ? location.locationInput
-                    : location.locationDisplayValue
-                }
-                onChange={(e) => location.updateLocationInput(e.target.value)}
-                onFocus={() => {
-                  location.setLocationOpen(true);
-                  location.updateLocationInput("");
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    const val = location.locationInputRef.current.trim();
-                    if (val) location.submitNearLocation(val);
-                    location.setLocationOpen(false);
-                    location.updateLocationInput("");
-                    (e.target as HTMLInputElement).blur();
-                  }
-                  if (e.key === "Escape") {
-                    location.setLocationOpen(false);
-                    location.updateLocationInput("");
-                    (e.target as HTMLInputElement).blur();
-                  }
-                }}
-                onBlur={location.handleLocationBlur}
-                placeholder="Near where? (e.g. Union Square)"
-                role="combobox"
-                aria-label="Search by location or select a city"
-                aria-expanded={location.locationOpen}
-                aria-controls="location-dropdown"
-                aria-haspopup="listbox"
-                className="location-input outline-none"
-                style={{
-                  backgroundColor: "var(--bg)",
-                  border: "0.5px solid rgba(201,168,76,0.4)",
-                  borderRadius: "20px",
-                  fontFamily: "var(--font-dm-sans)",
-                  fontSize: "13px",
-                  color: "var(--text-primary)",
-                  padding: "4px 24px 4px 12px",
-                  width: "160px",
-                }}
-              />
-              <span
-                className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none"
-                style={{ fontSize: "10px", color: "var(--gold)" }}
-              >
-                ▾
-              </span>
-            </div>
-
-            {/* Dropdown */}
-            {location.locationOpen && (
-              <div
-                id="location-dropdown"
-                role="listbox"
-                aria-label="City selection"
-                className="absolute top-full left-0 mt-1 z-50 overflow-y-auto"
-                style={{
-                  backgroundColor: "var(--card)",
-                  border: "0.5px solid var(--border)",
-                  borderRadius: "12px",
-                  boxShadow: "0 4px 16px rgba(0,0,0,0.12)",
-                  maxHeight: "240px",
-                  minWidth: "180px",
-                }}
-              >
-                {location.supportsGps && (
-                  <button
-                    role="option"
-                    aria-selected={location.isNearMe}
-                    aria-label="Use my current GPS location"
-                    onMouseDown={() => {
-                      location.suppressNextBlur();
-                      location.requestGps();
-                      location.setLocationOpen(false);
-                      location.updateLocationInput("");
-                    }}
-                    className="w-full text-left px-3 py-2.5"
-                    style={{
-                      fontFamily: "var(--font-dm-sans)",
-                      fontSize: "13px",
-                      color: "var(--gold)",
-                      display: "block",
-                      background: "none",
-                      borderTop: "none",
-                      borderLeft: "none",
-                      borderRight: "none",
-                      borderBottom: "0.5px solid var(--border)",
-                      cursor: "pointer",
-                    }}
-                  >
-                    ⊕ Use My Location
-                  </button>
-                )}
-                {CITIES_SORTED.filter(
-                  (c) =>
-                    !location.locationInput.trim() ||
-                    c.label
-                      .toLowerCase()
-                      .includes(location.locationInput.toLowerCase())
-                ).map((c) => (
-                  <button
-                    key={c.id}
-                    role="option"
-                    aria-selected={c.id === location.cityId}
-                    aria-label={`Select ${c.label}`}
-                    onMouseDown={() => {
-                      location.suppressNextBlur();
-                      location.handleCitySelect(c.id);
-                      location.setLocationOpen(false);
-                      location.updateLocationInput("");
-                    }}
-                    className="w-full text-left px-3 py-2"
-                    style={{
-                      fontFamily: "var(--font-dm-sans)",
-                      fontSize: "13px",
-                      color:
-                        c.id === location.cityId
-                          ? "var(--gold)"
-                          : "var(--text-primary)",
-                      display: "block",
-                      background: "none",
-                      border: "none",
-                      cursor: "pointer",
-                    }}
-                  >
-                    {c.label}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* My Trips link */}
-          <a
-            href="/trips"
-            style={{
-              background: "none",
-              border: "0.5px solid var(--border)",
-              borderRadius: "8px",
-              padding: "4px 10px",
-              fontFamily: "var(--font-dm-sans)",
-              fontSize: "11px",
-              color: "var(--text-secondary)",
-              textDecoration: "none",
-              whiteSpace: "nowrap",
-              flexShrink: 0,
-            }}
-          >
-            {tn.trips}
-          </a>
-
-          {/* Phase 5.3: Auth area */}
-          <div className="ml-auto flex-shrink-0 relative">
-            {auth.isSignedIn ? (
-              /* Signed-in: Avatar button */
-              <>
-                <button
-                  onClick={() => setAccountMenuOpen((o) => !o)}
-                  aria-label="Account menu"
-                  style={{
-                    width: "30px",
-                    height: "30px",
-                    borderRadius: "50%",
-                    overflow: "hidden",
-                    border: "1.5px solid var(--gold)",
-                    cursor: "pointer",
-                    background: "none",
-                    padding: 0,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    backgroundColor: "var(--gold)",
-                    color: "#fff",
-                    fontFamily: "var(--font-dm-sans)",
-                    fontSize: "12px",
-                    fontWeight: 600,
-                  }}
-                >
-                  {auth.userAvatar ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={auth.userAvatar} alt="avatar" width={30} height={30} style={{ objectFit: "cover" }} />
-                  ) : (
-                    (auth.userDisplayName?.[0] ?? "U").toUpperCase()
-                  )}
-                </button>
-                {accountMenuOpen && (
-                  <div
-                    style={{
-                      position: "absolute",
-                      right: 0,
-                      top: "calc(100% + 8px)",
-                      backgroundColor: "var(--card)",
-                      border: "0.5px solid var(--border)",
-                      borderRadius: "12px",
-                      boxShadow: "0 4px 16px rgba(0,0,0,0.16)",
-                      minWidth: "160px",
-                      zIndex: 50,
-                      overflow: "hidden",
-                    }}
-                  >
-                    <div
-                      style={{
-                        padding: "10px 14px",
-                        fontFamily: "var(--font-dm-sans)",
-                        fontSize: "12px",
-                        color: "var(--text-secondary)",
-                        borderBottom: "0.5px solid var(--border)",
-                      }}
-                    >
-                      {auth.userDisplayName ?? "Signed in"}
-                    </div>
-                    <a
-                      href="/permissions"
-                      onClick={() => setAccountMenuOpen(false)}
-                      style={{
-                        display: "block",
-                        width: "100%",
-                        textAlign: "left",
-                        padding: "8px 14px",
-                        fontFamily: "var(--font-dm-sans)",
-                        fontSize: "13px",
-                        color: "var(--text-primary)",
-                        textDecoration: "none",
-                      }}
-                    >
-                      {tn.preferences}
-                    </a>
-
-                    {/* Language picker */}
-                    <div style={{ borderTop: "0.5px solid var(--border)" }}>
-                      <button
-                        onClick={() => setLangMenuOpen((o) => !o)}
-                        style={{
-                          display: "flex", alignItems: "center", justifyContent: "space-between",
-                          width: "100%", textAlign: "left", padding: "8px 14px",
-                          fontFamily: "var(--font-dm-sans)", fontSize: "13px",
-                          color: "var(--text-primary)", background: "none", border: "none", cursor: "pointer",
-                        }}
-                      >
-                        <span>{currentLang.flag} {tn.language}</span>
-                        <span style={{ fontSize: 11, color: "var(--text-secondary)" }}>{currentLang.label} {langMenuOpen ? "▲" : "▼"}</span>
-                      </button>
-                      {langMenuOpen && (
-                        <div style={{ borderTop: "0.5px solid var(--border)", maxHeight: 220, overflowY: "auto" }}>
-                          {LANGUAGES.map((l) => (
-                            <button
-                              key={l.code}
-                              onClick={() => { setLang(l.code); setLangMenuOpen(false); setAccountMenuOpen(false); }}
-                              style={{
-                                display: "flex", alignItems: "center", gap: 8,
-                                width: "100%", textAlign: "left", padding: "7px 14px 7px 20px",
-                                fontFamily: "var(--font-dm-sans)", fontSize: "12px",
-                                color: l.code === lang ? "var(--gold)" : "var(--text-primary)",
-                                fontWeight: l.code === lang ? 600 : 400,
-                                background: l.code === lang ? "rgba(201,168,76,0.07)" : "none",
-                                border: "none", cursor: "pointer",
-                              }}
-                            >
-                              <span>{l.flag}</span>
-                              <span>{l.label}</span>
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-
-                    <button
-                      onClick={() => { auth.signOut(); setAccountMenuOpen(false); }}
-                      style={{
-                        display: "block",
-                        width: "100%",
-                        textAlign: "left",
-                        padding: "8px 14px",
-                        fontFamily: "var(--font-dm-sans)",
-                        fontSize: "13px",
-                        color: "var(--text-secondary)",
-                        background: "none",
-                        border: "none",
-                        cursor: "pointer",
-                        borderTop: "0.5px solid var(--border)",
-                      }}
-                    >
-                      {tn.signOut}
-                    </button>
-                  </div>
-                )}
-              </>
-            ) : (
-              /* Not signed in: Language globe + Login button */
-              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                {/* Language picker (always visible) */}
-                <div style={{ position: "relative" }}>
-                  <button
-                    onClick={() => setLangMenuOpen((o) => !o)}
-                    title="Language"
-                    style={{
-                      background: "none", border: "0.5px solid var(--border)", borderRadius: "16px",
-                      padding: "4px 8px", cursor: "pointer", fontSize: "14px",
-                      display: "flex", alignItems: "center", gap: 4,
-                      fontFamily: "var(--font-dm-sans)", fontSize: "12px", color: "var(--text-secondary)",
-                    }}
-                  >
-                    {currentLang.flag}
-                  </button>
-                  {langMenuOpen && (
-                    <>
-                      <div onClick={() => setLangMenuOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 49 }} />
-                      <div style={{
-                        position: "absolute", right: 0, top: "calc(100% + 8px)",
-                        backgroundColor: "var(--card)", border: "0.5px solid var(--border)",
-                        borderRadius: 12, boxShadow: "0 4px 16px rgba(0,0,0,0.16)",
-                        minWidth: 180, zIndex: 50, overflow: "hidden",
-                      }}>
-                        {LANGUAGES.map((l) => (
-                          <button
-                            key={l.code}
-                            onClick={() => { setLang(l.code); setLangMenuOpen(false); }}
-                            style={{
-                              display: "flex", alignItems: "center", gap: 8,
-                              width: "100%", textAlign: "left", padding: "8px 14px",
-                              fontFamily: "var(--font-dm-sans)", fontSize: "13px",
-                              color: l.code === lang ? "var(--gold)" : "var(--text-primary)",
-                              fontWeight: l.code === lang ? 600 : 400,
-                              background: l.code === lang ? "rgba(201,168,76,0.07)" : "none",
-                              border: "none", borderBottom: "0.5px solid var(--border)", cursor: "pointer",
-                            }}
-                          >
-                            <span>{l.flag}</span>
-                            <span>{l.label}</span>
-                            {l.code === lang && <span style={{ marginLeft: "auto", fontSize: 10 }}>✓</span>}
-                          </button>
-                        ))}
-                      </div>
-                    </>
-                  )}
-                </div>
-
-                <button
-                  onClick={() => auth.signIn()}
-                  style={{
-                    fontFamily: "var(--font-dm-sans)",
-                    fontSize: "12px",
-                    color: "var(--text-secondary)",
-                    background: "none",
-                    border: "0.5px solid var(--border)",
-                    borderRadius: "16px",
-                    padding: "4px 10px",
-                    cursor: "pointer",
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  {tn.signIn}
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-      </header>
+      {/* ─── Nav ─────────────────────────────────────────────── */}
+      <GlobalNav active="home" />
 
       {/* Phase 5.3: Upgrade prompt toast (shown after 3rd favorite when not signed in) */}
       {upgradePromptShown && !auth.isSignedIn && (
@@ -1685,25 +1295,114 @@ export default function Home() {
       {!isMapMode && (
         <div className="flex-1 overflow-y-auto" style={{ minHeight: 0 }}>
           <div className="max-w-2xl mx-auto w-full px-4 py-6">
+
             {!hasMessages ? (
               /* Welcome / Hero State */
               <div className="flex flex-col items-center justify-center min-h-[60vh] text-center">
-                <h2
-                  style={{
-                    fontFamily: "var(--font-playfair)",
-                    fontSize: "clamp(28px, 5vw, 42px)",
-                    fontWeight: 700,
-                    color: "var(--text-primary)",
-                    lineHeight: 1.15,
-                    marginBottom: "16px",
-                    opacity: heroVisible ? 1 : 0,
-                    transform: heroVisible ? "translateY(0)" : "translateY(-10px)",
-                    transition: "opacity 0.5s ease, transform 0.5s ease",
-                  }}
-                >
-                  {th.taglines[heroIdx].headline[0]}<br />
-                  {th.taglines[heroIdx].headline[1]}
-                </h2>
+                {/* City name embedded in headline */}
+                <div style={{ position: "relative", marginBottom: 16 }}>
+                  <h2
+                    style={{
+                      fontFamily: "var(--font-playfair)",
+                      fontSize: "clamp(28px, 5vw, 42px)",
+                      fontWeight: 700,
+                      color: "var(--text-primary)",
+                      lineHeight: 1.15,
+                      marginBottom: 12,
+                      opacity: heroVisible ? 1 : 0,
+                      transform: heroVisible ? "translateY(0)" : "translateY(-10px)",
+                      transition: "opacity 0.5s ease, transform 0.5s ease",
+                    }}
+                  >
+                    {th.taglines[heroIdx].headline[0]}<br />
+                    {th.taglines[heroIdx].headline[1]}
+                  </h2>
+
+                  {/* City selector */}
+                  <button
+                    onClick={() => location.setLocationOpen((o) => !o)}
+                    style={{
+                      fontFamily: "var(--font-playfair)",
+                      fontSize: "clamp(20px, 3.5vw, 30px)",
+                      fontWeight: 700,
+                      color: location.cityId || location.isNearMe ? "var(--gold)" : "var(--text-secondary)",
+                      background: "none",
+                      border: "none",
+                      cursor: "pointer",
+                      padding: 0,
+                      borderBottom: "2px solid transparent",
+                      transition: "border-color 0.15s, opacity 0.15s",
+                      display: "inline-flex",
+                      alignItems: "baseline",
+                      gap: "0.25em",
+                      opacity: heroVisible ? 1 : 0,
+                      transform: heroVisible ? "translateY(0)" : "translateY(-10px)",
+                    }}
+                    onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderBottomColor = "var(--gold)"; }}
+                    onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderBottomColor = "transparent"; }}
+                  >
+                    {location.isNearMe
+                      ? "Near Me"
+                      : location.cityId
+                        ? (CITIES_SORTED.find(c => c.id === location.cityId)?.label ?? "your city")
+                        : "your city"}
+                    <span style={{ fontSize: "0.4em", verticalAlign: "middle", opacity: 0.5 }}>▾</span>
+                  </button>
+
+                  {/* City dropdown */}
+                  {location.locationOpen && (
+                    <>
+                      <div onClick={() => location.setLocationOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 49 }} />
+                      <div
+                        role="listbox"
+                        aria-label="City selection"
+                        style={{
+                          position: "absolute", left: "50%", transform: "translateX(-50%)",
+                          top: "calc(100% + 8px)", zIndex: 50,
+                          backgroundColor: "var(--card)", border: "0.5px solid var(--border)",
+                          borderRadius: 14, boxShadow: "0 8px 32px rgba(0,0,0,0.14)",
+                          maxHeight: 280, overflowY: "auto", minWidth: 200,
+                          textAlign: "left",
+                        }}
+                      >
+                        {location.supportsGps && (
+                          <button
+                            role="option"
+                            aria-selected={location.isNearMe}
+                            onMouseDown={() => { location.suppressNextBlur(); location.requestGps(); location.setLocationOpen(false); location.updateLocationInput(""); }}
+                            style={{
+                              display: "block", width: "100%", textAlign: "left",
+                              padding: "10px 16px", background: "none",
+                              border: "none", borderBottom: "0.5px solid var(--border)",
+                              fontFamily: "var(--font-dm-sans)", fontSize: 13,
+                              color: "var(--gold)", cursor: "pointer",
+                            }}
+                          >
+                            ⊕ Use My Location
+                          </button>
+                        )}
+                        {CITIES_SORTED.map((c) => (
+                          <button
+                            key={c.id}
+                            role="option"
+                            aria-selected={c.id === location.cityId}
+                            onMouseDown={() => { location.suppressNextBlur(); location.handleCitySelect(c.id); location.setLocationOpen(false); location.updateLocationInput(""); }}
+                            style={{
+                              display: "block", width: "100%", textAlign: "left",
+                              padding: "9px 16px", background: "none", border: "none",
+                              fontFamily: "var(--font-dm-sans)", fontSize: 13,
+                              color: c.id === location.cityId ? "var(--gold)" : "var(--text-primary)",
+                              fontWeight: c.id === location.cityId ? 600 : 400,
+                              cursor: "pointer",
+                            }}
+                          >
+                            {c.label}
+                          </button>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </div>
                 <p
                   style={{
                     color: "var(--text-secondary)",
@@ -1777,7 +1476,7 @@ export default function Home() {
                       <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 12, fontWeight: 600, color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
                         {th.recentTrips}
                       </p>
-                      <a href="/trips" style={{ fontFamily: "var(--font-dm-sans)", fontSize: 12, color: "var(--gold)", textDecoration: "none" }}>
+                      <a href="/tasks" style={{ fontFamily: "var(--font-dm-sans)", fontSize: 12, color: "var(--gold)", textDecoration: "none" }}>
                         {th.viewAll}
                       </a>
                     </div>
@@ -1792,7 +1491,7 @@ export default function Home() {
                         };
                         const sm = statusMeta[job.status] ?? statusMeta.pending;
                         return (
-                          <a key={job.id} href="/trips" style={{ textDecoration: "none", display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", borderRadius: 12, backgroundColor: "var(--card)", border: "0.5px solid var(--border)" }}>
+                          <a key={job.id} href="/tasks" style={{ textDecoration: "none", display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", borderRadius: 12, backgroundColor: "var(--card)", border: "0.5px solid var(--border)" }}>
                             <span style={{ width: 7, height: 7, borderRadius: "50%", backgroundColor: sm.dot, flexShrink: 0 }} />
                             <span style={{ fontFamily: "var(--font-dm-sans)", fontSize: 13, color: "var(--text-primary)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{job.trip_label}</span>
                             <span style={{ fontFamily: "var(--font-dm-sans)", fontSize: 11, color: "var(--text-secondary)", flexShrink: 0 }}>{sm.label}</span>

@@ -289,7 +289,7 @@ export default function MonitoringPage() {
                 color: "var(--text-primary, #111)" }}>
                 {group.tripLabel}
               </p>
-              <a href="/trips" style={{ fontFamily: "var(--font-dm-sans)", fontSize: 12,
+              <a href="/tasks" style={{ fontFamily: "var(--font-dm-sans)", fontSize: 12,
                 color: "var(--gold, #C9A84C)", textDecoration: "none" }}>
                 {tm.viewTrip}
               </a>

@@ -473,7 +473,7 @@ export async function POST(_req: NextRequest, { params }: Params) {
 
     await Promise.allSettled(
       subscriptions.map((sub) =>
-        sendPushNotification(sub.push_subscription as PushSubscription, { title, body, url: "/trips" })
+        sendPushNotification(sub.push_subscription as PushSubscription, { title, body, url: "/tasks" })
       )
     );
   } catch { /* push failure never blocks */ }

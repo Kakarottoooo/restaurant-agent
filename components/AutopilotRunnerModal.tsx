@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import type { AutopilotResult } from "../lib/booking-autopilot/types";
 import { ConnectAccountsModal } from "./ConnectAccountsModal";
-import { AutonomySettingsModal } from "./AutonomySettingsModal";
+
 import { loadAutonomySettings } from "@/lib/autonomy";
 
 export interface BookableFallbackCandidate {
@@ -46,7 +46,7 @@ export function AutopilotRunnerModal({ open, steps, tripLabel, onClose }: Props)
   const [stepStates, setStepStates] = useState<StepState[]>([]);
   const [allDone, setAllDone] = useState(false);
   const [connectOpen, setConnectOpen] = useState(false);
-  const [autonomyOpen, setAutonomyOpen] = useState(false);
+
   const [bgJobId, setBgJobId] = useState<string | null>(null);
   const [bgSent, setBgSent] = useState(false);
 
@@ -193,8 +193,8 @@ export function AutopilotRunnerModal({ open, steps, tripLabel, onClose }: Props)
             {allDone ? "Your trip is ready to book" : "Booking your trip…"}
           </span>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <button
-              onClick={() => setAutonomyOpen(true)}
+            <a
+              href="/permissions"
               title="Agent permissions"
               style={{
                 background: "none",
@@ -206,10 +206,13 @@ export function AutopilotRunnerModal({ open, steps, tripLabel, onClose }: Props)
                 color: "var(--text-secondary, #666)",
                 cursor: "pointer",
                 whiteSpace: "nowrap",
+                textDecoration: "none",
+                display: "inline-flex",
+                alignItems: "center",
               }}
             >
               ⚙ Permissions
-            </button>
+            </a>
             <button
               onClick={() => setConnectOpen(true)}
               style={{
@@ -237,7 +240,6 @@ export function AutopilotRunnerModal({ open, steps, tripLabel, onClose }: Props)
 
         {/* Nested modals */}
         <ConnectAccountsModal open={connectOpen} onClose={() => setConnectOpen(false)} />
-        <AutonomySettingsModal open={autonomyOpen} onClose={() => setAutonomyOpen(false)} />
 
         {/* Body */}
         <div style={{ flex: 1, overflowY: "auto", padding: "20px" }}>
@@ -300,7 +302,7 @@ export function AutopilotRunnerModal({ open, steps, tripLabel, onClose }: Props)
                 </p>
               </div>
               <button
-                onClick={() => { window.location.href = "/trips"; }}
+                onClick={() => { window.location.href = "/tasks"; }}
                 style={{
                   width: "100%",
                   padding: "12px",
