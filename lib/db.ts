@@ -618,7 +618,7 @@ export interface DecisionLogEntry {
 }
 
 export interface BookingJobStep {
-  type: "flight" | "hotel" | "restaurant";
+  type: "flight" | "hotel" | "restaurant" | "universal";
   emoji: string;
   label: string;
   apiEndpoint: string;

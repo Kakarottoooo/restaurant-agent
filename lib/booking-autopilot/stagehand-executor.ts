@@ -195,14 +195,12 @@ Take a screenshot just before stopping.`,
 // ── Task instruction builders ────────────────────────────────────────────────
 
 function buildInstruction(input: BrowserTaskInput): string {
-  // If a custom task is provided, inject profile details into it
-  const profileBlock = `
-User details to fill in forms:
-- Full name: ${input.profile.first_name} ${input.profile.last_name}
-- Email: ${input.profile.email}
-- Phone: ${input.profile.phone}
+  const p = input.profile;
+  const hasProfile = p.first_name || p.last_name || p.email || p.phone;
 
-STOP before entering any payment or credit card information.`.trim();
+  const profileBlock = hasProfile
+    ? `User details to fill in forms:\n- Full name: ${p.first_name} ${p.last_name}\n- Email: ${p.email}\n- Phone: ${p.phone}\n\nSTOP before entering any payment or credit card information.`
+    : `Navigate and select options as far as possible. Stop when you reach the personal info or payment page so the user can complete it.`;
 
   return `${input.task}\n\n${profileBlock}`;
 }

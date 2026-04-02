@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { HotelRecommendationCard } from "@/lib/types";
 
 interface HotelCardProps {
@@ -9,6 +11,42 @@ interface HotelCardProps {
 
 export default function HotelCard({ card, index }: HotelCardProps) {
   const { hotel } = card;
+  const router = useRouter();
+  const [booking, setBooking] = useState(false);
+
+  async function handleBook() {
+    if (booking) return;
+    setBooking(true);
+    try {
+      const sessionId = localStorage.getItem("session_id") ?? crypto.randomUUID();
+      const step = {
+        type: "universal",
+        emoji: "🏨",
+        label: hotel.name,
+        apiEndpoint: "/api/booking-autopilot/universal",
+        body: {
+          startUrl: hotel.booking_link,
+          task: `Book a room at ${hotel.name}. Select the best available option and stop at the payment page without completing payment.`,
+          profile: { first_name: "", last_name: "", email: "", phone: "" },
+        },
+        fallbackUrl: hotel.booking_link,
+        status: "pending",
+      };
+      const createRes = await fetch("/api/booking-jobs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ session_id: sessionId, trip_label: hotel.name, steps: [step] }),
+      });
+      if (createRes.ok) {
+        const { jobId } = await createRes.json();
+        // Fire-and-forget: start the job in background
+        fetch(`/api/booking-jobs/${jobId}/start`, { method: "POST" }).catch(() => {});
+        router.push("/tasks");
+      }
+    } finally {
+      setBooking(false);
+    }
+  }
 
   return (
     <div
@@ -288,25 +326,26 @@ export default function HotelCard({ card, index }: HotelCardProps) {
           >
             Map
           </a>
-          <a
-            href={hotel.booking_link}
-            target="_blank"
-            rel="noopener noreferrer"
+          <button
+            onClick={handleBook}
+            disabled={booking}
             style={{
               flex: 2,
               textAlign: "center",
               padding: "8px 0",
               borderRadius: "10px",
-              backgroundColor: "var(--gold)",
+              backgroundColor: booking ? "var(--border)" : "var(--gold)",
               fontFamily: "var(--font-dm-sans)",
               fontSize: "13px",
               fontWeight: 500,
               color: "#fff",
-              textDecoration: "none",
+              border: "none",
+              cursor: booking ? "default" : "pointer",
+              transition: "background-color 0.2s",
             }}
           >
-            Book on Google Hotels →
-          </a>
+            {booking ? "Starting agent…" : "Book with Agent →"}
+          </button>
         </div>
       </div>
     </div>

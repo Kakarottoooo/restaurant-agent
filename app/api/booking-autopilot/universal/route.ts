@@ -23,29 +23,20 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  if (!body.startUrl || !body.task || !body.profile) {
+  if (!body.startUrl || !body.task) {
     return NextResponse.json(
-      { error: "Missing required fields: startUrl, task, profile (first_name, last_name, email, phone)" },
+      { error: "Missing required fields: startUrl, task" },
       { status: 400 }
     );
   }
 
-  if (
-    !body.profile.first_name ||
-    !body.profile.last_name ||
-    !body.profile.email ||
-    !body.profile.phone
-  ) {
-    return NextResponse.json(
-      { error: "profile must include first_name, last_name, email, phone" },
-      { status: 400 }
-    );
-  }
+  // Profile is optional — if not set, agent navigates but cannot pre-fill forms
+  const profile = body.profile ?? { first_name: "", last_name: "", email: "", phone: "" };
 
   const input: BrowserTaskInput = {
     startUrl: body.startUrl,
     task: body.task,
-    profile: body.profile,
+    profile,
     jobId: body.jobId ?? "manual",
     stepIndex: body.stepIndex ?? 0,
   };

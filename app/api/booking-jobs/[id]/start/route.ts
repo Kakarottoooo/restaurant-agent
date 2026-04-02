@@ -45,7 +45,7 @@ import { buildAutoMonitors } from "@/lib/monitors";
 import { createBookingMonitor } from "@/lib/db";
 import { sendPushNotification } from "@/lib/push";
 import type { PushSubscription } from "web-push";
-import type { AutopilotResult } from "@/lib/booking-autopilot/types";
+import type { AutopilotResult, BrowserTaskResult } from "@/lib/booking-autopilot/types";
 import { buildPreferenceProfile } from "@/lib/policy";
 
 // ── Agent-runtime: activity skill dispatch ─────────────────────────────────
@@ -309,6 +309,55 @@ async function runStepWithRecovery(
   };
 }
 
+// ── Universal step via Stagehand browser executor ─────────────────────────
+
+async function runUniversalStep(
+  step: BookingJobStep,
+  onProgress: (s: BookingJobStep) => Promise<void>
+): Promise<BookingJobStep> {
+  const log: DecisionLogEntry[] = [];
+  await onProgress({ ...step, status: "loading", decisionLog: log });
+
+  try {
+    const res = await fetch(`${BASE_URL}/api/booking-autopilot/universal`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(step.body),
+    });
+
+    const data = await res.json() as BrowserTaskResult;
+
+    if (data.status === "completed" || data.status === "paused_payment") {
+      log.push({ ts: now(), type: "succeeded", message: data.summary, outcome: "Done ✓" });
+      return {
+        ...step,
+        status: data.status === "paused_payment" ? "awaiting_confirmation" : "done",
+        handoff_url: data.handoffUrl,
+        decisionLog: log,
+      };
+    }
+
+    if (data.status === "no_availability") {
+      log.push({ ts: now(), type: "skipped", message: "No availability found", outcome: "No availability" });
+      return { ...step, status: "no_availability", error: data.summary, decisionLog: log };
+    }
+
+    log.push({ ts: now(), type: "failed", message: data.error ?? data.summary, outcome: "Failed" });
+    return {
+      ...step,
+      status: "error",
+      error: data.error ?? data.summary,
+      handoff_url: step.fallbackUrl,
+      actionItem: { message: "Auto-booking failed. Tap to complete manually:", options: [{ label: step.label, url: step.fallbackUrl }] },
+      decisionLog: log,
+    };
+  } catch (err) {
+    const errMsg = err instanceof Error ? err.message : "Network error";
+    log.push({ ts: now(), type: "failed", message: errMsg, outcome: "Error" });
+    return { ...step, status: "error", error: errMsg, decisionLog: log };
+  }
+}
+
 // ── Activity step via agent-runtime skill ─────────────────────────────────
 
 async function runActivityStep(
@@ -407,10 +456,10 @@ export async function POST(_req: NextRequest, { params }: Params) {
       await updateBookingJobSteps(id, steps);
     };
 
-    // ── Dispatch: activity steps → agent-runtime skill ─────────────────
-    // Restaurant / hotel / flight use the battle-tested 4-phase recovery loop.
-    // Activity (and future types) are dispatched through the agent-runtime skill.
-    if ((steps[i].type as string) === "activity") {
+    // ── Dispatch: universal → Stagehand, activity → agent-runtime, rest → recovery loop ──
+    if (steps[i].type === "universal") {
+      steps[i] = await runUniversalStep(steps[i], onProgress);
+    } else if ((steps[i].type as string) === "activity") {
       steps[i] = await runActivityStep(steps[i], skillCtx, onProgress);
     } else {
       steps[i] = await runStepWithRecovery(steps[i], autonomy, policy, onProgress);

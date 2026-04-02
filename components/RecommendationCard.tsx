@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { RecommendationCard as CardType, FeedbackRecord } from "@/lib/types";
 
 interface Props {
@@ -73,6 +74,45 @@ export default function RecommendationCard({
   isComparing,
   onFeedback,
 }: Props) {
+  const router = useRouter();
+  const [booking, setBooking] = useState(false);
+
+  async function handleReserve() {
+    if (booking) return;
+    setBooking(true);
+    fireTelemetry("reserve_click");
+    try {
+      const sessionId = localStorage.getItem("session_id") ?? crypto.randomUUID();
+      const startUrl =
+        card.opentable_url ??
+        `https://www.opentable.com/s?term=${encodeURIComponent(card.restaurant.name)}`;
+      const step = {
+        type: "universal",
+        emoji: "🍽️",
+        label: card.restaurant.name,
+        apiEndpoint: "/api/booking-autopilot/universal",
+        body: {
+          startUrl,
+          task: `Make a reservation at ${card.restaurant.name}. Fill in the contact information and stop at the payment or confirmation page without completing payment.`,
+          profile: { first_name: "", last_name: "", email: "", phone: "" },
+        },
+        fallbackUrl: startUrl,
+        status: "pending",
+      };
+      const createRes = await fetch("/api/booking-jobs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ session_id: sessionId, trip_label: card.restaurant.name, steps: [step] }),
+      });
+      if (createRes.ok) {
+        const { jobId } = await createRes.json();
+        fetch(`/api/booking-jobs/${jobId}/start`, { method: "POST" }).catch(() => {});
+        router.push("/tasks");
+      }
+    } finally {
+      setBooking(false);
+    }
+  }
 
   function fireTelemetry(type: "map_click" | "reserve_click") {
     const event = {
@@ -690,27 +730,23 @@ export default function RecommendationCard({
                   Map
                 </a>
               )}
-              <a
-                href={
-                  card.opentable_url ??
-                  `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(card.restaurant.name)}&query_place_id=${card.restaurant.id}`
-                }
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={() => fireTelemetry("reserve_click")}
+              <button
+                onClick={handleReserve}
+                disabled={booking}
                 style={{
                   fontFamily: "var(--font-dm-sans)",
                   fontSize: "13px",
                   color: "#fff",
-                  backgroundColor: "var(--gold)",
+                  backgroundColor: booking ? "var(--border)" : "var(--gold)",
                   borderRadius: "8px",
                   padding: "7px 14px",
-                  textDecoration: "none",
-                  display: "inline-block",
+                  border: "none",
+                  cursor: booking ? "default" : "pointer",
+                  transition: "background-color 0.2s",
                 }}
               >
-                Reserve →
-              </a>
+                {booking ? "Starting agent…" : "Reserve with Agent →"}
+              </button>
             </div>
           </div>
 
