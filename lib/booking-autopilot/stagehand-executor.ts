@@ -79,17 +79,18 @@ export async function runBrowserTask(
     // Build the agent instruction
     const instruction = buildInstruction(input);
 
-    // Resolve model + API key — prefer user-supplied config, fall back to env defaults
-    const modelName = input.agentModel?.model ?? "google/gemini-2.0-flash";
+    // Stagehand tool-based agent uses SHORT model names (not "provider/model" prefix).
+    // "provider/model" format is only for CUA mode.
+    // Short names: "gpt-4o", "gemini-2.0-flash", "claude-sonnet-4-6" etc.
+    const modelName = input.agentModel?.model ?? "gpt-4o";
     const modelApiKey = input.agentModel?.apiKey
-      ?? (modelName.startsWith("google/")
+      ?? (modelName.includes("gemini") || modelName.includes("google")
           ? (process.env.GEMINI_API_KEY ?? process.env.GOOGLE_GENERATIVE_AI_API_KEY ?? process.env.GOOGLE_API_KEY)
-          : modelName.startsWith("openai/")
-          ? process.env.OPENAI_API_KEY
-          : process.env.ANTHROPIC_API_KEY);
+          : modelName.includes("claude") || modelName.includes("anthropic")
+          ? process.env.ANTHROPIC_API_KEY
+          : process.env.OPENAI_API_KEY);
 
-    // Run the agent — pass apiKey explicitly if available, otherwise use string format
-    // so Stagehand falls back to its own env var lookup (providerEnvVarMap)
+    // Pass apiKey explicitly if available; otherwise let Stagehand look up its own env vars
     const agent = stagehand.agent({
       model: modelApiKey ? { modelName, apiKey: modelApiKey } : modelName,
       systemPrompt: `You are a booking assistant helping a user complete a reservation.

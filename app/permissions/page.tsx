@@ -363,24 +363,25 @@ export interface AgentModelConfig {
   apiKey: string;
 }
 
+// Stagehand tool-based agent uses short model names (no "provider/" prefix)
 const MODEL_OPTIONS: { model: string; label: string; provider: string; hint: string }[] = [
   {
-    model: "google/gemini-2.0-flash",
-    label: "Gemini 2.0 Flash",
-    provider: "Google",
-    hint: "Fast & free tier available — recommended for most users",
-  },
-  {
-    model: "anthropic/claude-sonnet-4-6",
-    label: "Claude Sonnet 4.6",
-    provider: "Anthropic",
-    hint: "Best reasoning & form-filling accuracy",
-  },
-  {
-    model: "openai/gpt-4o",
+    model: "gpt-4o",
     label: "GPT-4o",
     provider: "OpenAI",
-    hint: "Widely available, strong vision capability",
+    hint: "Best overall — strong vision & form-filling, widely supported",
+  },
+  {
+    model: "gemini-2.0-flash",
+    label: "Gemini 2.0 Flash",
+    provider: "Google",
+    hint: "Fast & free tier available",
+  },
+  {
+    model: "claude-sonnet-4-6",
+    label: "Claude Sonnet 4.6",
+    provider: "Anthropic",
+    hint: "Best reasoning accuracy",
   },
 ];
 
