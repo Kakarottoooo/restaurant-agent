@@ -214,6 +214,148 @@ function TimeInput({ value, onChange, label }: { value: string; onChange: (v: st
   );
 }
 
+// ── Booking Profile helpers ────────────────────────────────────────────────
+
+const PROFILE_KEY = "booking_profile";
+
+export interface BookingProfile {
+  first_name: string;
+  last_name: string;
+  email: string;
+  phone: string;
+}
+
+export function loadBookingProfile(): BookingProfile {
+  if (typeof window === "undefined") return { first_name: "", last_name: "", email: "", phone: "" };
+  try {
+    return JSON.parse(localStorage.getItem(PROFILE_KEY) ?? "{}");
+  } catch {
+    return { first_name: "", last_name: "", email: "", phone: "" };
+  }
+}
+
+function saveBookingProfile(p: BookingProfile) {
+  localStorage.setItem(PROFILE_KEY, JSON.stringify(p));
+}
+
+// ── Booking Profile tab ────────────────────────────────────────────────────
+
+function BookingProfileTab() {
+  const [profile, setProfile] = useState<BookingProfile>({ first_name: "", last_name: "", email: "", phone: "" });
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    setProfile(loadBookingProfile());
+  }, []);
+
+  function set(field: keyof BookingProfile, value: string) {
+    const next = { ...profile, [field]: value };
+    setProfile(next);
+    saveBookingProfile(next);
+    setSaved(true);
+    setTimeout(() => setSaved(false), 1800);
+  }
+
+  const inputStyle: React.CSSProperties = {
+    width: "100%", padding: "10px 12px", borderRadius: 10, boxSizing: "border-box",
+    border: "0.5px solid var(--border, #e5e7eb)", backgroundColor: "var(--card, #fff)",
+    fontFamily: "var(--font-dm-sans)", fontSize: 14, color: "var(--text-primary, #111)",
+    outline: "none", transition: "border-color 0.15s",
+  };
+
+  const isComplete = profile.first_name && profile.last_name && profile.email && profile.phone;
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+
+      {/* Status banner */}
+      <div style={{
+        display: "flex", alignItems: "center", gap: 10,
+        padding: "12px 14px", borderRadius: 12, marginBottom: 24,
+        backgroundColor: isComplete ? "rgba(201,168,76,0.08)" : "var(--card, #fff)",
+        border: `0.5px solid ${isComplete ? "var(--gold, #C9A84C)" : "var(--border, #e5e7eb)"}`,
+      }}>
+        <span style={{ fontSize: 20 }}>{isComplete ? "✅" : "📋"}</span>
+        <div>
+          <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 13, color: "var(--text-primary, #111)", fontWeight: 600 }}>
+            {isComplete ? "Agent can auto-fill booking forms" : "Add your details to enable auto-fill"}
+          </p>
+          <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 11, color: "var(--text-muted, #aaa)" }}>
+            {isComplete
+              ? "Agent will fill name, email, and phone on booking sites"
+              : "Without a profile the agent stops at the form page"}
+          </p>
+        </div>
+      </div>
+
+      {/* Name row */}
+      <SectionLabel>Name</SectionLabel>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
+        <div>
+          <FieldLabel>First name</FieldLabel>
+          <input
+            style={inputStyle}
+            value={profile.first_name}
+            placeholder="Jane"
+            onChange={(e) => set("first_name", e.target.value)}
+          />
+        </div>
+        <div>
+          <FieldLabel>Last name</FieldLabel>
+          <input
+            style={inputStyle}
+            value={profile.last_name}
+            placeholder="Smith"
+            onChange={(e) => set("last_name", e.target.value)}
+          />
+        </div>
+      </div>
+
+      {/* Contact */}
+      <SectionLabel>Contact</SectionLabel>
+      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        <div>
+          <FieldLabel>Email</FieldLabel>
+          <input
+            style={inputStyle}
+            type="email"
+            value={profile.email}
+            placeholder="jane@example.com"
+            onChange={(e) => set("email", e.target.value)}
+          />
+        </div>
+        <div>
+          <FieldLabel>Phone</FieldLabel>
+          <input
+            style={inputStyle}
+            type="tel"
+            value={profile.phone}
+            placeholder="+1 555 000 0000"
+            onChange={(e) => set("phone", e.target.value)}
+          />
+        </div>
+      </div>
+
+      {/* Privacy note */}
+      <p style={{
+        fontFamily: "var(--font-dm-sans)", fontSize: 11,
+        color: "var(--text-muted, #aaa)", marginTop: 24, lineHeight: 1.6,
+      }}>
+        Stored locally on your device. The agent uses this to pre-fill restaurant and hotel booking forms.
+        Payment is always completed by you.
+      </p>
+
+      {/* Auto-save */}
+      <p style={{
+        fontFamily: "var(--font-dm-sans)", fontSize: 12, textAlign: "center", marginTop: 16,
+        color: saved ? "var(--gold, #C9A84C)" : "transparent", transition: "color 0.3s",
+      }}>
+        ✓ Saved
+      </p>
+    </div>
+  );
+}
+
 // ── Taste Profile tab ──────────────────────────────────────────────────────
 
 function TasteProfileTab() {
@@ -506,10 +648,10 @@ function PermissionsTab({ settings, update, tp }: {
 
 // ── Main page ──────────────────────────────────────────────────────────────
 
-type TabId = "taste" | "permissions";
+type TabId = "profile" | "taste" | "permissions";
 
 export default function PermissionsPage() {
-  const [activeTab, setActiveTab] = useState<TabId>("taste");
+  const [activeTab, setActiveTab] = useState<TabId>("profile");
   const [settings, setSettings] = useState<AgentAutonomySettings>(DEFAULT_AUTONOMY);
   const [mounted, setMounted] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -532,6 +674,7 @@ export default function PermissionsPage() {
   }, []);
 
   const TABS: { id: TabId; label: string }[] = [
+    { id: "profile",     label: "My Profile" },
     { id: "taste",       label: "Taste Profile" },
     { id: "permissions", label: tp.title },
   ];
@@ -569,6 +712,7 @@ export default function PermissionsPage() {
         </div>
 
         {/* Tab content */}
+        {activeTab === "profile" && <BookingProfileTab />}
         {activeTab === "taste" && <TasteProfileTab />}
         {activeTab === "permissions" && mounted && (
           <PermissionsTab settings={settings} update={update} tp={tp} />
@@ -578,7 +722,7 @@ export default function PermissionsPage() {
         )}
 
         {/* Auto-save notice (permissions tab only) */}
-        {activeTab === "permissions" && (
+        {activeTab === "permissions" && saved && (
           <p style={{
             fontFamily: "var(--font-dm-sans)", fontSize: 12,
             color: saved ? "var(--gold, #C9A84C)" : "var(--text-muted, #aaa)",

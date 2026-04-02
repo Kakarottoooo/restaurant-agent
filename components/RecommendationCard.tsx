@@ -83,6 +83,13 @@ export default function RecommendationCard({
     fireTelemetry("reserve_click");
     try {
       const sessionId = localStorage.getItem("session_id") ?? crypto.randomUUID();
+      const savedProfile = JSON.parse(localStorage.getItem("booking_profile") ?? "{}");
+      const profile = {
+        first_name: savedProfile.first_name ?? "",
+        last_name: savedProfile.last_name ?? "",
+        email: savedProfile.email ?? "",
+        phone: savedProfile.phone ?? "",
+      };
       const startUrl =
         card.opentable_url ??
         `https://www.opentable.com/s?term=${encodeURIComponent(card.restaurant.name)}`;
@@ -94,7 +101,7 @@ export default function RecommendationCard({
         body: {
           startUrl,
           task: `Make a reservation at ${card.restaurant.name}. Fill in the contact information and stop at the payment or confirmation page without completing payment.`,
-          profile: { first_name: "", last_name: "", email: "", phone: "" },
+          profile,
         },
         fallbackUrl: startUrl,
         status: "pending",

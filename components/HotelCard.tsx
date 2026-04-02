@@ -19,6 +19,13 @@ export default function HotelCard({ card, index }: HotelCardProps) {
     setBooking(true);
     try {
       const sessionId = localStorage.getItem("session_id") ?? crypto.randomUUID();
+      const savedProfile = JSON.parse(localStorage.getItem("booking_profile") ?? "{}");
+      const profile = {
+        first_name: savedProfile.first_name ?? "",
+        last_name: savedProfile.last_name ?? "",
+        email: savedProfile.email ?? "",
+        phone: savedProfile.phone ?? "",
+      };
       const step = {
         type: "universal",
         emoji: "🏨",
@@ -27,7 +34,7 @@ export default function HotelCard({ card, index }: HotelCardProps) {
         body: {
           startUrl: hotel.booking_link,
           task: `Book a room at ${hotel.name}. Select the best available option and stop at the payment page without completing payment.`,
-          profile: { first_name: "", last_name: "", email: "", phone: "" },
+          profile,
         },
         fallbackUrl: hotel.booking_link,
         status: "pending",
