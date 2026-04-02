@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import type { BookingJob, BookingJobStep, DecisionLogEntry, AgentFeedbackStats } from "@/lib/db";
+import type { PolicyBias } from "@/lib/policy";
 import { AutonomySettingsModal } from "@/components/AutonomySettingsModal";
 
 function getSessionId(): string {
@@ -504,14 +505,20 @@ function ProgressBar({ value, color }: { value: number; color: string }) {
 function InsightsPanel({ sessionId }: { sessionId: string }) {
   const [open, setOpen] = useState(false);
   const [stats, setStats] = useState<AgentFeedbackStats | null>(null);
+  const [policy, setPolicy] = useState<PolicyBias | null>(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (!open || stats) return;
     setLoading(true);
-    fetch(`/api/booking-feedback?session_id=${encodeURIComponent(sessionId)}`)
-      .then((r) => r.json())
-      .then((d) => setStats(d.stats ?? null))
+    Promise.all([
+      fetch(`/api/booking-feedback?session_id=${encodeURIComponent(sessionId)}`).then((r) => r.json()),
+      fetch(`/api/policy?session_id=${encodeURIComponent(sessionId)}`).then((r) => r.json()),
+    ])
+      .then(([feedbackData, policyData]) => {
+        setStats(feedbackData.stats ?? null);
+        setPolicy(policyData.bias ?? null);
+      })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, [open, sessionId, stats]);
@@ -685,6 +692,112 @@ function InsightsPanel({ sessionId }: { sessionId: string }) {
                       <span style={{ fontFamily: "var(--font-dm-sans)", fontSize: 12, color: "rgba(220,38,38,0.75)", fontWeight: 600 }}>{v.overrides}× overridden</span>
                     </div>
                   ))}
+                </div>
+              )}
+
+              {/* ── What the agent has learned (policy) ── */}
+              {policy && policy.hasEnoughData && (
+                <div style={{ borderTop: "0.5px solid var(--border, #e5e7eb)", paddingTop: 16, display: "flex", flexDirection: "column", gap: 14 }}>
+                  <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 11, fontWeight: 700, color: "var(--gold, #D4A34B)", letterSpacing: "0.06em", textTransform: "uppercase" }}>
+                    What the agent has learned
+                  </p>
+
+                  {/* Personal tolerance */}
+                  {policy.personalTolerance && (
+                    <div>
+                      <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 11, fontWeight: 600, color: "var(--text-secondary, #666)", marginBottom: 6 }}>Your behavior profile</p>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                        {[
+                          {
+                            label: "Time adjustment tolerance",
+                            tolerance: policy.personalTolerance.timeAdjust,
+                            rate: policy.personalTolerance.timeAdjustRate,
+                            count: policy.personalTolerance.timeAdjustCount,
+                          },
+                          {
+                            label: "Venue switch tolerance",
+                            tolerance: policy.personalTolerance.venueSwitch,
+                            rate: policy.personalTolerance.venueSwitchRate,
+                            count: policy.personalTolerance.venueSwitchCount,
+                          },
+                        ].map(({ label, tolerance, rate, count }) => (
+                          <div key={label} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "4px 0" }}>
+                            <span style={{ fontFamily: "var(--font-dm-sans)", fontSize: 12, color: "var(--text-secondary, #666)" }}>{label}</span>
+                            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                              <span style={{ fontFamily: "var(--font-dm-sans)", fontSize: 10, color: "var(--text-muted, #aaa)" }}>{count > 0 ? `${Math.round(rate * 100)}%` : ""}</span>
+                              <span style={{
+                                fontFamily: "var(--font-dm-sans)", fontSize: 11, fontWeight: 600,
+                                color: tolerance === "liberal" ? "rgba(22,163,74,0.85)" : tolerance === "strict" ? "rgba(220,38,38,0.75)" : "var(--gold, #D4A34B)",
+                                background: tolerance === "liberal" ? "rgba(22,163,74,0.08)" : tolerance === "strict" ? "rgba(220,38,38,0.08)" : "rgba(212,163,75,0.1)",
+                                borderRadius: 6, padding: "2px 6px",
+                              }}>
+                                {tolerance}
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Provider preference order */}
+                  {policy.providerRanking.length > 0 && (
+                    <div>
+                      <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 11, fontWeight: 600, color: "var(--text-secondary, #666)", marginBottom: 6 }}>Provider preference order</p>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                        {policy.providerRanking.map((p) => (
+                          <div key={p.provider} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            <span style={{ fontFamily: "var(--font-dm-sans)", fontSize: 11, color: "var(--text-muted, #aaa)", width: 16, textAlign: "right", flexShrink: 0 }}>
+                              #{p.preferenceRank}
+                            </span>
+                            <span style={{ fontFamily: "var(--font-dm-sans)", fontSize: 12, color: "var(--text-secondary, #666)", flex: 1 }}>
+                              {PROVIDER_NAMES[p.provider] ?? p.provider}
+                            </span>
+                            <span style={{
+                              fontFamily: "var(--font-dm-sans)", fontSize: 11,
+                              color: p.score > 0 ? "rgba(22,163,74,0.85)" : p.score < 0 ? "rgba(220,38,38,0.75)" : "var(--text-muted, #aaa)",
+                              fontWeight: 600,
+                            }}>
+                              {p.score > 0 ? "+" : ""}{p.score.toFixed(1)}
+                            </span>
+                            <span style={{ fontFamily: "var(--font-dm-sans)", fontSize: 10, color: "var(--text-muted, #aaa)" }}>
+                              ({p.eventCount})
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Trusted venues */}
+                  {policy.topVenues.length > 0 && (
+                    <div>
+                      <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 11, fontWeight: 600, color: "var(--text-secondary, #666)", marginBottom: 6 }}>Venues agent tries first</p>
+                      {policy.topVenues.map((v) => (
+                        <div key={v.venueName} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "3px 0" }}>
+                          <span style={{ fontFamily: "var(--font-dm-sans)", fontSize: 12, color: "var(--text-secondary, #666)" }}>{v.venueName}</span>
+                          <span style={{ fontFamily: "var(--font-dm-sans)", fontSize: 11, color: "rgba(22,163,74,0.85)", fontWeight: 600 }}>
+                            +{v.score.toFixed(1)} trusted
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Flagged venues */}
+                  {policy.flaggedVenues.length > 0 && (
+                    <div>
+                      <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 11, fontWeight: 600, color: "var(--text-secondary, #666)", marginBottom: 6 }}>Venues deprioritized by agent</p>
+                      {policy.flaggedVenues.map((v) => (
+                        <div key={v.venueName} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "3px 0" }}>
+                          <span style={{ fontFamily: "var(--font-dm-sans)", fontSize: 12, color: "var(--text-secondary, #666)" }}>{v.venueName}</span>
+                          <span style={{ fontFamily: "var(--font-dm-sans)", fontSize: 11, color: "rgba(220,38,38,0.75)", fontWeight: 600 }}>
+                            {v.score.toFixed(1)} often overridden
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
             </div>

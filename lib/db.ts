@@ -912,6 +912,30 @@ export async function getAgentFeedbackStats(sessionId?: string): Promise<AgentFe
   };
 }
 
+export async function getAgentFeedbackEvents(
+  sessionId?: string,
+  limit = 500
+): Promise<AgentFeedbackEvent[]> {
+  await ensureAgentFeedbackTable();
+  const rows = sessionId
+    ? await sql<AgentFeedbackEvent>`
+        SELECT id, session_id, job_id, step_index, step_type, agent_decision,
+               venue_name, provider, outcome, metadata
+        FROM agent_feedback
+        WHERE session_id = ${sessionId}
+        ORDER BY created_at DESC
+        LIMIT ${limit}
+      `
+    : await sql<AgentFeedbackEvent>`
+        SELECT id, session_id, job_id, step_index, step_type, agent_decision,
+               venue_name, provider, outcome, metadata
+        FROM agent_feedback
+        ORDER BY created_at DESC
+        LIMIT ${limit}
+      `;
+  return rows.rows;
+}
+
 // ─── End Agent Feedback ────────────────────────────────────────────────────────
 
 // ─── End Booking Jobs ─────────────────────────────────────────────────────────

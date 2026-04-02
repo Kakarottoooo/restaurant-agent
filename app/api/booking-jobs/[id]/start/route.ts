@@ -28,6 +28,14 @@ import {
   Explain,
 } from "@/lib/autonomy";
 import type { AgentAutonomySettings } from "@/lib/autonomy";
+import {
+  computePolicyBias,
+  sortCandidatesByPolicy,
+  policyOrderExplanation,
+  toleranceNote,
+} from "@/lib/policy";
+import type { PolicyBias } from "@/lib/policy";
+import { getAgentFeedbackEvents } from "@/lib/db";
 import { sendPushNotification } from "@/lib/push";
 import type { PushSubscription } from "web-push";
 import type { AutopilotResult } from "@/lib/booking-autopilot/types";
@@ -58,6 +66,7 @@ async function callEndpoint(
 async function runStepWithRecovery(
   step: BookingJobStep,
   autonomy: AgentAutonomySettings,
+  policy: PolicyBias,
   onProgress: (s: BookingJobStep) => Promise<void>
 ): Promise<BookingJobStep> {
   const log: DecisionLogEntry[] = [];
@@ -117,7 +126,7 @@ async function runStepWithRecovery(
     }
   }
 
-  if (primaryData?.status === "done") {
+  if (primaryData && primaryData.status === "ready") {
     // Shouldn't reach here but type-safety guard
     return { ...current, status: "done", decisionLog: [...log] };
   }
@@ -127,6 +136,12 @@ async function runStepWithRecovery(
 
   if (step.type === "restaurant" && primaryData?.status === "no_availability" && baseTime) {
     const rawFallbacks = step.timeFallbacks ?? [];
+
+    // Personal tolerance note for time adjustments
+    if (policy.personalTolerance && rst.timeWindowMinutes > 0) {
+      const note = toleranceNote(policy.personalTolerance, "time_adjusted");
+      if (note) log.push({ ts: now(), type: "attempt", message: note });
+    }
 
     if (rst.timeWindowMinutes === 0) {
       log.push({ ts: now(), type: "skipped",
@@ -177,8 +192,26 @@ async function runStepWithRecovery(
   }
 
   // ── Phase 3: fallback candidates ──────────────────────────────────────
-  const candidates: FallbackCandidate[] = step.fallbackCandidates ?? [];
+  let candidates: FallbackCandidate[] = step.fallbackCandidates ?? [];
   const venueAllowed = step.type === "restaurant" ? rst.allowVenueSwitch : htl.allowAreaSwitch;
+
+  // Sort by policy score — best-trusted venue tried first
+  if (candidates.length > 1 && policy.hasEnoughData) {
+    candidates = sortCandidatesByPolicy(candidates, policy.venueScores);
+    candidates.forEach((c, i) => {
+      const score = policy.venueScores[c.label] ?? 0;
+      const explanation = policyOrderExplanation(c.label, score, i + 1);
+      if (score !== 0) {
+        log.push({ ts: now(), type: "attempt", message: explanation });
+      }
+    });
+  }
+
+  // Personal tolerance note — warn if behavior diverges from settings
+  if (policy.personalTolerance) {
+    const note = toleranceNote(policy.personalTolerance, "venue_switched");
+    if (note) log.push({ ts: now(), type: "attempt", message: note });
+  }
 
   if (candidates.length > 0 && !venueAllowed) {
     log.push({ ts: now(), type: "skipped",
@@ -276,6 +309,15 @@ export async function POST(_req: NextRequest, { params }: Params) {
   // Use the autonomy settings saved at job-creation time, fall back to defaults
   const autonomy: AgentAutonomySettings = job.autonomy_settings ?? DEFAULT_AUTONOMY;
 
+  // Load policy bias for this session — seeds candidate ordering and tolerance notes
+  let policy: PolicyBias;
+  try {
+    const events = await getAgentFeedbackEvents(job.session_id, 500);
+    policy = computePolicyBias(events);
+  } catch {
+    policy = computePolicyBias([]); // safe fallback — no bias applied
+  }
+
   await updateBookingJobStatus(id, "running");
 
   const steps: BookingJobStep[] = [...job.steps];
@@ -285,7 +327,7 @@ export async function POST(_req: NextRequest, { params }: Params) {
       steps[i] = updated;
       await updateBookingJobSteps(id, steps);
     };
-    steps[i] = await runStepWithRecovery(steps[i], autonomy, onProgress);
+    steps[i] = await runStepWithRecovery(steps[i], autonomy, policy, onProgress);
     await updateBookingJobSteps(id, steps);
   }
 
