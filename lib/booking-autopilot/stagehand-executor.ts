@@ -82,7 +82,7 @@ export async function runBrowserTask(
     // Stagehand tool-based agent uses SHORT model names (not "provider/model" prefix).
     // "provider/model" format is only for CUA mode.
     // Short names: "gpt-4o", "gemini-2.0-flash", "claude-sonnet-4-6" etc.
-    const modelName = input.agentModel?.model ?? "gpt-4o";
+    const modelName = input.agentModel?.model ?? "gpt-4o-2024-08-06";
     const modelApiKey = input.agentModel?.apiKey
       ?? (modelName.includes("gemini") || modelName.includes("google")
           ? (process.env.GEMINI_API_KEY ?? process.env.GOOGLE_GENERATIVE_AI_API_KEY ?? process.env.GOOGLE_API_KEY)

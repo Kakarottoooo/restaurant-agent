@@ -366,7 +366,7 @@ export interface AgentModelConfig {
 // Stagehand tool-based agent uses short model names (no "provider/" prefix)
 const MODEL_OPTIONS: { model: string; label: string; provider: string; hint: string }[] = [
   {
-    model: "gpt-4o",
+    model: "gpt-4o-2024-08-06",
     label: "GPT-4o",
     provider: "OpenAI",
     hint: "Best overall — strong vision & form-filling, widely supported",
