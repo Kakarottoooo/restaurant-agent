@@ -236,10 +236,38 @@ export default function DateNightPage() {
     <div style={{ minHeight: "100vh", background: "#0a0a0a", color: "#f5f0e8", fontFamily: "'DM Sans', sans-serif" }}>
 
       {/* ── Nav ── */}
-      <nav style={{ padding: "20px 32px", display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid #1a1a1a" }}>
-        <a href="/" style={{ color: "#C9A84C", fontWeight: 700, fontSize: 18, textDecoration: "none", letterSpacing: "0.02em" }}>
-          Onegent
-        </a>
+      <nav style={{ padding: "16px 32px", display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid #1a1a1a" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+          <a
+            href="/"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              color: "#666",
+              fontSize: 13,
+              textDecoration: "none",
+              padding: "6px 12px",
+              borderRadius: 8,
+              border: "1px solid #222",
+              background: "#111",
+              transition: "border-color 0.15s, color 0.15s",
+            }}
+            onMouseEnter={(e) => {
+              (e.currentTarget as HTMLElement).style.borderColor = "#C9A84C";
+              (e.currentTarget as HTMLElement).style.color = "#C9A84C";
+            }}
+            onMouseLeave={(e) => {
+              (e.currentTarget as HTMLElement).style.borderColor = "#222";
+              (e.currentTarget as HTMLElement).style.color = "#666";
+            }}
+          >
+            ← Home
+          </a>
+          <a href="/" style={{ color: "#C9A84C", fontWeight: 700, fontSize: 18, textDecoration: "none", letterSpacing: "0.02em" }}>
+            Onegent
+          </a>
+        </div>
         <a href="/trips" style={{ color: "#888", fontSize: 14, textDecoration: "none" }}>
           My bookings →
         </a>
