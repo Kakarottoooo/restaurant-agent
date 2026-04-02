@@ -1664,6 +1664,33 @@ export default function Home() {
                     </button>
                   ))}
                 </div>
+
+                {/* Date Night CTA */}
+                <a
+                  href="/date-night"
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 12,
+                    marginTop: 16,
+                    padding: "14px 18px",
+                    background: "linear-gradient(135deg, #1a1200 0%, #0d0a00 100%)",
+                    border: "1px solid #C9A84C44",
+                    borderRadius: 14,
+                    textDecoration: "none",
+                    maxWidth: 360,
+                  }}
+                >
+                  <span style={{ fontSize: 24 }}>🌙</span>
+                  <div>
+                    <p style={{ color: "#C9A84C", fontWeight: 700, fontSize: 14, marginBottom: 2 }}>
+                      Date Night Agent
+                    </p>
+                    <p style={{ color: "#888", fontSize: 12 }}>
+                      Plan, book, and monitor your whole evening →
+                    </p>
+                  </div>
+                </a>
               </div>
             ) : (
               <div className="flex flex-col gap-4">
