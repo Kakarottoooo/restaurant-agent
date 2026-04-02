@@ -3,6 +3,7 @@ import {
   buildGoogleHotelsUrl,
   buildBookingComUrl,
   buildGoogleFlightsUrl,
+  buildKayakFlightsUrl,
   buildOpenTableUrl,
 } from "../agent/planners/booking-links";
 
@@ -104,6 +105,54 @@ describe("buildGoogleFlightsUrl", () => {
   it("includes USD currency in deep link", () => {
     const url = buildGoogleFlightsUrl({ origin: "JFK", dest: "LAX", date: "2026-04-15" });
     expect(url).toContain("c:USD");
+  });
+});
+
+describe("buildKayakFlightsUrl", () => {
+  it("builds round-trip URL with all fields", () => {
+    const url = buildKayakFlightsUrl({
+      origin: "BNA",
+      dest: "LAX",
+      date: "2026-03-28",
+      returnDate: "2026-03-30",
+      passengers: 1,
+      cabinClass: "economy",
+    });
+    expect(url).toBe(
+      "https://www.kayak.com/flights/BNA-LAX/2026-03-28/2026-03-30/1adults/economy"
+    );
+  });
+
+  it("builds one-way URL when no returnDate", () => {
+    const url = buildKayakFlightsUrl({ origin: "JFK", dest: "ORD", date: "2026-05-01" });
+    expect(url).toBe(
+      "https://www.kayak.com/flights/JFK-ORD/2026-05-01/1adults/economy"
+    );
+  });
+
+  it("maps premium_economy to 'premium'", () => {
+    const url = buildKayakFlightsUrl({
+      origin: "LAX",
+      dest: "LHR",
+      date: "2026-06-01",
+      cabinClass: "premium_economy",
+    });
+    expect(url).toContain("/premium");
+  });
+
+  it("maps business cabin correctly", () => {
+    const url = buildKayakFlightsUrl({ origin: "JFK", dest: "CDG", date: "2026-07-01", cabinClass: "business" });
+    expect(url).toContain("/business");
+  });
+
+  it("includes passenger count in URL", () => {
+    const url = buildKayakFlightsUrl({ origin: "BNA", dest: "LAX", date: "2026-03-28", passengers: 2 });
+    expect(url).toContain("2adults");
+  });
+
+  it("falls back to route-only URL when no date", () => {
+    const url = buildKayakFlightsUrl({ origin: "BNA", dest: "LAX" });
+    expect(url).toBe("https://www.kayak.com/flights/BNA-LAX");
   });
 });
 

@@ -32,8 +32,9 @@ import {
 } from "./agent/planners/trip-card";
 import {
   buildBookingComUrl,
-  buildGoogleFlightsUrl,
+  buildKayakFlightsUrl,
   buildOpenTableUrl,
+  type GoogleFlightsOpts,
 } from "./agent/planners/booking-links";
 
 const DATE_NIGHT_REGEX =
@@ -262,6 +263,7 @@ export function runWeekendTripPlanner(params: {
   flightRecommendations: FlightRecommendationCard[];
   hotelRecommendations: HotelRecommendationCard[];
   creditCardRecommendations: CreditCardRecommendationCard[];
+  restaurantRecommendations?: RecommendationCard[];
   userMessage: string;
   outputLanguage: OutputLanguage;
 }): DecisionPlan | null {
@@ -288,6 +290,12 @@ export function runWeekendTripPlanner(params: {
     ),
   };
 
+  // Assign restaurants to tiers: top-rated for experience, mid for stable, any for value
+  const restaurants = params.restaurantRecommendations ?? [];
+  const r0 = restaurants[0];
+  const r1 = restaurants[1] ?? r0;
+  const r2 = restaurants[2] ?? r0;
+
   const optionMap = {
     stable: buildWeekendTripOption({
       id: "stable",
@@ -295,6 +303,7 @@ export function runWeekendTripPlanner(params: {
       scenarioIntent: params.scenarioIntent,
       flight: stablePair.flight,
       hotel: stablePair.hotel,
+      restaurant: r1,
       card: pickCardForSpend(params.creditCardRecommendations, estimateTripTotal(stablePair.flight, stablePair.hotel)),
       fallbackReason: pickLanguageCopy(params.outputLanguage, "Default if you want the least fragile itinerary.", "如果你想要最不容易出错的行程，就选这个。"),
       outputLanguage: params.outputLanguage,
@@ -305,6 +314,7 @@ export function runWeekendTripPlanner(params: {
       scenarioIntent: params.scenarioIntent,
       flight: valuePair.flight,
       hotel: valuePair.hotel,
+      restaurant: r2,
       card: pickCardForSpend(params.creditCardRecommendations, estimateTripTotal(valuePair.flight, valuePair.hotel)),
       fallbackReason: pickLanguageCopy(params.outputLanguage, "Use this if staying under budget matters more than polish.", "如果你更在意压住预算，而不是追求最顺滑的体验，就选这个。"),
       outputLanguage: params.outputLanguage,
@@ -315,6 +325,7 @@ export function runWeekendTripPlanner(params: {
       scenarioIntent: params.scenarioIntent,
       flight: experiencePair.flight,
       hotel: experiencePair.hotel,
+      restaurant: r0,
       card: pickCardForSpend(params.creditCardRecommendations, estimateTripTotal(experiencePair.flight, experiencePair.hotel)),
       fallbackReason: pickLanguageCopy(params.outputLanguage, "Use this if you are willing to spend a bit more for a smoother stay.", "如果你愿意多花一点，换更顺的行程和更舒服的入住体验，就选这个。"),
       outputLanguage: params.outputLanguage,
@@ -434,6 +445,13 @@ export function runWeekendTripPlanner(params: {
       experiencePair.hotel.hotel.id,
     ]),
     evidence_items: evidenceItems,
+    autopilot_context: {
+      city: params.scenarioIntent.destination_city,
+      departure_city: params.scenarioIntent.departure_city,
+      start_date: params.scenarioIntent.start_date,
+      end_date: params.scenarioIntent.end_date,
+      travelers: params.scenarioIntent.travelers,
+    },
   };
 }
 
@@ -827,6 +845,7 @@ function buildWeekendTripOption(params: {
   scenarioIntent: WeekendTripIntent;
   flight: FlightRecommendationCard;
   hotel: HotelRecommendationCard;
+  restaurant?: RecommendationCard;
   card?: CreditCardRecommendationCard;
   fallbackReason?: string;
   outputLanguage: OutputLanguage;
@@ -873,23 +892,29 @@ function buildWeekendTripOption(params: {
 
   const flightBookingUrl = (() => {
     const intent = params.scenarioIntent;
+    const flight = params.flight.flight;
+    // Prefer IATA codes from the actual flight result — they land more reliably
+    // in Google Flights than city names. Fall back to city names if IATA unavailable.
     const origin =
-      intent.departure_city ??
-      params.flight.flight.departure_airport ??
-      params.flight.flight.departure_city;
+      flight.departure_airport?.match(/^[A-Z]{3}$/)
+        ? flight.departure_airport
+        : (intent.departure_city ?? flight.departure_airport ?? flight.departure_city);
     const dest =
-      intent.destination_city ??
-      params.flight.flight.arrival_city ??
-      params.flight.flight.arrival_airport;
+      flight.arrival_airport?.match(/^[A-Z]{3}$/)
+        ? flight.arrival_airport
+        : (intent.destination_city ?? flight.arrival_airport ?? flight.arrival_city);
     if (origin && dest) {
-      return buildGoogleFlightsUrl({
+      const sharedOpts = {
         origin,
         dest,
         date: intent.start_date,
-        returnDate: intent.end_date,
-      });
+        returnDate: flight.is_round_trip !== false ? intent.end_date : undefined,
+        passengers: intent.travelers,
+        cabinClass: intent.cabin_class as GoogleFlightsOpts["cabinClass"],
+      };
+      return buildKayakFlightsUrl(sharedOpts);
     }
-    return params.flight.flight.booking_link;
+    return flight.booking_link;
   })();
 
   const secondaryActions: PlanLinkAction[] = [
@@ -971,6 +996,15 @@ function buildWeekendTripOption(params: {
         `${params.hotel.hotel.name}: ${params.hotel.price_summary || `$${params.hotel.hotel.price_per_night}/night`} near ${params.hotel.location_summary}.`,
         `${params.hotel.hotel.name}：${params.hotel.price_summary || `$${params.hotel.hotel.price_per_night}/晚`}，靠近 ${params.hotel.location_summary}。`
       ),
+      ...(params.restaurant
+        ? [
+            pickLanguageCopy(
+              params.outputLanguage,
+              `${params.restaurant.restaurant!.name} • ${params.restaurant.restaurant!.cuisine} • ${params.restaurant.restaurant!.price ?? "$$"} — ${params.restaurant.why_recommended}.`,
+              `${params.restaurant.restaurant!.name} · ${params.restaurant.restaurant!.cuisine} · ${params.restaurant.restaurant!.price ?? "$$"} — ${params.restaurant.why_recommended}。`
+            ),
+          ]
+        : []),
       cardLine,
     ],
     primary_action: {

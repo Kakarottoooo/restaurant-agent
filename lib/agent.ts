@@ -35,7 +35,7 @@ import { runFlightPipeline } from "./agent/pipelines/flight";
 import { gatherCandidates, rankAndExplain } from "./agent/pipelines/restaurant";
 import { parseWeekendTripIntent } from "./agent/parse/weekend-trip";
 import { parseCityTripIntent } from "./agent/parse/city-trip";
-import { buildWeekendTripFlightIntent, buildWeekendTripHotelIntent, buildWeekendTripCardIntent } from "./agent/planners/weekend-trip";
+import { buildWeekendTripFlightIntent, buildWeekendTripHotelIntent, buildWeekendTripCardIntent, buildWeekendTripRestaurantRequirements } from "./agent/planners/weekend-trip";
 import { buildCityTripHotelIntent, buildCityTripRestaurantRequirements, buildCityTripBarRequirements } from "./agent/planners/city-trip";
 import { buildDateNightFallbackIntent } from "./agent/planners/date-night";
 import { parseBigPurchaseIntent, runBigPurchasePlanner } from "./agent/planners/big-purchase";
@@ -265,22 +265,32 @@ export async function runAgent(
 
     const flightIntent = buildWeekendTripFlightIntent(scenarioIntent);
     const hotelIntent = buildWeekendTripHotelIntent(scenarioIntent);
+    const restaurantReqs = buildWeekendTripRestaurantRequirements(scenarioIntent);
 
-    // Run flight + hotel in parallel; flight is best-effort (SerpAPI can be slow)
-    // Flight: 20s cap (SerpAPI only). Hotel: 40s cap (SerpAPI ~5s + MiniMax ~15-25s).
+    // Run flight + hotel + restaurants in parallel; all are best-effort
+    // Flight: 20s cap. Hotel: 40s cap. Restaurants: 25s cap.
     const flightTimeout = new Promise<{ flightRecommendations: []; no_direct_available: false }>(
       (resolve) => setTimeout(() => resolve({ flightRecommendations: [], no_direct_available: false }), 20_000)
     );
     const hotelTimeout = new Promise<{ hotelRecommendations: []; suggested_refinements: [] }>(
       (resolve) => setTimeout(() => resolve({ hotelRecommendations: [], suggested_refinements: [] }), 40_000)
     );
-    const [flightResult, { hotelRecommendations }] = await Promise.all([
+    const restaurantTimeout = new Promise<{ cards: [] }>(
+      (resolve) => setTimeout(() => resolve({ cards: [] }), 25_000)
+    );
+    const [flightResult, { hotelRecommendations }, { cards: restaurantCards }] = await Promise.all([
       Promise.race([runFlightPipeline(flightIntent), flightTimeout])
         .catch(() => ({ flightRecommendations: [] as [], no_direct_available: false as const })),
       Promise.race([
         runHotelPipeline(hotelIntent, conversationHistory, scenarioIntent.destination_city ?? cityFullName),
         hotelTimeout,
       ]).catch(() => ({ hotelRecommendations: [] as [], suggested_refinements: [] as [] })),
+      Promise.race([
+        gatherCandidates(restaurantReqs, cityId, null, undefined)
+          .then((r) => rankAndExplain(restaurantReqs, r.restaurants, r.semanticSignals, conversationHistory, scenarioIntent.destination_city ?? cityFullName, sessionPreferences, profileContext, customWeights))
+          .then((cards) => ({ cards })),
+        restaurantTimeout,
+      ]).catch(() => ({ cards: [] as [] })),
     ]);
     const { flightRecommendations, no_direct_available } = flightResult;
 
@@ -353,6 +363,7 @@ export async function runAgent(
       flightRecommendations,
       hotelRecommendations,
       creditCardRecommendations,
+      restaurantRecommendations: Array.isArray(restaurantCards) ? restaurantCards as import("./types").RecommendationCard[] : [],
       userMessage,
       outputLanguage: queryContext.output_language,
     });
@@ -399,7 +410,7 @@ export async function runAgent(
     const decisionPlan = runCityTripPlanner({
       scenarioIntent,
       hotelRecommendations,
-      restaurantRecommendations: restaurantCards,
+      restaurantRecommendations: Array.isArray(restaurantCards) ? restaurantCards as import("./types").RecommendationCard[] : [],
       barRecommendations: barCards,
       outputLanguage: queryContext.output_language,
     });

@@ -172,6 +172,7 @@ export function runModularPlanner(params: {
     next_actions: buildDefaultActions(lang),
     evidence_card_ids: evidenceCardIds,
     evidence_items: evidenceItems,
+    ...(config.autopilot_context ? { autopilot_context: config.autopilot_context } : {}),
   };
 }
 

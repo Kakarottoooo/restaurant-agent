@@ -1,4 +1,4 @@
-import { WeekendTripIntent, FlightIntent, HotelIntent, CreditCardIntent } from "../../types";
+import { WeekendTripIntent, FlightIntent, HotelIntent, CreditCardIntent, UserRequirements } from "../../types";
 
 export function buildWeekendTripFlightIntent(
   scenarioIntent: WeekendTripIntent
@@ -75,5 +75,33 @@ export function buildWeekendTripCardIntent(
     prefer_no_annual_fee: budget < 750 ? "soft" : false,
     prefer_flat_rate: false,
     needs_spending_info: false,
+  };
+}
+
+/**
+ * Build restaurant requirements from a weekend trip intent.
+ * Honours explicit cuisine preferences from the user message (e.g. "Chinese food").
+ */
+export function buildWeekendTripRestaurantRequirements(
+  intent: WeekendTripIntent
+): UserRequirements {
+  const cuisine =
+    (intent.cuisine_preferences ?? []).length > 0
+      ? (intent.cuisine_preferences ?? []).join(", ")
+      : intent.hotel_style === "luxury" || intent.hotel_style === "boutique"
+      ? "fine dining"
+      : "popular local dining";
+
+  return {
+    cuisine,
+    location: intent.destination_city,
+    purpose: "dining",
+    atmosphere:
+      intent.hotel_style === "luxury"
+        ? ["upscale", "refined"]
+        : intent.trip_pace === "easy"
+        ? ["relaxed", "neighborhood"]
+        : ["popular", "well-reviewed"],
+    party_size: intent.travelers ?? 1,
   };
 }

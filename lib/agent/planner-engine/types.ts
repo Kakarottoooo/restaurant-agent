@@ -46,4 +46,13 @@ export interface EngineConfig {
   startDate?: string;
   /** Optional plan-level comparative summary passed through to DecisionPlan.tradeoff_summary. */
   tradeoff_summary?: string;
+  /** Context for booking autopilot — city/dates/travelers from the scenario intent. */
+  autopilot_context?: {
+    city?: string;
+    departure_city?: string;
+    start_date?: string;
+    end_date?: string;
+    travelers?: number;
+    time_hint?: string;
+  };
 }

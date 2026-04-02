@@ -1,4 +1,5 @@
 import { Restaurant, ReviewSignals, GoogleReview, Hotel, Flight, AfterDinnerVenue } from "./types";
+import { buildKayakFlightsUrl } from "./agent/planners/booking-links";
 
 // ─── Geocoding ────────────────────────────────────────────────────────────────
 
@@ -751,8 +752,14 @@ export async function searchFlights(params: {
 
       const price = Number(entry.price ?? 0);
 
-      // Build Google Flights booking link (pre-filled)
-      const bookingLink = `https://www.google.com/flights?hl=en#flt=${encodeURIComponent(depAirport)}.${encodeURIComponent(arrAirport)}.${params.date}`;
+      const bookingLink = buildKayakFlightsUrl({
+        origin: depAirport,
+        dest: arrAirport,
+        date: normalizedDate,
+        returnDate: params.is_round_trip && params.return_date ? params.return_date : undefined,
+        passengers: params.passengers ?? 1,
+        cabinClass: (params.cabin_class ?? "economy") as "economy" | "premium_economy" | "business" | "first",
+      });
 
       // Get airport coords for map arcs
       const depCoords = getAirportCoords(depAirport);

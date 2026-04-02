@@ -86,12 +86,30 @@ export interface SessionPreferences {
   refined_from_query_count: number;
 }
 
+/** A single preference signal discovered automatically from conversations. */
+export interface DiscoveredPreference {
+  id: string;                   // stable UUID for updates/removals
+  category: "dining" | "travel" | "hotels" | "shopping" | "general";
+  key: string;                  // machine key e.g. "noise_level", "cabin_class", "hotel_stars"
+  label: string;                // human label e.g. "Prefers quiet atmosphere"
+  value: string;                // raw value e.g. "quiet", "economy", "4"
+  seen_count: number;           // how many times this signal was observed
+  source: string;               // e.g. "From: 'romantic dinner, no chains'"
+  discovered_at: string;        // ISO timestamp of first discovery
+  updated_at: string;           // ISO timestamp of last update
+  user_confirmed?: boolean;     // user explicitly confirmed or edited this
+}
+
 export interface UserPreferenceProfile {
-  version: 1;
+  version: 2;
   updated_at: string; // ISO timestamp
+  // Auto-discovered from conversations (the primary preference store)
+  discovered: DiscoveredPreference[];
+  // Explicit dietary restrictions (still allow user to set these directly)
+  dietary_restrictions: string[];
+  // Legacy fields kept for backward-compat and formatProfileForPrompt
   noise_preference?: "quiet" | "moderate" | "lively";
   typical_budget_per_person?: number;
-  dietary_restrictions: string[];
   cuisine_dislikes: string[];
   always_exclude_chains: boolean;
   preferred_occasions: string[];
@@ -280,6 +298,15 @@ export interface DecisionPlan {
   trip_card_callout?: string;
   /** True when the planner found more than 2 backup options but capped the display at 2. */
   show_more_available?: boolean;
+  /** Context for booking autopilot — city/dates/travelers from the original scenario intent. */
+  autopilot_context?: {
+    city?: string;           // destination city
+    departure_city?: string; // origin city (for flights)
+    start_date?: string;     // YYYY-MM-DD (checkin / trip start)
+    end_date?: string;       // YYYY-MM-DD (checkout / trip end)
+    travelers?: number;
+    time_hint?: string;      // HH:MM preferred dining time
+  };
   /** True when this plan was shared in group-vote mode — enables vote UI on the share page. */
   vote_mode?: boolean;
   risks: string[];
@@ -402,6 +429,7 @@ export interface WeekendTripIntent extends BaseIntent {
   hotel_neighborhood?: string;
   cabin_class?: "economy" | "business" | "first";
   prefer_direct?: boolean | null;
+  cuisine_preferences?: string[];
   planning_assumptions: string[];
   needs_clarification: boolean;
   missing_fields: string[];

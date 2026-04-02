@@ -79,15 +79,20 @@ export function buildBookingComUrl(opts: BookingComOpts): string {
 }
 
 export interface GoogleFlightsOpts {
-  origin: string; // IATA airport code or city name
-  dest: string; // IATA airport code or city name
+  origin: string; // IATA airport code preferred (e.g. "BNA"), city name as fallback
+  dest: string; // IATA airport code preferred (e.g. "LAX"), city name as fallback
   date?: string; // YYYY-MM-DD (outbound)
-  returnDate?: string; // YYYY-MM-DD (return leg)
+  returnDate?: string; // YYYY-MM-DD (return leg) — omit for one-way
+  passengers?: number; // number of adult passengers (default 1)
+  cabinClass?: "economy" | "premium_economy" | "business" | "first";
 }
 
 /**
- * Build a Google Flights deep link pre-filled with origin, destination, and dates.
- * Uses the fragment-based format: #flt={legs};c:USD;e:1;sd:1;t:f
+ * Google Flights `#flt=` fragment format is deprecated — it only partially
+ * fills the search form (origin city only). Use buildKayakFlightsUrl instead
+ * for fully pre-filled searches.
+ *
+ * Kept for tests and as a fallback when IATA codes are unavailable.
  */
 export function buildGoogleFlightsUrl(opts: GoogleFlightsOpts): string {
   if (opts.date) {
@@ -95,12 +100,224 @@ export function buildGoogleFlightsUrl(opts: GoogleFlightsOpts): string {
     const leg2 = opts.returnDate
       ? `${opts.dest}.${opts.origin}.${opts.returnDate}`
       : "";
-    const flt = [leg1, leg2].filter(Boolean).join("*");
-    return `https://www.google.com/flights?hl=en#flt=${flt};c:USD;e:1;sd:1;t:f`;
+    const legs = [leg1, leg2].filter(Boolean).join("*");
+    return `https://www.google.com/flights?hl=en#flt=${legs};c:USD;e:1`;
   }
-  // Fallback when no date: plain search query
   const q = `Flights from ${opts.origin} to ${opts.dest}`;
   return `https://www.google.com/travel/flights?${new URLSearchParams({ q }).toString()}`;
+}
+
+/** Kayak cabin class URL segments */
+const KAYAK_CABIN: Record<string, string> = {
+  economy: "economy",
+  premium_economy: "premium",
+  business: "business",
+  first: "first",
+};
+
+/**
+ * Build a Kayak flight search URL fully pre-filled with origin, destination,
+ * dates, passenger count, and cabin class.
+ *
+ * Format (round trip):
+ *   https://www.kayak.com/flights/{ORIG}-{DEST}/{DEP_DATE}/{RET_DATE}/{N}adults/{cabin}
+ * Format (one way):
+ *   https://www.kayak.com/flights/{ORIG}-{DEST}/{DEP_DATE}/{N}adults/{cabin}
+ *
+ * Requires IATA airport codes (BNA, LAX, etc.).
+ * All fields land on a fully-filtered results page — user can go straight to booking.
+ */
+export function buildKayakFlightsUrl(opts: GoogleFlightsOpts): string {
+  const orig = opts.origin.toUpperCase();
+  const dest = opts.dest.toUpperCase();
+  const cabin = KAYAK_CABIN[opts.cabinClass ?? "economy"] ?? "economy";
+  const pax = opts.passengers ?? 1;
+
+  if (!opts.date) {
+    // No date — use search query fallback on Kayak explore page
+    return `https://www.kayak.com/flights/${orig}-${dest}`;
+  }
+
+  const paxPart = `${pax}adults`;
+  if (opts.returnDate) {
+    return `https://www.kayak.com/flights/${orig}-${dest}/${opts.date}/${opts.returnDate}/${paxPart}/${cabin}`;
+  }
+  return `https://www.kayak.com/flights/${orig}-${dest}/${opts.date}/${paxPart}/${cabin}`;
+}
+
+// ── Airline-specific deep links ──────────────────────────────────────────────
+
+export interface AirlineDeepLinkOpts {
+  airline: string;         // airline name as returned by SerpAPI (e.g. "Delta", "Southwest")
+  origin: string;          // IATA code (e.g. "BNA")
+  dest: string;            // IATA code (e.g. "LAX")
+  date?: string;           // YYYY-MM-DD outbound — returns null when missing
+  returnDate?: string;     // YYYY-MM-DD return (omit for one-way)
+  passengers?: number;     // adults (default 1)
+  cabinClass?: "economy" | "premium_economy" | "business" | "first";
+}
+
+/** Internal opts type where date is guaranteed present */
+type AirlineOpts = AirlineDeepLinkOpts & { date: string };
+
+/** Convert YYYY-MM-DD → MM/DD/YYYY for airlines that need US date format */
+function toMMDDYYYY(date: string): string {
+  const [y, m, d] = date.split("-");
+  return `${m}/${d}/${y}`;
+}
+
+function buildDeltaUrl(o: AirlineOpts): string {
+  // Delta cabin codes: MAIN_CABIN, COMFORTPLUS, FIRST, BUSINESS_FIRST
+  const cabin =
+    o.cabinClass === "first" ? "FIRST" :
+    o.cabinClass === "business" ? "BUSINESS_FIRST" :
+    o.cabinClass === "premium_economy" ? "COMFORTPLUS" :
+    "MAIN_CABIN";
+  const p: Record<string, string> = {
+    tripType: o.returnDate ? "ROUNDTRIP" : "ONEWAY",
+    cabin,
+    numberOfAdults: String(o.passengers ?? 1),
+    departureDate: toMMDDYYYY(o.date),
+    originCity: o.origin,
+    destinationCity: o.dest,
+  };
+  if (o.returnDate) p.returnDate = toMMDDYYYY(o.returnDate);
+  return `https://www.delta.com/us/en/book-a-flight/results?${new URLSearchParams(p)}`;
+}
+
+function buildUnitedUrl(o: AirlineOpts): string {
+  // United cabin param: Economy/Business/First; travel_class for seat type
+  const cabin =
+    o.cabinClass === "business" ? "Business" :
+    o.cabinClass === "first" ? "First" :
+    "Economy";
+  const p: Record<string, string> = {
+    f: o.origin,
+    t: o.dest,
+    d: o.date,
+    tt: o.returnDate ? "2" : "1", // 1=one-way, 2=round-trip
+    at: String(o.passengers ?? 1),
+    sc: cabin === "Business" ? "8" : cabin === "First" ? "5" : "7",
+    px: "1",
+    taxng: "1",
+    newHP: "True",
+    clm: "7",
+  };
+  if (o.returnDate) p.r = o.returnDate;
+  return `https://www.united.com/en/us/fsr/choose-flights?${new URLSearchParams(p)}`;
+}
+
+function buildSouthwestUrl(o: AirlineOpts): string {
+  const p: Record<string, string> = {
+    adultPassengersCount: String(o.passengers ?? 1),
+    departureDate: o.date,
+    destinationAirportCode: o.dest,
+    originationAirportCode: o.origin,
+    fareType: "USD",
+    tripType: o.returnDate ? "roundtrip" : "oneway",
+    returnOrOneWay: o.returnDate ? "round-trip" : "point-to-point",
+  };
+  if (o.returnDate) p.returnDate = o.returnDate;
+  return `https://www.southwest.com/air/booking/?${new URLSearchParams(p)}`;
+}
+
+function buildAmericanUrl(o: AirlineOpts): string {
+  const cabin =
+    o.cabinClass === "business" ? "B" :
+    o.cabinClass === "first" ? "F" :
+    o.cabinClass === "premium_economy" ? "W" : "Y";
+  const p: Record<string, string> = {
+    locale: "en_US",
+    "passengers[0].type": "ADT",
+    "passengers[0].count": String(o.passengers ?? 1),
+    "segments[0].origin": o.origin,
+    "segments[0].destination": o.dest,
+    "segments[0].travelDate": o.date,
+    tripType: o.returnDate ? "R" : "O",
+    awardBooking: "false",
+    cabin,
+  };
+  if (o.returnDate) {
+    p["segments[1].origin"] = o.dest;
+    p["segments[1].destination"] = o.origin;
+    p["segments[1].travelDate"] = o.returnDate;
+  }
+  return `https://www.aa.com/booking/find-flights?${new URLSearchParams(p)}`;
+}
+
+function buildFrontierUrl(o: AirlineOpts): string {
+  // Frontier class: 1=economy, 2=stretch
+  const cls = o.cabinClass === "premium_economy" || o.cabinClass === "business" ? "2" : "1";
+  if (o.returnDate) {
+    const p = { language: "en", mode: "rt", from: o.origin, to: o.dest,
+      adl: String(o.passengers ?? 1), inf: "0", cld: "0",
+      startDate: o.date, endDate: o.returnDate, class: cls };
+    return `https://booking.flyfrontier.com/flight/search?${new URLSearchParams(p)}`;
+  }
+  const p = { language: "en", mode: "ow", from: o.origin, to: o.dest,
+    adl: String(o.passengers ?? 1), inf: "0", cld: "0", startDate: o.date, class: cls };
+  return `https://booking.flyfrontier.com/flight/search?${new URLSearchParams(p)}`;
+}
+
+function buildJetBlueUrl(o: AirlineOpts): string {
+  // JetBlue class: Y=economy (Blue), W=Even More Space, C=Mint (business)
+  const cls =
+    o.cabinClass === "business" ? "C" :
+    o.cabinClass === "premium_economy" ? "W" : "Y";
+  const p: Record<string, string> = {
+    from: o.origin, to: o.dest, depart: o.date,
+    adults: String(o.passengers ?? 1), children: "0", infants: "0",
+    cabinclass: cls, action: "findFlights",
+  };
+  if (o.returnDate) { p.return = o.returnDate; p.isMultiCity = "false"; }
+  return `https://book.jetblue.com/B6.cgi?${new URLSearchParams(p)}`;
+}
+
+function buildSpiritUrl(o: AirlineOpts): string {
+  const p: Record<string, string> = {
+    c1: o.origin, c2: o.dest, dd1: o.date,
+    mon: String(o.passengers ?? 1), inf: "0", chd: "0",
+    cat: o.returnDate ? "RT" : "OW",
+  };
+  if (o.returnDate) p.dd2 = o.returnDate;
+  return `https://www.spirit.com/book?${new URLSearchParams(p)}`;
+}
+
+function buildAlaskaUrl(o: AirlineOpts): string {
+  const cabin =
+    o.cabinClass === "business" || o.cabinClass === "first" ? "first" : "coach";
+  const p: Record<string, string> = {
+    type: o.returnDate ? "roundTrip" : "oneWay",
+    origin: o.origin, destination: o.dest,
+    departureDate: o.date,
+    adults: String(o.passengers ?? 1), children: "0", infants: "0",
+    cabin,
+  };
+  if (o.returnDate) p.returnDate = o.returnDate;
+  return `https://www.alaskaair.com/booking/choose-flights/1?${new URLSearchParams(p)}`;
+}
+
+/**
+ * Build the deepest possible airline-specific booking link for a known carrier.
+ * The returned URL lands on that airline's own flight search results page,
+ * pre-filtered to the exact route, date, cabin class, and passenger count.
+ * User just selects their specific departure time and clicks checkout.
+ *
+ * Returns null for unknown airlines (caller should fall back to buildKayakFlightsUrl).
+ */
+export function buildAirlineDeepLink(opts: AirlineDeepLinkOpts): string | null {
+  if (!opts.date) return null; // can't deep-link without a departure date
+  const o = opts as AirlineDeepLinkOpts & { date: string };
+  const name = opts.airline.toLowerCase();
+  if (name.includes("delta"))     return buildDeltaUrl(o);
+  if (name.includes("united"))    return buildUnitedUrl(o);
+  if (name.includes("southwest")) return buildSouthwestUrl(o);
+  if (name.includes("american"))  return buildAmericanUrl(o);
+  if (name.includes("frontier"))  return buildFrontierUrl(o);
+  if (name.includes("jetblue"))   return buildJetBlueUrl(o);
+  if (name.includes("spirit"))    return buildSpiritUrl(o);
+  if (name.includes("alaska"))    return buildAlaskaUrl(o);
+  return null;
 }
 
 export interface OpenTableOpts {

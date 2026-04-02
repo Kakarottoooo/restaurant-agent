@@ -90,6 +90,12 @@ export function buildCityTripEngineConfig(
     briefLines: buildBriefLines(intent, lang),
     nights,
     startDate: intent.start_date,
+    autopilot_context: {
+      city: intent.destination_city,
+      start_date: intent.start_date,
+      end_date: intent.end_date,
+      travelers: intent.travelers,
+    },
     tradeoff_summary: pickLanguageCopy(
       lang,
       "Upscale is the default: best hotel quality and refined dining. Trendy trades polish for social energy. Local vibe skips tourist traps for an authentic neighborhood feel.",
