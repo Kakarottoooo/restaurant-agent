@@ -556,17 +556,22 @@ export async function ensureBookingJobsTable(): Promise<void> {
     bookingJobsTableReady = (async () => {
       await sql`
         CREATE TABLE IF NOT EXISTS booking_jobs (
-          id           TEXT PRIMARY KEY,
-          session_id   TEXT NOT NULL,
-          user_id      TEXT,
-          trip_label   TEXT NOT NULL,
-          status       TEXT NOT NULL DEFAULT 'pending',
-          steps        JSONB NOT NULL DEFAULT '[]',
-          created_at   TIMESTAMPTZ DEFAULT NOW(),
-          updated_at   TIMESTAMPTZ DEFAULT NOW(),
-          completed_at TIMESTAMPTZ
+          id                TEXT PRIMARY KEY,
+          session_id        TEXT NOT NULL,
+          user_id           TEXT,
+          trip_label        TEXT NOT NULL,
+          status            TEXT NOT NULL DEFAULT 'pending',
+          steps             JSONB NOT NULL DEFAULT '[]',
+          autonomy_settings JSONB,
+          created_at        TIMESTAMPTZ DEFAULT NOW(),
+          updated_at        TIMESTAMPTZ DEFAULT NOW(),
+          completed_at      TIMESTAMPTZ
         )
       `;
+      // Migrate existing tables that pre-date this column
+      await sql`
+        ALTER TABLE booking_jobs ADD COLUMN IF NOT EXISTS autonomy_settings JSONB
+      `.catch(() => {});
       await sql`CREATE INDEX IF NOT EXISTS booking_jobs_session_idx ON booking_jobs (session_id)`;
       await sql`CREATE INDEX IF NOT EXISTS booking_jobs_user_idx ON booking_jobs (user_id) WHERE user_id IS NOT NULL`;
     })().catch((err) => {
@@ -650,6 +655,8 @@ export interface BookingJob {
   trip_label: string;
   status: "pending" | "running" | "done" | "failed";
   steps: BookingJobStep[];
+  /** User-configured autonomy settings at the time this job was created. */
+  autonomy_settings: import("./autonomy").AgentAutonomySettings | null;
   created_at: string;
   updated_at: string;
   completed_at: string | null;
@@ -661,12 +668,14 @@ export async function createBookingJob(params: {
   userId?: string | null;
   tripLabel: string;
   steps: BookingJobStep[];
+  autonomySettings?: import("./autonomy").AgentAutonomySettings | null;
 }): Promise<BookingJob> {
   await ensureBookingJobsTable();
   const stepsJson = JSON.stringify(params.steps);
+  const autonomyJson = params.autonomySettings ? JSON.stringify(params.autonomySettings) : null;
   const result = await sql<BookingJob>`
-    INSERT INTO booking_jobs (id, session_id, user_id, trip_label, status, steps)
-    VALUES (${params.id}, ${params.sessionId}, ${params.userId ?? null}, ${params.tripLabel}, 'pending', ${stepsJson}::jsonb)
+    INSERT INTO booking_jobs (id, session_id, user_id, trip_label, status, steps, autonomy_settings)
+    VALUES (${params.id}, ${params.sessionId}, ${params.userId ?? null}, ${params.tripLabel}, 'pending', ${stepsJson}::jsonb, ${autonomyJson}::jsonb)
     RETURNING *
   `;
   return result.rows[0];

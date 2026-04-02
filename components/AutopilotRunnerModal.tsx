@@ -3,6 +3,8 @@
 import { useState, useEffect } from "react";
 import type { AutopilotResult } from "../lib/booking-autopilot/types";
 import { ConnectAccountsModal } from "./ConnectAccountsModal";
+import { AutonomySettingsModal } from "./AutonomySettingsModal";
+import { loadAutonomySettings } from "@/lib/autonomy";
 
 export interface BookableFallbackCandidate {
   label: string;
@@ -44,13 +46,15 @@ export function AutopilotRunnerModal({ open, steps, tripLabel, onClose }: Props)
   const [stepStates, setStepStates] = useState<StepState[]>([]);
   const [allDone, setAllDone] = useState(false);
   const [connectOpen, setConnectOpen] = useState(false);
+  const [autonomyOpen, setAutonomyOpen] = useState(false);
   const [bgJobId, setBgJobId] = useState<string | null>(null);
   const [bgSent, setBgSent] = useState(false);
 
   // Send job to background (server-side execution)
   async function sendToBackground() {
     const sessionId = localStorage.getItem("session_id") ?? crypto.randomUUID();
-    // Create the job
+    const autonomySettings = loadAutonomySettings();
+    // Create the job — include autonomy settings so the worker knows the boundaries
     const res = await fetch("/api/booking-jobs", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -58,6 +62,7 @@ export function AutopilotRunnerModal({ open, steps, tripLabel, onClose }: Props)
         session_id: sessionId,
         trip_label: tripLabel ?? "My Trip",
         steps,
+        autonomy_settings: autonomySettings,
       }),
     });
     const data = await res.json();
@@ -189,6 +194,23 @@ export function AutopilotRunnerModal({ open, steps, tripLabel, onClose }: Props)
           </span>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <button
+              onClick={() => setAutonomyOpen(true)}
+              title="Agent permissions"
+              style={{
+                background: "none",
+                border: "0.5px solid var(--border, #e5e7eb)",
+                borderRadius: 8,
+                padding: "4px 10px",
+                fontFamily: "var(--font-dm-sans)",
+                fontSize: 11,
+                color: "var(--text-secondary, #666)",
+                cursor: "pointer",
+                whiteSpace: "nowrap",
+              }}
+            >
+              ⚙ Permissions
+            </button>
+            <button
               onClick={() => setConnectOpen(true)}
               style={{
                 background: "none",
@@ -213,8 +235,9 @@ export function AutopilotRunnerModal({ open, steps, tripLabel, onClose }: Props)
           </div>
         </div>
 
-        {/* Connect accounts modal (nested) */}
+        {/* Nested modals */}
         <ConnectAccountsModal open={connectOpen} onClose={() => setConnectOpen(false)} />
+        <AutonomySettingsModal open={autonomyOpen} onClose={() => setAutonomyOpen(false)} />
 
         {/* Body */}
         <div style={{ flex: 1, overflowY: "auto", padding: "20px" }}>

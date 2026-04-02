@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import type { BookingJob, BookingJobStep, DecisionLogEntry, AgentFeedbackStats } from "@/lib/db";
+import { AutonomySettingsModal } from "@/components/AutonomySettingsModal";
 
 function getSessionId(): string {
   if (typeof window === "undefined") return "";
@@ -699,6 +700,7 @@ function InsightsPanel({ sessionId }: { sessionId: string }) {
 export default function TripsPage() {
   const [jobs, setJobs] = useState<BookingJob[]>([]);
   const [loading, setLoading] = useState(true);
+  const [autonomyOpen, setAutonomyOpen] = useState(false);
   const sessionId = typeof window !== "undefined" ? getSessionId() : "";
 
   const loadJobs = useCallback(async () => {
@@ -755,14 +757,25 @@ export default function TripsPage() {
             {loading ? "Loading…" : jobs.length === 0 ? "No trips yet" : `${jobs.length} trip${jobs.length === 1 ? "" : "s"}`}
           </p>
         </div>
-        <button onClick={() => window.history.back()} style={{
-          background: "none", border: "0.5px solid var(--border, #e5e7eb)",
-          borderRadius: 8, padding: "6px 12px", fontFamily: "var(--font-dm-sans)",
-          fontSize: 12, color: "var(--text-secondary, #666)", cursor: "pointer",
-        }}>
-          ← Back
-        </button>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button onClick={() => setAutonomyOpen(true)} style={{
+            background: "none", border: "0.5px solid var(--border, #e5e7eb)",
+            borderRadius: 8, padding: "6px 12px", fontFamily: "var(--font-dm-sans)",
+            fontSize: 12, color: "var(--text-secondary, #666)", cursor: "pointer",
+            whiteSpace: "nowrap",
+          }}>
+            ⚙ Permissions
+          </button>
+          <button onClick={() => window.history.back()} style={{
+            background: "none", border: "0.5px solid var(--border, #e5e7eb)",
+            borderRadius: 8, padding: "6px 12px", fontFamily: "var(--font-dm-sans)",
+            fontSize: 12, color: "var(--text-secondary, #666)", cursor: "pointer",
+          }}>
+            ← Back
+          </button>
+        </div>
       </div>
+      <AutonomySettingsModal open={autonomyOpen} onClose={() => setAutonomyOpen(false)} />
 
       <div style={{ padding: "16px", display: "flex", flexDirection: "column", gap: 12, maxWidth: 620, margin: "0 auto" }}>
         {!loading && jobs.length === 0 && (

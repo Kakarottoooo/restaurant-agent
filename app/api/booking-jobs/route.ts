@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createBookingJob, getBookingJobsBySession } from "@/lib/db";
 import type { BookingJobStep } from "@/lib/db";
+import type { AgentAutonomySettings } from "@/lib/autonomy";
 import { auth } from "@clerk/nextjs/server";
 import { randomUUID } from "crypto";
 
@@ -10,6 +11,7 @@ export async function POST(req: NextRequest) {
   const sessionId = typeof body?.session_id === "string" ? body.session_id : null;
   const tripLabel = typeof body?.trip_label === "string" ? body.trip_label : "My Trip";
   const steps: BookingJobStep[] = Array.isArray(body?.steps) ? body.steps : [];
+  const autonomySettings: AgentAutonomySettings | null = body?.autonomy_settings ?? null;
 
   if (!sessionId) {
     return NextResponse.json({ error: "session_id required" }, { status: 400 });
@@ -21,7 +23,6 @@ export async function POST(req: NextRequest) {
   const { userId } = await auth();
   const jobId = randomUUID();
 
-  // Mark all steps as pending initially
   const initialSteps: BookingJobStep[] = steps.map((s) => ({ ...s, status: "pending" }));
 
   const job = await createBookingJob({
@@ -30,6 +31,7 @@ export async function POST(req: NextRequest) {
     userId: userId ?? null,
     tripLabel,
     steps: initialSteps,
+    autonomySettings,
   });
 
   return NextResponse.json({ jobId: job.id, status: job.status });

@@ -2,17 +2,17 @@
  * POST /api/booking-jobs/[id]/start
  *
  * Long-running endpoint (up to 5 min) that executes autopilot steps
- * sequentially with full in-task decision-making:
+ * sequentially. Every autonomous decision is:
+ *   1. Controlled by the user's AgentAutonomySettings (stored in the job)
+ *   2. Logged with an explanation that cites the relevant setting
  *
- * Per step:
- *  1. Try primary   (up to 3 attempts with 2s/5s backoff on transient error)
- *  2. If restaurant + no_availability: auto-try timeFallbacks (±30, ±60, ±90 min)
- *     — the agent picks the best adjacent time on the user's behalf
- *  3. Try each fallbackCandidate venue (1 attempt each)
- *  4. If candidate is a restaurant + no_availability: also try its timeFallbacks
- *  5. All failed → actionItem with manual booking links, continue to next step
- *
- * Every decision is logged in step.decisionLog for the task view.
+ * Recovery order per step:
+ *   1. Try primary (up to 3 attempts, 2s/5s backoff on transient error)
+ *   2. If restaurant + no_availability + timeWindowMinutes > 0:
+ *      try filtered timeFallbacks, citing the window setting in each log entry
+ *   3. If allowVenueSwitch (hotel/restaurant): try each fallbackCandidate
+ *      — restaurant candidates also get their own time-filtered fallbacks
+ *   4. All failed → actionItem + explanatory message, continue to next step
  */
 import { NextRequest, NextResponse } from "next/server";
 import {
@@ -21,30 +21,27 @@ import {
   updateBookingJobSteps,
   getPushSubscriptionsBySession,
 } from "@/lib/db";
-import type {
-  BookingJobStep,
-  FallbackCandidate,
-  DecisionLogEntry,
-} from "@/lib/db";
+import type { BookingJobStep, FallbackCandidate, DecisionLogEntry } from "@/lib/db";
+import {
+  DEFAULT_AUTONOMY,
+  filterTimeFallbacks,
+  Explain,
+} from "@/lib/autonomy";
+import type { AgentAutonomySettings } from "@/lib/autonomy";
 import { sendPushNotification } from "@/lib/push";
 import type { PushSubscription } from "web-push";
 import type { AutopilotResult } from "@/lib/booking-autopilot/types";
 
-export const maxDuration = 300; // 5 minutes
+export const maxDuration = 300;
 
 type Params = { params: Promise<{ id: string }> };
 
 const BASE_URL = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
 
-function now(): string {
-  return new Date().toISOString();
-}
+function now() { return new Date().toISOString(); }
+function sleep(ms: number) { return new Promise<void>((r) => setTimeout(r, ms)); }
 
-function sleep(ms: number) {
-  return new Promise<void>((resolve) => setTimeout(resolve, ms));
-}
-
-async function callAutopilotEndpoint(
+async function callEndpoint(
   endpoint: string,
   body: Record<string, unknown>
 ): Promise<AutopilotResult> {
@@ -56,294 +53,228 @@ async function callAutopilotEndpoint(
   return res.json() as Promise<AutopilotResult>;
 }
 
-/**
- * Try one specific body payload against the autopilot endpoint.
- * Returns { data, log } — data is the API result, log is the entry to append.
- */
-async function tryOnce(
-  endpoint: string,
-  body: Record<string, unknown>,
-  logMessage: string
-): Promise<{ data: AutopilotResult | null; entry: DecisionLogEntry }> {
-  try {
-    const data = await callAutopilotEndpoint(endpoint, body);
-    const outcome =
-      data.status === "ready"
-        ? "Booked ✓"
-        : data.status === "no_availability"
-        ? "No availability"
-        : data.error ?? "Error";
-    return {
-      data,
-      entry: {
-        ts: now(),
-        type: data.status === "ready" ? "succeeded" : data.status === "no_availability" ? "skipped" : "failed",
-        message: logMessage,
-        outcome,
-      },
-    };
-  } catch (err) {
-    return {
-      data: null,
-      entry: {
-        ts: now(),
-        type: "failed",
-        message: logMessage,
-        outcome: err instanceof Error ? err.message : "Network error",
-      },
-    };
-  }
-}
-
-/**
- * Try a venue+body with optional time fallbacks.
- * Returns the first successful result, or null if all fail.
- * Appends to `log` for every attempt made.
- */
-async function tryWithTimeFallbacks(
-  endpoint: string,
-  baseBody: Record<string, unknown>,
-  primaryLabel: string,
-  timeFallbacks: string[] | undefined,
-  log: DecisionLogEntry[]
-): Promise<AutopilotResult | null> {
-  // Primary time
-  const primaryTime = typeof baseBody.time === "string" ? baseBody.time : undefined;
-  const primaryMessage =
-    primaryTime && baseBody.restaurant_name
-      ? `Tried ${baseBody.restaurant_name} at ${primaryTime}`
-      : primaryLabel;
-
-  const { data, entry } = await tryOnce(endpoint, baseBody, primaryMessage);
-  log.push(entry);
-
-  if (data?.status === "ready") return data;
-
-  // Only try time fallbacks for no_availability (not transient errors)
-  if (data?.status === "no_availability" && timeFallbacks?.length) {
-    for (const altTime of timeFallbacks) {
-      const altBody = { ...baseBody, time: altTime };
-      const altMessage = baseBody.restaurant_name
-        ? `Agent adjusted to ${altTime} at ${baseBody.restaurant_name}`
-        : `Trying ${altTime}`;
-      const { data: altData, entry: altEntry } = await tryOnce(endpoint, altBody, altMessage);
-      altEntry.type = altData?.status === "ready" ? "succeeded" : "time_adjusted";
-      log.push(altEntry);
-      if (altData?.status === "ready") return altData;
-    }
-  }
-
-  return null;
-}
+// ── Core recovery engine ───────────────────────────────────────────────────
 
 async function runStepWithRecovery(
   step: BookingJobStep,
-  onProgress: (updated: BookingJobStep) => Promise<void>
+  autonomy: AgentAutonomySettings,
+  onProgress: (s: BookingJobStep) => Promise<void>
 ): Promise<BookingJobStep> {
-  const RETRY_DELAYS = [0, 2000, 5000];
   const log: DecisionLogEntry[] = [];
-  let current = { ...step, attemptCount: 0, decisionLog: log };
+  const RETRY_DELAYS = [0, 2000, 5000];
+  let current: BookingJobStep = { ...step, attemptCount: 0, decisionLog: log };
 
-  // ── Phase 1: primary, up to 3 attempts with backoff ──────────────────
-  let primarySucceeded = false;
+  const rst = autonomy.restaurant;
+  const htl = autonomy.hotel;
+
+  // ── Phase 1: primary, up to 3 attempts ──────────────────────────────────
   let primaryData: AutopilotResult | null = null;
 
   for (let attempt = 0; attempt < RETRY_DELAYS.length; attempt++) {
     if (attempt > 0) {
       await sleep(RETRY_DELAYS[attempt]);
       log.push({
-        ts: now(),
-        type: "retry",
-        message: `Retrying… (attempt ${attempt + 1} of ${RETRY_DELAYS.length})`,
+        ts: now(), type: "retry",
+        message: Explain.retry(attempt + 1, RETRY_DELAYS.length, current.error ?? "error"),
       });
     }
 
-    current = {
-      ...current,
-      status: "loading",
-      attemptCount: (current.attemptCount ?? 0) + 1,
-    };
+    current = { ...current, status: "loading", attemptCount: (current.attemptCount ?? 0) + 1 };
     await onProgress({ ...current, decisionLog: [...log] });
 
     try {
-      const data = await callAutopilotEndpoint(step.apiEndpoint, step.body);
+      const data = await callEndpoint(step.apiEndpoint, step.body);
+      primaryData = data;
 
       if (data.status === "ready") {
-        const primaryTime =
-          typeof step.body.time === "string" ? step.body.time : undefined;
-        log.push({
-          ts: now(),
-          type: "succeeded",
-          message: primaryTime
-            ? `Booked ${step.label} at ${primaryTime}`
-            : `Booked ${step.label}`,
-          outcome: "Booked ✓",
-        });
-        primarySucceeded = true;
-        primaryData = data;
-        break;
+        const timeStr = typeof step.body.time === "string" ? ` at ${step.body.time}` : "";
+        log.push({ ts: now(), type: "succeeded",
+          message: Explain.timeTry(step.label, typeof step.body.time === "string" ? step.body.time : ""),
+          outcome: "Booked ✓" });
+        return { ...current, status: "done", handoff_url: data.handoff_url,
+          selected_time: data.selected_time, usedFallback: false, timeAdjusted: false,
+          decisionLog: [...log] };
       }
 
       if (data.status === "no_availability") {
-        const primaryTime =
-          typeof step.body.time === "string" ? ` at ${step.body.time}` : "";
-        log.push({
-          ts: now(),
-          type: "skipped",
-          message: `Tried ${step.label}${primaryTime}`,
-          outcome: "No availability",
-        });
-        primaryData = data;
-        break; // no_availability = don't retry same time
+        const baseTime = typeof step.body.time === "string" ? step.body.time : "";
+        log.push({ ts: now(), type: "skipped",
+          message: Explain.timeTry(step.label, baseTime),
+          outcome: "No availability" });
+        break; // don't retry no_availability — go to time fallbacks
       }
 
-      // transient error → loop to retry
-      log.push({
-        ts: now(),
-        type: "attempt",
-        message: `Tried ${step.label}`,
-        outcome: data.error ?? "Error",
-      });
-      primaryData = data;
+      log.push({ ts: now(), type: "attempt",
+        message: Explain.timeTry(step.label, typeof step.body.time === "string" ? step.body.time : ""),
+        outcome: data.error ?? "Error" });
+      current = { ...current, error: data.error };
     } catch (err) {
-      log.push({
-        ts: now(),
-        type: "attempt",
-        message: `Tried ${step.label}`,
-        outcome: err instanceof Error ? err.message : "Network error",
-      });
+      const errMsg = err instanceof Error ? err.message : "Network error";
+      log.push({ ts: now(), type: "attempt",
+        message: Explain.timeTry(step.label, ""),
+        outcome: errMsg });
+      current = { ...current, error: errMsg };
     }
   }
 
-  if (primarySucceeded && primaryData) {
-    return {
-      ...current,
-      status: "done",
-      handoff_url: primaryData.handoff_url,
-      selected_time: primaryData.selected_time,
-      usedFallback: false,
-      timeAdjusted: false,
-      decisionLog: [...log],
-    };
+  if (primaryData?.status === "done") {
+    // Shouldn't reach here but type-safety guard
+    return { ...current, status: "done", decisionLog: [...log] };
   }
 
-  // ── Phase 2: time fallbacks (restaurants only) ───────────────────────
-  if (
-    step.type === "restaurant" &&
-    primaryData?.status === "no_availability" &&
-    step.timeFallbacks?.length
-  ) {
-    current = { ...current, status: "loading" };
-    await onProgress({ ...current, decisionLog: [...log] });
+  // ── Phase 2: time fallbacks (restaurants) ─────────────────────────────
+  const baseTime = typeof step.body.time === "string" ? step.body.time : "";
 
-    for (const altTime of step.timeFallbacks) {
-      const altBody = { ...step.body, time: altTime };
-      const altMessage = `Agent adjusted to ${altTime} at ${step.label}`;
-      const { data: altData, entry: altEntry } = await tryOnce(
-        step.apiEndpoint,
-        altBody,
-        altMessage
-      );
-      altEntry.type = altData?.status === "ready" ? "succeeded" : "time_adjusted";
-      log.push(altEntry);
+  if (step.type === "restaurant" && primaryData?.status === "no_availability" && baseTime) {
+    const rawFallbacks = step.timeFallbacks ?? [];
 
+    if (rst.timeWindowMinutes === 0) {
+      log.push({ ts: now(), type: "skipped",
+        message: Explain.noTimeAdjustmentAllowed(step.label, baseTime),
+        outcome: "Time adjustment is off" });
+    } else {
+      const allowed = filterTimeFallbacks(baseTime, rawFallbacks, rst);
+
+      // Log times that were filtered out by settings
+      const blocked = rawFallbacks.filter((t) => !allowed.includes(t));
+      for (const t of blocked) {
+        const tMin = toMin(t);
+        const baseMin = toMin(baseTime);
+        const diff = Math.abs(tMin - baseMin);
+        const reason: "window" | "latest" | "earliest" =
+          diff > rst.timeWindowMinutes ? "window" :
+          tMin > toMin(rst.latestTimeHHMM) ? "latest" : "earliest";
+        log.push({ ts: now(), type: "skipped",
+          message: Explain.timeAdjustedBlocked(step.label, baseTime, t, reason),
+          outcome: `Blocked by your settings` });
+      }
+
+      for (const altTime of allowed) {
+        current = { ...current, status: "loading" };
+        await onProgress({ ...current, decisionLog: [...log] });
+
+        log.push({ ts: now(), type: "time_adjusted",
+          message: Explain.timeAdjusted(step.label, baseTime, altTime, rst.timeWindowMinutes) });
+
+        try {
+          const data = await callEndpoint(step.apiEndpoint, { ...step.body, time: altTime });
+          const lastEntry = log[log.length - 1];
+          lastEntry.outcome = data.status === "ready" ? "Booked ✓" : data.error ?? "No availability";
+          lastEntry.type = data.status === "ready" ? "succeeded" : "time_adjusted";
+
+          await onProgress({ ...current, decisionLog: [...log] });
+
+          if (data.status === "ready") {
+            return { ...current, status: "done", handoff_url: data.handoff_url,
+              selected_time: data.selected_time, timeAdjusted: true, usedFallback: false,
+              decisionLog: [...log] };
+          }
+        } catch (err) {
+          log[log.length - 1].outcome = err instanceof Error ? err.message : "Error";
+        }
+      }
+    }
+  }
+
+  // ── Phase 3: fallback candidates ──────────────────────────────────────
+  const candidates: FallbackCandidate[] = step.fallbackCandidates ?? [];
+  const venueAllowed = step.type === "restaurant" ? rst.allowVenueSwitch : htl.allowAreaSwitch;
+
+  if (candidates.length > 0 && !venueAllowed) {
+    log.push({ ts: now(), type: "skipped",
+      message: Explain.venueSwitchBlocked(step.label),
+      outcome: "Venue switching is off" });
+  } else {
+    for (const candidate of candidates) {
+      current = { ...current, status: "loading" };
+      log.push({ ts: now(), type: "venue_switched",
+        message: Explain.venueSwitched(step.label, candidate.label) });
       await onProgress({ ...current, decisionLog: [...log] });
 
-      if (altData?.status === "ready") {
-        return {
-          ...current,
-          status: "done",
-          handoff_url: altData.handoff_url,
-          selected_time: altData.selected_time,
-          usedFallback: false,
-          timeAdjusted: true,
-          decisionLog: [...log],
-        };
+      try {
+        const data = await callEndpoint(step.apiEndpoint, candidate.body);
+        log[log.length - 1].outcome = data.status === "ready" ? "Booked ✓" :
+          data.status === "no_availability" ? "No availability" : (data.error ?? "Error");
+
+        await onProgress({ ...current, decisionLog: [...log] });
+
+        if (data.status === "ready") {
+          return { ...current, label: candidate.label, status: "done",
+            handoff_url: data.handoff_url, selected_time: data.selected_time,
+            usedFallback: true, decisionLog: [...log] };
+        }
+
+        // Also try time fallbacks for restaurant candidates
+        if (step.type === "restaurant" && data.status === "no_availability" &&
+            rst.timeWindowMinutes > 0) {
+          const candTime = typeof candidate.body.time === "string" ? candidate.body.time : baseTime;
+          const candFallbacks = filterTimeFallbacks(candTime, step.timeFallbacks ?? [], rst);
+
+          for (const altTime of candFallbacks) {
+            log.push({ ts: now(), type: "time_adjusted",
+              message: Explain.timeAdjusted(candidate.label, candTime, altTime, rst.timeWindowMinutes) });
+
+            try {
+              const altData = await callEndpoint(step.apiEndpoint, { ...candidate.body, time: altTime });
+              log[log.length - 1].outcome = altData.status === "ready" ? "Booked ✓" : (altData.error ?? "No availability");
+              log[log.length - 1].type = altData.status === "ready" ? "succeeded" : "time_adjusted";
+
+              await onProgress({ ...current, decisionLog: [...log] });
+
+              if (altData.status === "ready") {
+                return { ...current, label: candidate.label, status: "done",
+                  handoff_url: altData.handoff_url, selected_time: altData.selected_time,
+                  usedFallback: true, timeAdjusted: true, decisionLog: [...log] };
+              }
+            } catch { /* continue */ }
+          }
+        }
+      } catch (err) {
+        log[log.length - 1].outcome = err instanceof Error ? err.message : "Error";
       }
     }
   }
 
-  // ── Phase 3: fallback candidates (alternative venues) ────────────────
-  const candidates: FallbackCandidate[] = step.fallbackCandidates ?? [];
-  for (const candidate of candidates) {
-    current = {
-      ...current,
-      status: "loading",
-    };
-    await onProgress({ ...current, decisionLog: [...log] });
-
-    log.push({
-      ts: now(),
-      type: "venue_switched",
-      message: `Switching to alternative: ${candidate.label}`,
-    });
-
-    const successData = await tryWithTimeFallbacks(
-      step.apiEndpoint,
-      candidate.body,
-      candidate.label,
-      step.type === "restaurant" ? step.timeFallbacks : undefined,
-      log
-    );
-
-    await onProgress({ ...current, decisionLog: [...log] });
-
-    if (successData) {
-      return {
-        ...current,
-        status: "done",
-        label: candidate.label,
-        handoff_url: successData.handoff_url,
-        selected_time: successData.selected_time,
-        usedFallback: true,
-        decisionLog: [...log],
-      };
-    }
-  }
-
-  // ── Phase 4: all failed — build actionItem ────────────────────────────
-  log.push({
-    ts: now(),
-    type: "failed",
-    message: "All automatic options exhausted",
-    outcome: "Needs your attention",
-  });
+  // ── Phase 4: all failed — actionItem ──────────────────────────────────
+  const triedCount = 1 + (step.timeFallbacks?.length ?? 0) + candidates.length;
+  log.push({ ts: now(), type: "failed",
+    message: Explain.allFailed(step.label, triedCount),
+    outcome: "Needs your attention" });
 
   const manualOptions = [
     { label: step.label, url: step.fallbackUrl },
     ...candidates.map((c) => ({ label: c.label, url: c.fallbackUrl })),
   ].filter((o) => o.url);
 
-  const actionItem =
-    manualOptions.length > 0
-      ? {
-          message:
-            manualOptions.length === 1
-              ? "Auto-booking failed. Tap to complete manually:"
-              : "Auto-booking failed. Choose one of these to book manually:",
-          options: manualOptions,
-        }
-      : undefined;
-
   return {
     ...current,
     status: "error",
     handoff_url: step.fallbackUrl,
-    actionItem,
+    actionItem: manualOptions.length > 0
+      ? {
+          message: manualOptions.length === 1
+            ? "Auto-booking failed. Tap to complete manually:"
+            : "Auto-booking failed. Choose one of these to book manually:",
+          options: manualOptions,
+        }
+      : undefined,
     decisionLog: [...log],
   };
 }
+
+// ── Route handler ──────────────────────────────────────────────────────────
 
 export async function POST(_req: NextRequest, { params }: Params) {
   const { id } = await params;
 
   const job = await getBookingJob(id);
-  if (!job) {
-    return NextResponse.json({ error: "Job not found" }, { status: 404 });
-  }
+  if (!job) return NextResponse.json({ error: "Job not found" }, { status: 404 });
   if (job.status === "running" || job.status === "done") {
     return NextResponse.json({ error: "Job already started" }, { status: 409 });
   }
+
+  // Use the autonomy settings saved at job-creation time, fall back to defaults
+  const autonomy: AgentAutonomySettings = job.autonomy_settings ?? DEFAULT_AUTONOMY;
 
   await updateBookingJobStatus(id, "running");
 
@@ -354,8 +285,7 @@ export async function POST(_req: NextRequest, { params }: Params) {
       steps[i] = updated;
       await updateBookingJobSteps(id, steps);
     };
-
-    steps[i] = await runStepWithRecovery(steps[i], onProgress);
+    steps[i] = await runStepWithRecovery(steps[i], autonomy, onProgress);
     await updateBookingJobSteps(id, steps);
   }
 
@@ -363,33 +293,24 @@ export async function POST(_req: NextRequest, { params }: Params) {
   const finalStatus = doneCount > 0 ? "done" : "failed";
   await updateBookingJobStatus(id, finalStatus, new Date());
 
-  // ── Push notification ──────────────────────────────────────────────────
+  // ── Push notification ────────────────────────────────────────────────
   try {
     const subscriptions = await getPushSubscriptionsBySession(job.session_id);
     const needsAttention = steps.filter((s) => s.actionItem).length;
-    const timeAdjusted = steps.filter((s) => s.timeAdjusted).length;
-    const usedFallback = steps.filter((s) => s.usedFallback).length;
+    const adjusted = steps.filter((s) => s.timeAdjusted || s.usedFallback).length;
 
-    let title: string;
-    let body: string;
-
+    let title: string, body: string;
     if (doneCount === steps.length) {
-      const adjustNote =
-        timeAdjusted > 0 || usedFallback > 0
-          ? ` (agent made ${timeAdjusted + usedFallback} smart adjustment${timeAdjusted + usedFallback > 1 ? "s" : ""})`
-          : "";
+      const note = adjusted > 0 ? ` (${adjusted} smart adjustment${adjusted > 1 ? "s" : ""})` : "";
       title = "✈ Your trip is ready to book!";
-      body = `All ${steps.length} bookings pre-filled${adjustNote} — tap to open and pay.`;
+      body = `All ${steps.length} bookings pre-filled${note} — tap to open and pay.`;
     } else if (doneCount > 0 && needsAttention > 0) {
-      const doneEmojis = steps
-        .filter((s) => s.status === "done")
-        .map((s) => s.emoji)
-        .join(" ");
-      title = `${doneEmojis} Partially booked — action needed`;
-      body = `${doneCount} of ${steps.length} ready. ${needsAttention} step${needsAttention > 1 ? "s need" : " needs"} your attention.`;
+      const emojis = steps.filter((s) => s.status === "done").map((s) => s.emoji).join(" ");
+      title = `${emojis} Partially booked — action needed`;
+      body = `${doneCount}/${steps.length} ready. ${needsAttention} step${needsAttention > 1 ? "s need" : " needs"} your decision.`;
     } else if (doneCount > 0) {
       title = "Trip booking update";
-      body = `${doneCount} of ${steps.length} bookings pre-filled — tap to see.`;
+      body = `${doneCount}/${steps.length} bookings pre-filled — tap to see.`;
     } else {
       title = "Trip booking needs attention";
       body = "Autopilot couldn't complete any steps. Tap to book manually.";
@@ -397,16 +318,17 @@ export async function POST(_req: NextRequest, { params }: Params) {
 
     await Promise.allSettled(
       subscriptions.map((sub) =>
-        sendPushNotification(sub.push_subscription as PushSubscription, {
-          title,
-          body,
-          url: "/trips",
-        })
+        sendPushNotification(sub.push_subscription as PushSubscription, { title, body, url: "/trips" })
       )
     );
-  } catch {
-    // Push failure never blocks job completion
-  }
+  } catch { /* push failure never blocks */ }
 
   return NextResponse.json({ jobId: id, status: finalStatus, steps });
+}
+
+// ── Utility ────────────────────────────────────────────────────────────────
+
+function toMin(hhmm: string): number {
+  const [h, m] = hhmm.split(":").map(Number);
+  return (h ?? 0) * 60 + (m ?? 0);
 }
