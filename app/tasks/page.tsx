@@ -251,52 +251,131 @@ function diagnoseFail(step: BookingJobStep): { reason: string; suggestion: strin
   };
 }
 
-function NeedsHelpCard({ step, onManualLink }: {
+function NeedsHelpCard({ step, onManualLink, jobId, stepIndex, onRefresh }: {
   step: BookingJobStep;
   onManualLink: (label: string, url: string, idx: number) => void;
+  jobId: string;
+  stepIndex: number;
+  onRefresh?: () => void;
 }) {
   const { reason, suggestion, chatPrompt } = diagnoseFail(step);
-  const encodedPrompt = encodeURIComponent(chatPrompt);
+  const [input, setInput] = useState(chatPrompt);
+  const [reply, setReply] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [retryNow, setRetryNow] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  async function send() {
+    const msg = input.trim();
+    if (!msg || loading) return;
+    setLoading(true);
+    setReply("");
+    setRetryNow(false);
+    try {
+      const res = await fetch("/api/agent-chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: msg, stepLabel: step.label, failReason: reason }),
+      });
+      const data = await res.json();
+      setReply(data.reply ?? "");
+      setRetryNow(!!data.retryNow);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleRetryNow() {
+    await fetch(`/api/booking-jobs/${jobId}/schedule-retry`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ stepIndex, retryAfter: null, resetStatus: true }),
+    }).catch(() => {});
+    fetch(`/api/booking-jobs/${jobId}/start`, { method: "POST" }).catch(() => {});
+    setTimeout(() => onRefresh?.(), 800);
+  }
 
   return (
     <div style={{ borderTop: "0.5px solid rgba(220,38,38,0.15)", backgroundColor: "rgba(220,38,38,0.03)" }}>
+
       {/* What happened */}
-      <div style={{ padding: "12px 14px 0" }}>
+      <div style={{ padding: "12px 14px 8px" }}>
         <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 12, fontWeight: 700, color: "rgba(185,28,28,0.85)", marginBottom: 4 }}>
           What happened
         </p>
-        <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 12, color: "var(--text-secondary, #666)", lineHeight: 1.6, marginBottom: 8 }}>
-          {reason}
-        </p>
-        <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 11, color: "var(--text-muted, #aaa)", lineHeight: 1.5, marginBottom: 12 }}>
-          {suggestion}
+        <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 12, color: "var(--text-secondary, #666)", lineHeight: 1.6 }}>
+          {reason} {suggestion}
         </p>
       </div>
 
-      {/* Primary CTA: continue in chat */}
-      <div style={{ padding: "0 14px 12px", display: "flex", flexDirection: "column", gap: 8 }}>
-        <a href={`/?q=${encodedPrompt}`} style={{
-          display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-          padding: "10px 14px", borderRadius: 10,
-          backgroundColor: "var(--gold, #C9A84C)", textDecoration: "none",
-          fontFamily: "var(--font-dm-sans)", fontSize: 13, fontWeight: 700, color: "#fff",
-        }}>
-          <span>💬</span>
-          <span>Continue in chat</span>
-        </a>
+      {/* Inline chat */}
+      <div style={{ padding: "0 14px 14px" }}>
 
-        {/* Manual fallbacks */}
+        {/* Agent reply bubble */}
+        {reply && (
+          <div style={{
+            backgroundColor: "var(--card, #fff)", borderRadius: 12,
+            border: "0.5px solid var(--border, #e5e7eb)",
+            padding: "10px 13px", marginBottom: 10,
+            fontFamily: "var(--font-dm-sans)", fontSize: 13,
+            color: "var(--text-primary, #111)", lineHeight: 1.6,
+          }}>
+            <span style={{ fontSize: 14, marginRight: 6 }}>🤖</span>{reply}
+          </div>
+        )}
+
+        {/* Retry button if agent says to */}
+        {retryNow && (
+          <button onClick={handleRetryNow} style={{
+            width: "100%", padding: "9px 0", borderRadius: 10, marginBottom: 10,
+            border: "none", backgroundColor: "var(--gold, #C9A84C)",
+            color: "#fff", fontFamily: "var(--font-dm-sans)", fontSize: 13,
+            fontWeight: 700, cursor: "pointer",
+          }}>
+            ↺ Retry now
+          </button>
+        )}
+
+        {/* Input row */}
+        <div style={{
+          display: "flex", gap: 8, alignItems: "flex-end",
+          backgroundColor: "var(--card, #fff)", borderRadius: 14,
+          border: "0.5px solid var(--border, #e5e7eb)",
+          padding: "8px 10px",
+        }}>
+          <textarea
+            ref={textareaRef}
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
+            rows={2}
+            style={{
+              flex: 1, border: "none", outline: "none", resize: "none",
+              fontFamily: "var(--font-dm-sans)", fontSize: 13,
+              color: "var(--text-primary, #111)", backgroundColor: "transparent",
+              lineHeight: 1.5,
+            }}
+          />
+          <button onClick={send} disabled={loading || !input.trim()} style={{
+            flexShrink: 0, width: 32, height: 32, borderRadius: 8, border: "none",
+            backgroundColor: loading || !input.trim() ? "var(--border, #e5e7eb)" : "var(--gold, #C9A84C)",
+            color: "#fff", cursor: loading || !input.trim() ? "default" : "pointer",
+            fontSize: 15, display: "flex", alignItems: "center", justifyContent: "center",
+            transition: "background 0.2s",
+          }}>
+            {loading ? "…" : "↑"}
+          </button>
+        </div>
+
+        {/* Manual booking fallback */}
         {step.actionItem?.options.map((opt, j) => (
           <button key={j} onClick={() => onManualLink(opt.label, opt.url, j)} style={{
-            padding: "8px 14px", borderRadius: 10,
-            border: "0.5px solid var(--border, #e5e7eb)",
-            background: "transparent",
-            color: "var(--text-secondary, #666)",
-            fontFamily: "var(--font-dm-sans)", fontSize: 12,
-            cursor: "pointer", textAlign: "left", display: "flex", gap: 8, alignItems: "center",
+            width: "100%", marginTop: 8, padding: "7px 12px", borderRadius: 10,
+            border: "0.5px solid var(--border, #e5e7eb)", background: "transparent",
+            color: "var(--text-muted, #aaa)", fontFamily: "var(--font-dm-sans)",
+            fontSize: 11, cursor: "pointer", textAlign: "left",
           }}>
-            <span style={{ color: "var(--text-muted, #aaa)" }}>↗</span>
-            <span>Book manually: {opt.label}</span>
+            ↗ Book manually: {opt.label}
           </button>
         ))}
       </div>
@@ -554,7 +633,13 @@ function StepCard({ step, stepIndex, jobId, onRefresh }: {
 
       {/* Action item — needs help card */}
       {step.actionItem && (
-        <NeedsHelpCard step={step} onManualLink={handleManualLink} />
+        <NeedsHelpCard
+          step={step}
+          onManualLink={handleManualLink}
+          jobId={jobId}
+          stepIndex={stepIndex}
+          onRefresh={onRefresh}
+        />
       )}
 
       {/* Human intervention banner — awaiting_confirmation or needs_login */}
