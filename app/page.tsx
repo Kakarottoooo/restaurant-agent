@@ -1486,6 +1486,23 @@ export default function Home() {
                     >
                       {tn.preferences}
                     </button>
+                    <a
+                      href="/permissions"
+                      onClick={() => setAccountMenuOpen(false)}
+                      style={{
+                        display: "block",
+                        width: "100%",
+                        textAlign: "left",
+                        padding: "8px 14px",
+                        fontFamily: "var(--font-dm-sans)",
+                        fontSize: "13px",
+                        color: "var(--text-primary)",
+                        textDecoration: "none",
+                        borderTop: "0.5px solid var(--border)",
+                      }}
+                    >
+                      {tn.permissions}
+                    </a>
 
                     {/* Language picker */}
                     <div style={{ borderTop: "0.5px solid var(--border)" }}>

@@ -8,6 +8,8 @@
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
+export type AutopilotLevel = "ask" | "smart" | "full";
+
 export interface RestaurantAutonomy {
   /** Max minutes the agent may shift the booking time in either direction.
    *  0 = never adjust time automatically. */
@@ -18,52 +20,82 @@ export interface RestaurantAutonomy {
   latestTimeHHMM: string;
   /** Agent will never book earlier than this time (24h "HH:MM"). */
   earliestTimeHHMM: string;
+  /** Max % over stated budget the agent may book. 0 = strictly no over-budget. */
+  budgetFlexPct: 0 | 5 | 10 | 20;
+  /** If true, agent only considers indoor venues. */
+  requireIndoor: boolean;
 }
 
 export interface HotelAutonomy {
   /** Max % over stated budget the agent may book.
    *  0 = strictly no over-budget. */
-  budgetFlexPct: 0 | 10 | 20;
+  budgetFlexPct: 0 | 5 | 10 | 20;
   /** If true, agent may switch to a hotel in the same city but different area. */
   allowAreaSwitch: boolean;
+  /** If true, agent may search in a broader region when local options fail. */
+  allowCrossRegion: boolean;
   /** Agent will refuse hotels rated below this on a 0–5 scale. */
   minStarRating: 0 | 3 | 3.5 | 4 | 4.5;
+  /** If true, agent only considers hotels with parking. */
+  requireParking: boolean;
 }
 
 export interface FlightAutonomy {
   /** Max minutes the agent may shift departure time in either direction.
    *  0 = never adjust departure. */
-  departureFlexMinutes: 0 | 60 | 120;
+  departureFlexMinutes: 0 | 60 | 120 | 180;
   /** If true, agent may try 1-stop options when no direct flights are available. */
   allowLayover: boolean;
   /** If true, agent may try nearby airports (e.g. JFK ↔ LGA ↔ EWR). */
   allowAlternateAirport: boolean;
 }
 
+export interface ActivityAutonomy {
+  /** Max minutes the agent may shift the activity time in either direction. */
+  timeWindowMinutes: 0 | 30 | 60 | 90;
+  /** If true, agent may switch to a backup activity venue when the primary fails. */
+  allowVenueSwitch: boolean;
+  /** If true, agent only considers indoor activities. */
+  requireIndoor: boolean;
+}
+
 export interface AgentAutonomySettings {
+  /** How much the agent does autonomously before checking in with the user. */
+  autopilot: AutopilotLevel;
   restaurant: RestaurantAutonomy;
   hotel: HotelAutonomy;
   flight: FlightAutonomy;
+  activity: ActivityAutonomy;
 }
 
 // ── Defaults ───────────────────────────────────────────────────────────────
 
 export const DEFAULT_AUTONOMY: AgentAutonomySettings = {
+  autopilot: "smart",
   restaurant: {
     timeWindowMinutes: 60,
     allowVenueSwitch: true,
     latestTimeHHMM: "22:00",
     earliestTimeHHMM: "11:00",
+    budgetFlexPct: 0,
+    requireIndoor: false,
   },
   hotel: {
     budgetFlexPct: 10,
     allowAreaSwitch: true,
+    allowCrossRegion: false,
     minStarRating: 3,
+    requireParking: false,
   },
   flight: {
     departureFlexMinutes: 60,
     allowLayover: false,
     allowAlternateAirport: false,
+  },
+  activity: {
+    timeWindowMinutes: 60,
+    allowVenueSwitch: true,
+    requireIndoor: false,
   },
 };
 
@@ -78,9 +110,11 @@ export function loadAutonomySettings(): AgentAutonomySettings {
     if (!raw) return DEFAULT_AUTONOMY;
     const saved = JSON.parse(raw) as Partial<AgentAutonomySettings>;
     return {
+      autopilot: saved.autopilot ?? DEFAULT_AUTONOMY.autopilot,
       restaurant: { ...DEFAULT_AUTONOMY.restaurant, ...saved.restaurant },
       hotel: { ...DEFAULT_AUTONOMY.hotel, ...saved.hotel },
       flight: { ...DEFAULT_AUTONOMY.flight, ...saved.flight },
+      activity: { ...DEFAULT_AUTONOMY.activity, ...saved.activity },
     };
   } catch {
     return DEFAULT_AUTONOMY;

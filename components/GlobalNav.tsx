@@ -128,6 +128,22 @@ export default function GlobalNav({ active }: Props) {
           );
         })}
 
+        {/* Settings link */}
+        <a
+          href="/permissions"
+          title={t.nav.permissions}
+          style={{
+            display: "flex", alignItems: "center", justifyContent: "center",
+            width: 32, height: 32, borderRadius: 8, marginLeft: 4,
+            border: active === "other" ? "1px solid var(--gold, #C9A84C)" : "0.5px solid var(--border, #e5e7eb)",
+            color: active === "other" ? "var(--gold, #C9A84C)" : "var(--text-secondary, #666)",
+            textDecoration: "none", fontSize: 15,
+            backgroundColor: active === "other" ? "rgba(201,168,76,0.07)" : "transparent",
+          }}
+        >
+          ⚙
+        </a>
+
         {/* Language picker */}
         <div style={{ position: "relative", marginLeft: 4 }}>
           <button
