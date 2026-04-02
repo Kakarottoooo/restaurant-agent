@@ -37,6 +37,8 @@ interface UseChatParams {
   profileContext?: string;
   learnedWeights?: LearnedWeights | null;
   onSubscriptionIntent?: (intent: SubscriptionIntent) => void;
+  // Called after every complete agent response with the parsed intent/requirements
+  onAgentResponse?: (requirements: Record<string, unknown>, userMessage: string) => void;
   userId?: string | null;
 }
 
@@ -48,6 +50,7 @@ export function useChat({
   profileContext,
   learnedWeights,
   onSubscriptionIntent,
+  onAgentResponse,
   userId,
 }: UseChatParams) {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -316,6 +319,10 @@ export function useChat({
                 const outputLanguage: OutputLanguage = event.output_language ?? "en";
                 if (event.request_id) {
                   latestRequestIdRef.current = String(event.request_id);
+                }
+                // Fire onAgentResponse callback for preference learning
+                if (onAgentResponse && event.requirements) {
+                  onAgentResponse(event.requirements as Record<string, unknown>, text);
                 }
                 setResultCategory(category);
                 setResultMode(mode);
@@ -727,7 +734,7 @@ export function useChat({
         setLoadingStep(-1);
       }
     },
-    [loading, isNearMe, cityId, gpsCoords, nearLocation, profileContext, sessionPreferences, learnedWeights, onSubscriptionIntent, trackScenarioEvent, userId, getTelemetrySessionId]
+    [loading, isNearMe, cityId, gpsCoords, nearLocation, profileContext, sessionPreferences, learnedWeights, onSubscriptionIntent, onAgentResponse, trackScenarioEvent, userId, getTelemetrySessionId]
   );
 
   const autoSearchFired = useRef(false);
@@ -738,10 +745,20 @@ export function useChat({
   useEffect(() => {
     if (autoSearchFired.current) return;
     const q = new URLSearchParams(window.location.search).get("q");
-    if (q) {
-      autoSearchFired.current = true;
-      sendMessageRef.current(q);
+    if (!q) return;
+    // Only auto-fire if the user hasn't already seen results for this query
+    // in this tab session. Prevents re-running on back-navigation.
+    const ssKey = `auto_search_done:${q}`;
+    if (sessionStorage.getItem(ssKey)) {
+      // Query already ran — strip the param from URL so it's clean
+      const clean = new URL(window.location.href);
+      clean.searchParams.delete("q");
+      window.history.replaceState({}, "", clean.toString());
+      return;
     }
+    autoSearchFired.current = true;
+    sessionStorage.setItem(ssKey, "1");
+    sendMessageRef.current(q);
   }, []);
 
   function swapDecisionPlanOption(optionId: string) {
