@@ -71,6 +71,7 @@ export function useChat({
   const [isStreaming, setIsStreaming] = useState(false);
   const [suggestedRefinements, setSuggestedRefinements] = useState<string[]>([]);
   const [allHotelCards, setAllHotelCards] = useState<HotelRecommendationCard[]>([]);
+  const [hotelDates, setHotelDates] = useState<{ check_in?: string; check_out?: string; guests?: number } | null>(null);
   const [allFlightCards, setAllFlightCards] = useState<FlightRecommendationCard[]>([]);
   const [allCreditCardCards, setAllCreditCardCards] = useState<CreditCardRecommendationCard[]>([]);
   const [allLaptopCards, setAllLaptopCards] = useState<LaptopRecommendationCard[]>([]);
@@ -194,6 +195,7 @@ export function useChat({
       setViewMode("list");
       setSuggestedRefinements([]);
       setAllHotelCards([]);
+      setHotelDates(null);
       setAllFlightCards([]);
       setAllCreditCardCards([]);
       setAllLaptopCards([]);
@@ -534,6 +536,13 @@ export function useChat({
                   }
                 } else if (category === "hotel") {
                   const hotelRecs: HotelRecommendationCard[] = event.hotelRecommendations ?? [];
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  const hIntent = (event.requirements ?? {}) as any;
+                  setHotelDates({
+                    check_in: hIntent.check_in ?? hIntent.start_date,
+                    check_out: hIntent.check_out ?? hIntent.end_date,
+                    guests: hIntent.guests ?? hIntent.travelers,
+                  });
 
                   if (hotelRecs.length === 0) {
                     setMessages((prev) => [
@@ -848,6 +857,7 @@ export function useChat({
     visibleCards,
     allCards,
     allHotelCards,
+    hotelDates,
     allFlightCards,
     allCreditCardCards,
     allLaptopCards,

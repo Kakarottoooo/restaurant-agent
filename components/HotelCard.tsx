@@ -8,9 +8,12 @@ import ProfilePicker, { PickedProfile } from "./ProfilePicker";
 interface HotelCardProps {
   card: HotelRecommendationCard;
   index: number;
+  checkIn?: string;
+  checkOut?: string;
+  guests?: number;
 }
 
-export default function HotelCard({ card, index }: HotelCardProps) {
+export default function HotelCard({ card, index, checkIn, checkOut, guests }: HotelCardProps) {
   const { hotel } = card;
   const router = useRouter();
   const [showPicker, setShowPicker] = useState(false);
@@ -39,7 +42,14 @@ export default function HotelCard({ card, index }: HotelCardProps) {
         apiEndpoint: "/api/booking-autopilot/universal",
         body: {
           startUrl: hotel.booking_link,
-          task: `Book a room at ${hotel.name}. Select the best available option and stop at the payment page without completing payment.`,
+          task: [
+            `Book a room at ${hotel.name}.`,
+            checkIn ? `Check-in date: ${checkIn}.` : "",
+            checkOut ? `Check-out date: ${checkOut}.` : "",
+            guests ? `Guests: ${guests}.` : "",
+            "If the site shows a date picker, click the check-in date cell first, then the check-out date cell to select dates before proceeding.",
+            "Select the best available room option and stop at the payment page without completing payment.",
+          ].filter(Boolean).join(" "),
           profileId: picked.profileId,
           profile: {
             first_name: picked.first_name,

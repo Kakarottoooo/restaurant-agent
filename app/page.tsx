@@ -1812,7 +1812,7 @@ export default function Home() {
                 {chat.resultCategory === "hotel" && chat.allHotelCards.length > 0 && (
                   <div className="flex flex-col gap-3">
                     {chat.allHotelCards.map((card, i) => (
-                      <HotelCard key={card.hotel.id} card={card} index={i} />
+                      <HotelCard key={card.hotel.id} card={card} index={i} checkIn={chat.hotelDates?.check_in} checkOut={chat.hotelDates?.check_out} guests={chat.hotelDates?.guests} />
                     ))}
                   </div>
                 )}
