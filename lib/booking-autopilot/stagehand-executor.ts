@@ -294,6 +294,31 @@ The user will enter the CVV and click the final payment button themselves. Your 
     const msg = (result.message ?? "").toLowerCase();
     const hitPaymentUrl = isPaymentUrl(currentUrl);
 
+    // ── Detect site blocking (bot detection, Cloudflare, challenge pages) ──
+    const wasBlocked =
+      msg.includes("challenge page") ||
+      msg.includes("something went wrong") ||
+      msg.includes("access denied") ||
+      msg.includes("bot detection") ||
+      msg.includes("cloudflare") ||
+      msg.includes("prevented further navigation") ||
+      msg.includes("couldn't proceed") ||
+      pageText.includes("something went wrong") ||
+      pageText.includes("access denied") ||
+      pageText.includes("enable javascript") ||
+      (pageText.includes("reference no") && pageText.includes("went wrong"));
+
+    if (wasBlocked) {
+      return {
+        status: "captcha",
+        screenshotBase64,
+        handoffUrl: input.startUrl,   // send back to original URL, not the error page
+        sessionUrl,
+        summary: "The hotel's website blocked the automated browser. Open the link to book directly in your browser — it will work normally there.",
+        error: "Site blocked the cloud browser (bot protection). Manual booking required.",
+      };
+    }
+
     // Agent stopped before CVV/pay button (has filled card number+expiry already)
     const hitPaymentGate =
       hitPaymentUrl ||
