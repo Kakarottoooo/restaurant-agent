@@ -1214,6 +1214,11 @@ export async function updateMonitor(
   `;
 }
 
+export async function deleteMonitor(id: string): Promise<void> {
+  await ensureBookingMonitorsTable();
+  await sql`DELETE FROM booking_monitors WHERE id = ${id}`;
+}
+
 // ─── End Booking Monitors ──────────────────────────────────────────────────────
 
 // ─── Relationship Profiles ────────────────────────────────────────────────────

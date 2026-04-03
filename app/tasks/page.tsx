@@ -1061,6 +1061,11 @@ function MonitorPanel({ jobId, sessionId }: { jobId: string; sessionId: string }
     setMonitors((prev) => prev.map((m) => m.id === id ? { ...m, status: "cancelled" } : m));
   }
 
+  async function deleteMonitor(id: string) {
+    await fetch(`/api/monitors/${id}`, { method: "DELETE" }).catch(() => {});
+    setMonitors((prev) => prev.filter((m) => m.id !== id));
+  }
+
   const active = monitors.filter((m) => m.status === "active");
   const triggered = monitors.filter((m) => m.status === "triggered");
 
@@ -1096,11 +1101,12 @@ function MonitorPanel({ jobId, sessionId }: { jobId: string; sessionId: string }
 
       {/* Monitor list */}
       <div style={{ display: "flex", flexDirection: "column" }}>
-        {monitors.filter((m) => m.status !== "cancelled").map((monitor) => (
+        {monitors.map((monitor) => (
           <div key={monitor.id} style={{
             borderTop: "0.5px solid var(--border, #e5e7eb)",
             padding: "10px 14px",
             background: monitor.status === "triggered" ? "rgba(220,38,38,0.03)" : "transparent",
+            opacity: monitor.status === "cancelled" ? 0.5 : 1,
           }}>
             <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
               {/* Pulse dot */}
@@ -1119,6 +1125,9 @@ function MonitorPanel({ jobId, sessionId }: { jobId: string; sessionId: string }
                   <span style={{ fontFamily: "var(--font-dm-sans)", fontSize: 10, color: "var(--text-muted, #aaa)" }}>
                     {MONITOR_TYPE_EMOJI[monitor.type]} {MONITOR_TYPE_LABEL[monitor.type] ?? monitor.type}
                   </span>
+                  {monitor.status === "cancelled" && (
+                    <span style={{ fontFamily: "var(--font-dm-sans)", fontSize: 10, color: "var(--text-muted, #aaa)" }}>· stopped</span>
+                  )}
                 </div>
 
                 {/* Alert message */}
@@ -1153,21 +1162,38 @@ function MonitorPanel({ jobId, sessionId }: { jobId: string; sessionId: string }
                 )}
               </div>
 
-              {/* Cancel button */}
-              {(monitor.status === "active" || monitor.status === "triggered") && (
+              {/* Action buttons */}
+              <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
+                {/* Stop button — active or triggered monitors */}
+                {(monitor.status === "active" || monitor.status === "triggered") && (
+                  <button
+                    onClick={() => cancelMonitor(monitor.id)}
+                    style={{
+                      background: "none",
+                      border: "0.5px solid var(--border, #e5e7eb)",
+                      borderRadius: 6, padding: "2px 7px",
+                      fontFamily: "var(--font-dm-sans)", fontSize: 10,
+                      color: "var(--text-muted, #aaa)", cursor: "pointer",
+                    }}
+                  >
+                    Stop
+                  </button>
+                )}
+                {/* Delete button — all monitors */}
                 <button
-                  onClick={() => cancelMonitor(monitor.id)}
+                  onClick={() => deleteMonitor(monitor.id)}
+                  title="Delete monitor"
                   style={{
-                    flexShrink: 0, background: "none",
+                    background: "none",
                     border: "0.5px solid var(--border, #e5e7eb)",
-                    borderRadius: 6, padding: "2px 7px",
-                    fontFamily: "var(--font-dm-sans)", fontSize: 10,
-                    color: "var(--text-muted, #aaa)", cursor: "pointer",
+                    borderRadius: 6, padding: "2px 6px",
+                    fontSize: 11, color: "var(--text-muted, #aaa)",
+                    cursor: "pointer", lineHeight: 1,
                   }}
                 >
-                  Stop
+                  🗑
                 </button>
-              )}
+              </div>
             </div>
           </div>
         ))}
