@@ -65,12 +65,24 @@ export default function HotelCard({ card, index, checkIn, checkOut, guests }: Ho
         return `${base}?${params.toString()}`;
       })();
 
+      // Expedia OTA fallback — used when booking.com search fails.
+      // Prefer Expedia over the hotel's direct site to avoid bot-detection walls
+      // (Hilton/Marriott direct sites block automated browsers).
+      const expediaFallbackUrl = (() => {
+        const base = "https://www.expedia.com/Hotel-Search";
+        const params = new URLSearchParams({ destination: searchTerm });
+        if (checkIn) params.set("startDate", checkIn);
+        if (checkOut) params.set("endDate", checkOut);
+        params.set("adults", String(numAdults));
+        return `${base}?${params.toString()}`;
+      })();
+
       const task = [
         `Find and book "${hotel.name}" on booking.com for ${numAdults} adult(s).`,
         checkIn ? `Check-in date: ${checkIn}.` : "",
         checkOut ? `Check-out date: ${checkOut}.` : "",
         `On the search results page, find the card closest to "${hotel.name}"${locationHint ? ` in ${locationHint}` : ""} and click on it.`,
-        `If booking.com shows no search results or an error page, navigate directly to this fallback URL instead and complete the booking there: ${hotel.booking_link}`,
+        `If booking.com shows no search results or an error page, navigate to Expedia instead: ${expediaFallbackUrl}`,
         "On the hotel detail page, confirm or update the dates, then select the cheapest available room and click Reserve.",
         "Fill in all guest information and card details.",
         "Stop before entering CVV or clicking the final payment confirmation button.",
@@ -87,7 +99,7 @@ export default function HotelCard({ card, index, checkIn, checkOut, guests }: Ho
         body: {
           startUrl: bookingComUrl,
           task,
-          fallbackUrl: hotel.booking_link,
+          fallbackUrl: expediaFallbackUrl,
           profileId: picked.profileId,
           profile: {
             first_name: picked.first_name,
@@ -102,7 +114,7 @@ export default function HotelCard({ card, index, checkIn, checkOut, guests }: Ho
           },
           agentModel,
         },
-        fallbackUrl: hotel.booking_link,
+        fallbackUrl: expediaFallbackUrl,
         status: "pending",
       };
       const createRes = await fetch("/api/booking-jobs", {
