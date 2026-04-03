@@ -130,6 +130,12 @@ CALENDAR & DATE PICKERS:
 - After both dates are selected, look for "Book now" / "Reserve" / "Check availability" and click it
 - NEVER report dates as selected unless you can clearly see them shown as chosen on the page
 
+MINIMUM STAY / DATE CONFLICTS:
+- If you see a "minimum stay X nights" error, DO NOT give up. Extend the check-out date by enough days to satisfy the minimum (e.g., if minimum is 2 nights and you selected 1 night, move check-out forward by 1 day and try again)
+- If specific dates are given but unavailable, try the next available dates starting from the requested check-in date
+- Keep trying different date combinations — do not report failure after only 1-2 attempts
+- Your goal is to get to the guest info / payment form. Adjust dates as needed to get there
+
 BROWSER ERRORS — IGNORE THESE, KEEP GOING:
 - reCAPTCHA errors ("Invalid domain", "Invalid site key", reCAPTCHA failed to load) → IGNORE, fill the form fields anyway
 - CORS errors, network errors, console errors → IGNORE, they do not block you from typing into fields
