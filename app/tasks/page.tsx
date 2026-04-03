@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useRouter } from "next/navigation";
 import type { BookingJob, BookingJobStep, DecisionLogEntry, AgentFeedbackStats } from "@/lib/db";
 import type { PolicyBias, UserPreferenceProfile } from "@/lib/policy";
 import type { BookingMonitor } from "@/lib/monitors";
@@ -1999,6 +2000,7 @@ function InsightsPanel({ sessionId }: { sessionId: string }) {
 // ── Page ───────────────────────────────────────────────────────────────────────
 
 export default function TripsPage() {
+  const router = useRouter();
   const [jobs, setJobs] = useState<BookingJob[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -2038,6 +2040,17 @@ export default function TripsPage() {
 
       {/* Page title */}
       <div style={{ padding: "20px 20px 4px", maxWidth: 620, margin: "0 auto" }}>
+        <button
+          onClick={() => router.back()}
+          style={{
+            display: "flex", alignItems: "center", gap: 4,
+            background: "none", border: "none", padding: "0 0 10px",
+            fontFamily: "var(--font-dm-sans)", fontSize: 13,
+            color: "var(--text-secondary, #666)", cursor: "pointer",
+          }}
+        >
+          ← Back to results
+        </button>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <p style={{ fontFamily: "var(--font-dm-sans)", fontWeight: 700, fontSize: 17 }}>Tasks</p>
           {actionTotal > 0 && (
