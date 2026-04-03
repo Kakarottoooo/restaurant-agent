@@ -66,11 +66,11 @@ export default function HotelCard({ card, index, checkIn, checkOut, guests }: Ho
       })();
 
       const task = [
-        `Find and book "${hotel.name}" on booking.com for ${numAdults} adult(s).`,
+        `Book "${hotel.name}" for ${numAdults} adult(s).`,
         checkIn ? `Check-in date: ${checkIn}.` : "",
         checkOut ? `Check-out date: ${checkOut}.` : "",
-        `On the search results page, find the card closest to "${hotel.name}"${locationHint ? ` in ${locationHint}` : ""} and click on it.`,
-        "On the hotel detail page, confirm or update the dates, then select the cheapest available room and click Reserve.",
+        "On the hotel's website, set the correct dates, select the cheapest available room, and click Reserve or Book.",
+        `If this site is blocked or broken, fall back to booking.com: ${bookingComUrl}`,
         "Fill in all guest information and card details.",
         "Stop before entering CVV or clicking the final payment confirmation button.",
       ].filter(Boolean).join(" ");
@@ -84,9 +84,9 @@ export default function HotelCard({ card, index, checkIn, checkOut, guests }: Ho
         label: hotel.name,
         apiEndpoint: "/api/booking-autopilot/universal",
         body: {
-          startUrl: bookingComUrl,
+          startUrl: hotel.booking_link,
           task,
-          fallbackUrl: hotel.booking_link,
+          fallbackUrl: bookingComUrl,
           profileId: picked.profileId,
           profile: {
             first_name: picked.first_name,
@@ -101,7 +101,7 @@ export default function HotelCard({ card, index, checkIn, checkOut, guests }: Ho
           },
           agentModel,
         },
-        fallbackUrl: hotel.booking_link,
+        fallbackUrl: bookingComUrl,
         status: "pending",
       };
       const createRes = await fetch("/api/booking-jobs", {
