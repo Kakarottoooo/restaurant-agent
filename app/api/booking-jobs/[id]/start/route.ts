@@ -21,6 +21,7 @@ import {
   updateBookingJobSteps,
   getPushSubscriptionsBySession,
   writeAgentLog,
+  getBookingProfileById,
 } from "@/lib/db";
 import type { BookingJobStep, FallbackCandidate, DecisionLogEntry } from "@/lib/db";
 import {
@@ -314,16 +315,47 @@ async function runStepWithRecovery(
 
 async function runUniversalStep(
   step: BookingJobStep,
-  onProgress: (s: BookingJobStep) => Promise<void>
+  onProgress: (s: BookingJobStep) => Promise<void>,
+  jobUserId?: string | null,
 ): Promise<BookingJobStep> {
   const log: DecisionLogEntry[] = [];
   await onProgress({ ...step, status: "loading", decisionLog: log });
+
+  // Resolve profile from DB server-side using the job's userId.
+  // The internal fetch has no Clerk session, so auth() returns null in the
+  // universal endpoint. Fetching here and injecting inline solves that.
+  let resolvedBody: Record<string, unknown> = { ...(step.body as Record<string, unknown>) };
+  const profileId = typeof resolvedBody.profileId === "number" ? resolvedBody.profileId : null;
+  if (profileId && jobUserId) {
+    try {
+      const dbProfile = await getBookingProfileById(profileId, jobUserId, true);
+      if (dbProfile) {
+        resolvedBody = {
+          ...resolvedBody,
+          profile: {
+            first_name: dbProfile.first_name,
+            last_name: dbProfile.last_name,
+            email: dbProfile.email,
+            phone: dbProfile.phone,
+            address_line1: dbProfile.address_line1,
+            city: dbProfile.city,
+            state: dbProfile.state,
+            zip: dbProfile.zip,
+            country: dbProfile.country,
+            card_name: dbProfile.card_name,
+            card_number: dbProfile.card_number,
+            card_expiry: dbProfile.card_expiry,
+          },
+        };
+      }
+    } catch { /* non-fatal — proceed without profile, agent will ask user */ }
+  }
 
   try {
     const res = await fetch(`${BASE_URL}/api/booking-autopilot/universal`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(step.body),
+      body: JSON.stringify(resolvedBody),
     });
 
     let data: BrowserTaskResult;
@@ -474,7 +506,7 @@ export async function POST(_req: NextRequest, { params }: Params) {
 
     // ── Dispatch: universal → Stagehand, activity → agent-runtime, rest → recovery loop ──
     if (steps[i].type === "universal") {
-      steps[i] = await runUniversalStep(steps[i], onProgress);
+      steps[i] = await runUniversalStep(steps[i], onProgress, job.user_id);
     } else if ((steps[i].type as string) === "activity") {
       steps[i] = await runActivityStep(steps[i], skillCtx, onProgress);
     } else {
