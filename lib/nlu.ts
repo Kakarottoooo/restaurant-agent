@@ -8,14 +8,30 @@ import {
 } from "./types";
 
 const LOCATION_ALIAS_RULES: Array<{ pattern: RegExp; location: string }> = [
-  { pattern: /\bnyc\b|\bnew york city\b|\bmanhattan\b/i, location: "New York, NY" },
+  { pattern: /\bnyc\b|\bnew york city\b|\bnew york\b|\bmanhattan\b|\bbrooklyn\b|\bqueens\b/i, location: "New York, NY" },
   { pattern: /\bny\b/i, location: "New York, NY" },
+  { pattern: /\blos angeles\b/i, location: "Los Angeles, CA" },
   { pattern: /\bla\b/i, location: "Los Angeles, CA" },
   { pattern: /\bsf\b|\bsan francisco\b/i, location: "San Francisco, CA" },
   { pattern: /\bdc\b|\bwashington dc\b|\bwashington, dc\b/i, location: "Washington, DC" },
-  { pattern: /\bphilly\b/i, location: "Philadelphia, PA" },
+  { pattern: /\bphilly\b|\bphiladelphia\b/i, location: "Philadelphia, PA" },
   { pattern: /\bvegas\b|\blas vegas\b/i, location: "Las Vegas, NV" },
   { pattern: /\bchi\b|\bchicago\b/i, location: "Chicago, IL" },
+  { pattern: /\bmiami\b/i, location: "Miami, FL" },
+  { pattern: /\bboston\b/i, location: "Boston, MA" },
+  { pattern: /\bseattle\b/i, location: "Seattle, WA" },
+  { pattern: /\bhouston\b/i, location: "Houston, TX" },
+  { pattern: /\bdallas\b/i, location: "Dallas, TX" },
+  { pattern: /\batlanta\b/i, location: "Atlanta, GA" },
+  { pattern: /\bdenver\b/i, location: "Denver, CO" },
+  { pattern: /\baustin\b/i, location: "Austin, TX" },
+  { pattern: /\bportland\b/i, location: "Portland, OR" },
+  { pattern: /\bphoenix\b/i, location: "Phoenix, AZ" },
+  { pattern: /\bminneapolis\b/i, location: "Minneapolis, MN" },
+  { pattern: /\bdetroit\b/i, location: "Detroit, MI" },
+  { pattern: /\bnew orleans\b/i, location: "New Orleans, LA" },
+  { pattern: /\bsan diego\b/i, location: "San Diego, CA" },
+  { pattern: /\bsan antonio\b/i, location: "San Antonio, TX" },
 ];
 
 const VALID_CATEGORIES: CategoryType[] = [
@@ -192,7 +208,10 @@ function buildFallbackContext(
     intent_summary: message.trim(),
     category_hint: categoryHint,
     scenario_hint: scenarioHint,
-    location_hint: resolveLocationAlias(message) ?? fallbackLocation,
+    // Do NOT fall back to fallbackLocation here — the AI NLU pass will extract
+    // an explicit city from the message and override this. If we pre-fill the
+    // fallback city (e.g. Nashville), it wins over the AI-extracted location.
+    location_hint: resolveLocationAlias(message) ?? undefined,
     ...(refinementConstraints.length > 0 ? { constraints_hint: refinementConstraints } : {}),
   };
 }
