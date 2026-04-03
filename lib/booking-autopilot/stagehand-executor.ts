@@ -108,10 +108,21 @@ export async function runBrowserTask(
     // Agent uses the same model string — key is already in process.env
     const agent = stagehand.agent({
       model: modelName,
-      systemPrompt: `You are a booking assistant helping a user complete a reservation.
-Follow the task exactly. Navigate the site, fill in all provided information.
-CRITICAL: Stop immediately when you reach ANY payment page, credit card form,
-or checkout confirmation that requires payment details. Do NOT enter payment info.`,
+      systemPrompt: `You are a booking assistant completing a reservation on behalf of a user.
+
+YOUR JOB:
+1. Navigate to the booking page and select the requested dates/options.
+2. Fill in ALL guest information fields (full name, email, phone, address) using the details provided in the instruction.
+3. Proceed through every step UNTIL you reach a field asking for a CREDIT CARD NUMBER, card expiry date, or CVV security code.
+4. STOP immediately before entering any credit card or payment card information.
+5. Report what page you stopped at and the current URL.
+
+IMPORTANT DISTINCTIONS:
+- Guest info forms (name, email, phone) → FILL THEM IN and continue
+- Date / room selection → SELECT and continue
+- Credit card / payment card fields → STOP HERE, do not fill
+
+Do NOT stop at guest information forms. Always fill them and proceed.`,
     });
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -124,20 +135,46 @@ or checkout confirmation that requires payment details. Do NOT enter payment inf
     const sessionUrl = useCloud ? stagehand.browserbaseSessionURL : undefined;
 
     // Determine outcome
+    const msg = (result.message ?? "").toLowerCase();
     const hitPaymentUrl = isPaymentUrl(currentUrl);
-    const agentStopped =
-      result.message?.toLowerCase().includes("payment") ||
-      result.message?.toLowerCase().includes("credit card") ||
-      result.message?.toLowerCase().includes("stopped") ||
-      !result.completed;
 
-    if (hitPaymentUrl || agentStopped) {
+    // Agent explicitly stopped at credit card / payment card fields
+    const hitPaymentGate =
+      hitPaymentUrl ||
+      msg.includes("credit card") ||
+      msg.includes("card number") ||
+      msg.includes("cvv") ||
+      msg.includes("expiry") ||
+      msg.includes("payment card") ||
+      msg.includes("billing information");
+
+    if (hitPaymentGate) {
       return {
         status: "paused_payment",
         screenshotBase64,
         handoffUrl: currentUrl,
         sessionUrl,
         summary: result.message || "Reached payment page — ready for you to complete.",
+      };
+    }
+
+    // Agent stopped because it needs guest info from the user
+    const needsGuestInfo =
+      msg.includes("personal detail") ||
+      msg.includes("guest detail") ||
+      msg.includes("guest information") ||
+      msg.includes("contact information") ||
+      msg.includes("no guest") ||
+      (!result.completed && msg.includes("form"));
+
+    if (needsGuestInfo) {
+      return {
+        status: "needs_login",   // reuses the "needs intervention" flow in tasks UI
+        screenshotBase64,
+        handoffUrl: currentUrl,
+        sessionUrl,
+        summary: result.message || "Agent reached the guest info form but has no profile data. Please add your details in Preferences → My Profile.",
+        error: "No guest profile — add your name, email and phone in Preferences → My Profile, then retry.",
       };
     }
 
@@ -231,13 +268,23 @@ or checkout confirmation that requires payment details. Do NOT enter payment inf
 
 function buildInstruction(input: BrowserTaskInput): string {
   const p = input.profile;
-  const hasProfile = p.first_name || p.last_name || p.email || p.phone;
+  const hasProfile = !!(p.first_name || p.last_name || p.email || p.phone);
 
-  const profileBlock = hasProfile
-    ? `User details to fill in forms:\n- Full name: ${p.first_name} ${p.last_name}\n- Email: ${p.email}\n- Phone: ${p.phone}\n\nSTOP before entering any payment or credit card information.`
-    : `Navigate and select options as far as possible. Stop when you reach the personal info or payment page so the user can complete it.`;
+  if (hasProfile) {
+    return `${input.task}
 
-  return `${input.task}\n\n${profileBlock}`;
+Guest details — fill these into ALL guest/contact information fields you encounter:
+- Full name: ${[p.first_name, p.last_name].filter(Boolean).join(" ")}
+- Email: ${p.email}
+- Phone: ${p.phone}
+
+Fill ALL guest info fields and proceed. STOP ONLY when you reach a credit card number, card expiry, or CVV field. Do not enter any payment card data.`;
+  }
+
+  // No profile — navigate as far as possible then stop and list what's needed
+  return `${input.task}
+
+No guest details provided. Navigate and select dates/room options. When you reach a guest information form (name, email, phone), stop and clearly list every field the form is asking for so the user knows what to provide.`;
 }
 
 /** Build a natural-language task for restaurant booking. */
