@@ -2032,6 +2032,15 @@ FIRST STEP — GET TO THE BOOKING FORM:
 - If the hotel homepage shows a "BOOK NOW" or "Book Now" button in the header/navigation bar, click it FIRST to open the booking calendar widget. This is the entry point — you cannot select dates until you click this button.
 - If a cookie consent banner appears, click "Decline all" or "Reject all" to dismiss it before proceeding.
 
+HOTEL DETAIL PAGE — VERIFY DATES FIRST:
+- When you land on a hotel detail page (e.g. IHG, Marriott, Hilton direct site) that shows a date picker or search bar with check-in/check-out dates, CHECK that the displayed dates match the task's required check-in and check-out before doing anything else.
+- If the dates are WRONG (e.g. showing today's date instead of the required dates), update them FIRST:
+  1. Click the check-in date field to open the date picker.
+  2. Navigate to the correct month and select the correct check-in date.
+  3. Set the correct check-out date or stay duration.
+  4. Click "Search" / "View Prices" / "Update" to apply the dates.
+- Only after dates are correct should you proceed to room selection or "View Prices".
+
 AFTER CLICKING "BOOK NOW" — WAIT FOR CALENDAR TO LOAD:
 - After clicking "BOOK NOW", take an ariaTree snapshot BEFORE trying to click anything else.
 - Verify the ariaTree shows a BOOKING CALENDAR with a month/year header (e.g., "April 2026") and a date grid showing day numbers. If the calendar is not yet visible, take another screenshot and wait.
