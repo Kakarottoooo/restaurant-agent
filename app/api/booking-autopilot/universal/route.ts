@@ -14,7 +14,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { runBrowserTask } from "../../../../lib/booking-autopilot/stagehand-executor";
-import { getBookingProfileById } from "../../../../lib/db";
+import { getBookingProfileById, getDefaultBookingProfile } from "../../../../lib/db";
 import type { BrowserTaskInput, BookingProfile } from "../../../../lib/booking-autopilot/types";
 
 export const maxDuration = 300; // 5 min — Vercel Pro allows up to 300s
@@ -34,30 +34,44 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Resolve profile: prefer DB lookup by profileId (secure), fall back to inline
+  // Resolve profile: prefer DB lookup by profileId (secure), then inline, then default
   let profile: BookingProfile = body.profile ?? { first_name: "", last_name: "", email: "", phone: "" };
 
-  if (body.profileId) {
-    const { userId } = await auth();
-    if (userId) {
-      const dbProfile = await getBookingProfileById(body.profileId, userId, true);
-      if (dbProfile) {
-        profile = {
-          first_name: dbProfile.first_name,
-          last_name: dbProfile.last_name,
-          email: dbProfile.email,
-          phone: dbProfile.phone,
-          address_line1: dbProfile.address_line1,
-          city: dbProfile.city,
-          state: dbProfile.state,
-          zip: dbProfile.zip,
-          country: dbProfile.country,
-          card_name: dbProfile.card_name,
-          card_number: dbProfile.card_number,
-          card_expiry: dbProfile.card_expiry,
-        };
-      }
+  const { userId } = await auth();
+
+  if (body.profileId && userId) {
+    const dbProfile = await getBookingProfileById(body.profileId, userId, true);
+    if (dbProfile) {
+      profile = dbProfileToBookingProfile(dbProfile);
     }
+  } else if (userId && !hasInlineProfile(body.profile)) {
+    // Fallback: no profileId in body, no inline profile → use the user's default profile
+    const dbProfile = await getDefaultBookingProfile(userId, true);
+    if (dbProfile) {
+      profile = dbProfileToBookingProfile(dbProfile);
+    }
+  }
+
+  function dbProfileToBookingProfile(dbProfile: Awaited<ReturnType<typeof getBookingProfileById>>) {
+    if (!dbProfile) return profile;
+    return {
+      first_name: dbProfile.first_name,
+      last_name: dbProfile.last_name,
+      email: dbProfile.email,
+      phone: dbProfile.phone,
+      address_line1: dbProfile.address_line1,
+      city: dbProfile.city,
+      state: dbProfile.state,
+      zip: dbProfile.zip,
+      country: dbProfile.country,
+      card_name: dbProfile.card_name,
+      card_number: dbProfile.card_number,
+      card_expiry: dbProfile.card_expiry,
+    };
+  }
+
+  function hasInlineProfile(p: BookingProfile | undefined): boolean {
+    return !!(p?.first_name || p?.last_name || p?.email || p?.phone);
   }
 
   const input: BrowserTaskInput = {

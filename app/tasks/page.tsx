@@ -320,12 +320,14 @@ function NeedsHelpCard({ step, onManualLink, jobId, stepIndex, onRefresh }: {
   async function handleRetry() {
     if (retrying) return;
     setRetrying(true);
-    // Always patch in latest model config from localStorage so retries use current settings
+    // Always patch in latest model config + profile from localStorage so retries use current settings
     const savedModel = JSON.parse(localStorage.getItem("agent_model_config") ?? "{}");
     const agentModel = savedModel.model && savedModel.apiKey ? savedModel : undefined;
+    const activeProfileId = localStorage.getItem("active_profile_id");
     const patchBody = {
       ...(enrichedTask ? { task: enrichedTask } : {}),
       ...(agentModel ? { agentModel } : {}),
+      ...(activeProfileId ? { profileId: parseInt(activeProfileId) } : {}),
     };
     await fetch(`/api/booking-jobs/${jobId}/schedule-retry`, {
       method: "PATCH",
@@ -472,12 +474,17 @@ function RetryScheduler({ step, stepIndex, jobId, onScheduled }: {
     setRetrying(true);
     const savedModel = JSON.parse(localStorage.getItem("agent_model_config") ?? "{}");
     const agentModel = savedModel.model && savedModel.apiKey ? savedModel : undefined;
+    const activeProfileId = localStorage.getItem("active_profile_id");
+    const patchBody = {
+      ...(agentModel ? { agentModel } : {}),
+      ...(activeProfileId ? { profileId: parseInt(activeProfileId) } : {}),
+    };
     await fetch(`/api/booking-jobs/${jobId}/schedule-retry`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         stepIndex, retryAfter: null, resetStatus: true,
-        ...(agentModel ? { patchBody: { agentModel } } : {}),
+        ...(Object.keys(patchBody).length > 0 ? { patchBody } : {}),
       }),
     }).catch(() => {});
     fetch(`/api/booking-jobs/${jobId}/start`, { method: "POST" }).catch(() => {});
