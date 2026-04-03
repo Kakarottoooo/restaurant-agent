@@ -1320,6 +1320,11 @@ export async function runBrowserTask(
     ...(useCloud && {
       apiKey: process.env.BROWSERBASE_API_KEY,
       projectId: process.env.BROWSERBASE_PROJECT_ID,
+      // Use Browserbase residential proxies to avoid bot-detection on OTA sites
+      // (booking.com and Expedia block datacenter IPs).
+      browserbaseSessionCreateParams: {
+        proxies: true,
+      },
     }),
     model: modelName,  // just the string — Stagehand reads key from env vars above
     verbose: 0,
@@ -1379,8 +1384,7 @@ export async function runBrowserTask(
     {
       const landedUrl = page.url();
       const bookingComFailed =
-        landedUrl.includes("errorc_searchstring_not_found") ||
-        (landedUrl.includes("booking.com/index.html") && input.startUrl.includes("booking.com/searchresults"));
+        landedUrl.includes("errorc_searchstring_not_found");
 
       if (bookingComFailed) {
         // Resolve fallback: prefer explicit input.fallbackUrl, then parse from task string
