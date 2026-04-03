@@ -22,6 +22,7 @@ import {
   getPushSubscriptionsBySession,
   writeAgentLog,
   getBookingProfileById,
+  getDefaultBookingProfile,
 } from "@/lib/db";
 import type { BookingJobStep, FallbackCandidate, DecisionLogEntry } from "@/lib/db";
 import {
@@ -325,30 +326,69 @@ async function runUniversalStep(
   // The internal fetch has no Clerk session, so auth() returns null in the
   // universal endpoint. Fetching here and injecting inline solves that.
   let resolvedBody: Record<string, unknown> = { ...(step.body as Record<string, unknown>) };
-  const profileId = typeof resolvedBody.profileId === "number" ? resolvedBody.profileId : null;
-  if (profileId && jobUserId) {
+
+  // Accept profileId as number OR string (JSONB round-trips preserve numbers, but be defensive)
+  const rawProfileId = resolvedBody.profileId;
+  const profileId: number | null =
+    typeof rawProfileId === "number" ? rawProfileId :
+    typeof rawProfileId === "string" && rawProfileId ? parseInt(rawProfileId) :
+    null;
+
+  const hasInlineProfile = (() => {
+    const rp = resolvedBody.profile as Record<string, string> | undefined;
+    return !!(rp?.first_name || rp?.last_name || rp?.email || rp?.phone);
+  })();
+
+  // Fetch card number from DB and merge into inline profile (card never stored in step body).
+  // Also serves as fallback if inline profile is missing.
+  if (jobUserId) {
     try {
-      const dbProfile = await getBookingProfileById(profileId, jobUserId, true);
+      const dbProfile = profileId
+        ? await getBookingProfileById(profileId, jobUserId, true)
+        : await getDefaultBookingProfile(jobUserId, true);
+
       if (dbProfile) {
+        // Prefer inline profile for contact info (always up-to-date from picker),
+        // but add card data from DB (card number never stored inline).
+        const inline = (resolvedBody.profile ?? {}) as Record<string, string | undefined>;
         resolvedBody = {
           ...resolvedBody,
           profile: {
-            first_name: dbProfile.first_name,
-            last_name: dbProfile.last_name,
-            email: dbProfile.email,
-            phone: dbProfile.phone,
-            address_line1: dbProfile.address_line1,
-            city: dbProfile.city,
-            state: dbProfile.state,
-            zip: dbProfile.zip,
-            country: dbProfile.country,
+            first_name: inline.first_name || dbProfile.first_name,
+            last_name: inline.last_name || dbProfile.last_name,
+            email: inline.email || dbProfile.email,
+            phone: inline.phone || dbProfile.phone,
+            address_line1: inline.address_line1 || dbProfile.address_line1,
+            city: inline.city || dbProfile.city,
+            state: inline.state || dbProfile.state,
+            zip: inline.zip || dbProfile.zip,
+            country: inline.country || dbProfile.country,
             card_name: dbProfile.card_name,
             card_number: dbProfile.card_number,
             card_expiry: dbProfile.card_expiry,
           },
         };
+      } else {
+        // Log for debugging — profile not found by id or default
+        await writeAgentLog({
+          session_id: "",
+          job_id: step.label,
+          level: "warn",
+          source: "runUniversalStep",
+          message: `Profile not found in DB (profileId=${profileId}, userId=${jobUserId})`,
+          details: { profileId, jobUserId },
+        });
       }
-    } catch { /* non-fatal — proceed without profile, agent will ask user */ }
+    } catch (err) {
+      await writeAgentLog({
+        session_id: "",
+        job_id: step.label,
+        level: "error",
+        source: "runUniversalStep",
+        message: `Profile DB fetch failed: ${err instanceof Error ? err.message : String(err)}`,
+        details: { profileId, jobUserId },
+      });
+    }
   }
 
   try {

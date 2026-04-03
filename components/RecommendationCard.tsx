@@ -4,7 +4,7 @@ import Image from "next/image";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { RecommendationCard as CardType, FeedbackRecord } from "@/lib/types";
-import ProfilePicker from "./ProfilePicker";
+import ProfilePicker, { PickedProfile } from "./ProfilePicker";
 
 interface Props {
   card: CardType;
@@ -85,10 +85,10 @@ export default function RecommendationCard({
     setShowPicker(true);
   }
 
-  async function proceedWithProfile(profileId: number) {
+  async function proceedWithProfile(picked: PickedProfile) {
     setShowPicker(false);
     setBooking(true);
-    localStorage.setItem("active_profile_id", String(profileId));
+    localStorage.setItem("active_profile_id", String(picked.profileId));
     try {
       const sessionId = localStorage.getItem("session_id") ?? crypto.randomUUID();
       const savedModel = JSON.parse(localStorage.getItem("agent_model_config") ?? "{}");
@@ -104,7 +104,18 @@ export default function RecommendationCard({
         body: {
           startUrl,
           task: `Make a reservation at ${card.restaurant.name}. Fill in the contact information and stop at the payment or confirmation page without completing payment.`,
-          profileId,
+          profileId: picked.profileId,
+          profile: {
+            first_name: picked.first_name,
+            last_name: picked.last_name,
+            email: picked.email,
+            phone: picked.phone,
+            address_line1: picked.address_line1,
+            city: picked.city,
+            state: picked.state,
+            zip: picked.zip,
+            country: picked.country,
+          },
           agentModel,
         },
         fallbackUrl: startUrl,

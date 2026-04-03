@@ -19,13 +19,32 @@ interface ProfileRecord {
   first_name: string;
   last_name: string;
   email: string;
+  phone: string;
+  address_line1?: string;
+  city?: string;
+  state?: string;
+  zip?: string;
+  country?: string;
   card_number_masked?: string;
   card_expiry?: string;
 }
 
+export interface PickedProfile {
+  profileId: number;
+  first_name: string;
+  last_name: string;
+  email: string;
+  phone: string;
+  address_line1?: string;
+  city?: string;
+  state?: string;
+  zip?: string;
+  country?: string;
+}
+
 interface ProfilePickerProps {
-  /** Called with the chosen profile ID when user confirms. */
-  onSelect: (profileId: number) => void;
+  /** Called with the chosen profile data when user confirms. */
+  onSelect: (picked: PickedProfile) => void;
   /** Called when user dismisses without selecting. */
   onCancel: () => void;
 }
@@ -122,7 +141,7 @@ export default function ProfilePicker({ onSelect, onCancel }: ProfilePickerProps
             <>
               <p style={s.title}>Book with this profile?</p>
               <p style={s.subtitle}>The agent will use this identity to fill booking forms.</p>
-              <div style={s.profileCard(true)} onClick={() => onSelect(profiles[0].id)}>
+              <div style={s.profileCard(true)} onClick={() => onSelect({ profileId: profiles[0].id, first_name: profiles[0].first_name, last_name: profiles[0].last_name, email: profiles[0].email, phone: profiles[0].phone, address_line1: profiles[0].address_line1, city: profiles[0].city, state: profiles[0].state, zip: profiles[0].zip, country: profiles[0].country })}>
                 <span style={{ fontSize: 22 }}>👤</span>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 13, fontWeight: 700, color: "var(--text-primary, #111)" }}>
@@ -154,7 +173,7 @@ export default function ProfilePicker({ onSelect, onCancel }: ProfilePickerProps
               <p style={s.title}>Which profile should book?</p>
               <p style={s.subtitle}>Tap a profile to use it for this booking.</p>
               {profiles.map((p) => (
-                <div key={p.id} style={s.profileCard(p.is_default)} onClick={() => onSelect(p.id)}>
+                <div key={p.id} style={s.profileCard(p.is_default)} onClick={() => onSelect({ profileId: p.id, first_name: p.first_name, last_name: p.last_name, email: p.email, phone: p.phone, address_line1: p.address_line1, city: p.city, state: p.state, zip: p.zip, country: p.country })}>
                   <span style={{ fontSize: 22 }}>👤</span>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 13, fontWeight: 700, color: "var(--text-primary, #111)" }}>

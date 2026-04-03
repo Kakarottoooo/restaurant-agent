@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { HotelRecommendationCard } from "@/lib/types";
-import ProfilePicker from "./ProfilePicker";
+import ProfilePicker, { PickedProfile } from "./ProfilePicker";
 
 interface HotelCardProps {
   card: HotelRecommendationCard;
@@ -21,15 +21,17 @@ export default function HotelCard({ card, index }: HotelCardProps) {
     setShowPicker(true);
   }
 
-  async function proceedWithProfile(profileId: number) {
+  async function proceedWithProfile(picked: PickedProfile) {
     setShowPicker(false);
     setBooking(true);
-    // Remember this as the active profile for future bookings
-    localStorage.setItem("active_profile_id", String(profileId));
+    localStorage.setItem("active_profile_id", String(picked.profileId));
     try {
       const sessionId = localStorage.getItem("session_id") ?? crypto.randomUUID();
       const savedModel = JSON.parse(localStorage.getItem("agent_model_config") ?? "{}");
       const agentModel = savedModel.model && savedModel.apiKey ? savedModel : undefined;
+      // Include contact info inline so the agent always has it,
+      // even if server-side profile lookup fails (no auth session on job).
+      // Card number is NOT included here — fetched server-side via profileId.
       const step = {
         type: "universal",
         emoji: "🏨",
@@ -38,7 +40,18 @@ export default function HotelCard({ card, index }: HotelCardProps) {
         body: {
           startUrl: hotel.booking_link,
           task: `Book a room at ${hotel.name}. Select the best available option and stop at the payment page without completing payment.`,
-          profileId,
+          profileId: picked.profileId,
+          profile: {
+            first_name: picked.first_name,
+            last_name: picked.last_name,
+            email: picked.email,
+            phone: picked.phone,
+            address_line1: picked.address_line1,
+            city: picked.city,
+            state: picked.state,
+            zip: picked.zip,
+            country: picked.country,
+          },
           agentModel,
         },
         fallbackUrl: hotel.booking_link,
