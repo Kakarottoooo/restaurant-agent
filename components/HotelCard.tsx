@@ -31,7 +31,8 @@ export default function HotelCard({ card, index, checkIn, checkOut, guests }: Ho
     try {
       const sessionId = localStorage.getItem("session_id") ?? crypto.randomUUID();
       const savedModel = JSON.parse(localStorage.getItem("agent_model_config") ?? "{}");
-      const agentModel = savedModel.model && savedModel.apiKey ? savedModel : undefined;
+      // apiKey may be empty when using a server-side env key — only require model to be set.
+      const agentModel = savedModel.model ? savedModel : undefined;
 
       // Build a booking.com search URL for this hotel so the agent uses a
       // consistent, bot-friendly OTA platform instead of the hotel's own site.
