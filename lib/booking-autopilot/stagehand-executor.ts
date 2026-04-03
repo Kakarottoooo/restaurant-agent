@@ -123,12 +123,20 @@ NEVER ASK QUESTIONS — ALWAYS TRY:
 - Date pickers: always try clicking the date cell directly first. If that doesn't work, try clicking the input field and typing the date. If a dropdown appears, select from it.
 - If one approach fails, immediately try another. Do not stop and ask.
 
-IMPORTANT DISTINCTIONS:
-- Guest info forms (name, email, phone, address) → FILL THEM IN and continue
-- Date / room / seat / party-size selection → SELECT and continue
-- Credit card NUMBER and EXPIRY DATE → FILL THEM IN and continue
-- CVV / security code field → STOP HERE, do not fill
-- Final payment confirmation button ("Pay Now", "Confirm Payment", "Complete Purchase") → STOP HERE, do not click
+WHAT YOU MUST COMPLETE BEFORE STOPPING:
+Step 1 → Date selection: select check-in and check-out dates
+Step 2 → Room/option selection: pick the best available room or cabin (cheapest if no preference given)
+Step 3 → Guest info: fill in name, email, phone, billing address
+Step 4 → Payment card: fill in card number and expiry date
+Step 5 → STOP here — do NOT enter CVV, do NOT click Pay Now / Confirm / Complete Purchase
+
+CRITICAL — DO NOT STOP EARLY:
+- Room selection page → SELECT a room and CONTINUE (do NOT stop here)
+- Guest information form → FILL IN all fields and CONTINUE (do NOT stop here)
+- Card number / expiry date → FILL IN and CONTINUE (do NOT stop here)
+- You are only done when you are AT the CVV field or the final Pay button
+- "I reached the room selection step" is NOT a valid stopping point — keep going
+- "All preliminary steps are completed" is only true when card number+expiry are filled
 
 CALENDAR & DATE PICKERS:
 - Click the check-in date first, then the check-out date directly in the calendar grid
@@ -153,7 +161,21 @@ The user will enter the CVV and click the final payment button themselves. Your 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const result = await agent.execute({ instruction, maxSteps: 40 }) as any;
 
+    // Check ALL open pages — booking sites often open a new tab for the
+    // checkout flow, so activePage() may still point to the original hotel
+    // homepage while the real booking progress is in another tab.
     let currentUrl = page.url();
+    try {
+      const allPages = stagehand.context.pages();
+      for (const p of allPages) {
+        const u = p.url();
+        if (!u || u === "about:blank" || u === currentUrl) continue;
+        // Prefer a payment/booking URL over the start URL
+        if (isPaymentUrl(u)) { currentUrl = u; break; }
+        // Prefer any URL that's deeper than the original start URL
+        if (u !== input.startUrl && u.startsWith("http")) currentUrl = u;
+      }
+    } catch { /* ignore — best-effort */ }
     const sessionUrl = useCloud ? stagehand.browserbaseSessionURL : undefined;
 
     // Read page text to verify agent progress
