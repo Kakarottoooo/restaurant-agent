@@ -1457,6 +1457,11 @@ ROOM SELECTION / RATE PAGES — DO NOT FILL GUEST INFO HERE:
 - On room selection pages, your only job is to select the correct rate/room and click "Proceed to payment" / "Continue" / "Next" to advance to the actual checkout form
 - Guest info (name, email, phone, billing address, card) must ONLY be filled into clearly labeled individual input fields on the payment/checkout page — AFTER clicking "Proceed to payment"
 
+UPSELL / EXTRAS PAGES — ALWAYS SKIP:
+- If you land on a page titled "Add Extras", "Upgrade your room", "Enhance your stay", "Add-ons", or similar upsell screens showing room upgrades or optional add-ons with a "No thanks" / "Skip" / "No thanks, skip it" link — click that link IMMEDIATELY to skip past the page.
+- Do NOT fill any guest info or card info on these upsell pages — they are not the checkout form.
+- Do NOT click any upgrade or add-on option — just find and click "No thanks, skip it >" or "Skip" to advance to the actual guest information / payment form.
+
 TERMS / PRIVACY POLICY CHECKBOXES — ALWAYS CHECK:
 - Before clicking "Book Now", "Reserve", "Continue", or any booking button, scroll down and look for checkboxes labelled "I agree to the privacy policy", "I accept the terms and conditions", "I agree to the cancellation policy", or similar
 - ALWAYS check / tick these checkboxes — they are required to enable the booking button
