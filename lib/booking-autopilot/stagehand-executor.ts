@@ -200,34 +200,77 @@ The user will enter the CVV and click the final payment button themselves. Your 
         try {
           alreadyFilled = await page.evaluate((email: string) => {
             return Array.from(document.querySelectorAll("input")).some(
-              (el) => el.value.toLowerCase().includes(email.toLowerCase())
+              (el) => (el as HTMLInputElement).value.toLowerCase().includes(email.toLowerCase())
             );
           }, p.email) as boolean;
         } catch { /* ignore */ }
       }
 
       if (!alreadyFilled) {
-        // Fill each field directly — these act() calls are more reliable than
-        // the agent because they target specific visible elements
-        const fillActions: { action: string }[] = [];
-        if (p.first_name) fillActions.push({ action: `Click the First name input field and type "${p.first_name}"` });
-        if (p.last_name)  fillActions.push({ action: `Click the Last name input field and type "${p.last_name}"` });
-        if (p.phone)      fillActions.push({ action: `Click the Phone number input field and type "${p.phone}"` });
-        if (p.email)      fillActions.push({ action: `Click the Email input field and type "${p.email}"` });
-        if (p.address_line1) fillActions.push({ action: `Click the Street address input field and type "${p.address_line1}"` });
-        if (p.city)       fillActions.push({ action: `Click the City input field and type "${p.city}"` });
-        if (p.state)      fillActions.push({ action: `Click the State input field and type "${p.state}"` });
-        if (p.zip)        fillActions.push({ action: `Click the ZIP or postal code input field and type "${p.zip}"` });
-        if (p.card_name)  fillActions.push({ action: `Click the Cardholder name input field and type "${p.card_name}"` });
-        if (p.card_number) fillActions.push({ action: `Click the Card number input field and type "${p.card_number}"` });
-        if (p.card_expiry) fillActions.push({ action: `Click the Card expiry input field and type "${p.card_expiry}"` });
+        // Use RAW Playwright fill() — bypasses Stagehand AI and reCAPTCHA DOM interference.
+        // Try matching each field by placeholder text, then by accessible label name.
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const raw: any = (page as any).page ?? page;
 
-        for (const { action } of fillActions) {
-          try {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            await (page as any).act({ action });
-          } catch { /* non-fatal — move to next field */ }
+        type FieldSpec = { patterns: string[]; value: string };
+        const specs: FieldSpec[] = [
+          { patterns: ["first name", "given name", "firstname"], value: p.first_name ?? "" },
+          { patterns: ["last name", "family name", "surname", "lastname"], value: p.last_name ?? "" },
+          { patterns: ["phone", "mobile", "telephone"], value: p.phone ?? "" },
+          { patterns: ["email", "e-mail"], value: p.email ?? "" },
+          { patterns: ["street address", "address line 1", "address 1", "billing address"], value: p.address_line1 ?? "" },
+          { patterns: ["city"], value: p.city ?? "" },
+          { patterns: ["state", "province"], value: p.state ?? "" },
+          { patterns: ["zip", "postal code", "postcode"], value: p.zip ?? "" },
+          { patterns: ["country"], value: p.country ?? "" },
+          { patterns: ["name on card", "cardholder", "card holder"], value: p.card_name ?? "" },
+          { patterns: ["card number", "credit card number"], value: p.card_number ?? "" },
+          { patterns: ["expir", "expiry", "mm/yy", "mm / yy"], value: p.card_expiry ?? "" },
+        ].filter(s => s.value);
+
+        for (const { patterns, value } of specs) {
+          let filled = false;
+          // 1️⃣ Try by placeholder (most reliable for guest forms)
+          for (const pat of patterns) {
+            if (filled) break;
+            try {
+              const loc = raw.getByPlaceholder(new RegExp(pat, "i")).first();
+              if (await loc.isVisible({ timeout: 800 }).catch(() => false)) {
+                await loc.fill(value);
+                filled = true;
+              }
+            } catch { /* try next */ }
+          }
+          // 2️⃣ Try by accessible role + label text
+          if (!filled) {
+            for (const pat of patterns) {
+              if (filled) break;
+              try {
+                const loc = raw.getByRole("textbox", { name: new RegExp(pat, "i") }).first();
+                if (await loc.isVisible({ timeout: 800 }).catch(() => false)) {
+                  await loc.fill(value);
+                  filled = true;
+                }
+              } catch { /* try next */ }
+            }
+          }
+          // 3️⃣ Try by label element text
+          if (!filled) {
+            for (const pat of patterns) {
+              if (filled) break;
+              try {
+                const loc = raw.getByLabel(new RegExp(pat, "i")).first();
+                if (await loc.isVisible({ timeout: 800 }).catch(() => false)) {
+                  await loc.fill(value);
+                  filled = true;
+                }
+              } catch { /* try next */ }
+            }
+          }
         }
+
+        // Small pause so the page can react to filled values (React state updates etc.)
+        await new Promise(r => setTimeout(r, 800));
 
         // Re-read page state after direct fill
         currentUrl = page.url();
