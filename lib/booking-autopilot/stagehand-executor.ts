@@ -1481,6 +1481,7 @@ KEY RULES:
 - Calendar month wrong → click ‹/› arrow to navigate; verify header before clicking a date.
 - IHG/single-date calendar (shows per-night price on each cell, has Stay duration +/− control) → click check-in date ONLY, then use + button to set nights, then CONTINUE.
 - If hotel detail page shows wrong dates → update the date picker first, then View Prices.
+- EXPEDIA SEARCH RESULTS: If the "Where to?" field shows a city (e.g. "New York, New York") instead of the hotel name, use the "Search by property name" text field in the LEFT SIDEBAR to type the hotel name and filter results. Do NOT scroll through 300+ results.
 - "Book Now" at a consent/review summary (no name/email/card fields visible yet) → check terms checkbox, then click it to open the actual form.
 - Terms/privacy checkboxes → always check before clicking booking buttons.
 - Fill guest fields one at a time; only fill on the actual checkout form page.
