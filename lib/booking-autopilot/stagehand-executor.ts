@@ -142,21 +142,18 @@ The user will enter the CVV and click the final payment button themselves. Your 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const result = await agent.execute({ instruction, maxSteps: 40 }) as any;
 
-    const currentUrl = page.url();
-    const screenshotBuffer = await page.screenshot({ type: "png" });
-    const screenshotBase64 = `data:image/png;base64,${screenshotBuffer.toString("base64")}`;
-
+    let currentUrl = page.url();
     const sessionUrl = useCloud ? stagehand.browserbaseSessionURL : undefined;
 
-    // Verify the agent made real progress by checking page content
+    // Read page text to verify agent progress
     let pageText = "";
     try {
       pageText = await page.evaluate(() =>
-        (document.body?.innerText ?? "").toLowerCase().slice(0, 3000)
+        (document.body?.innerText ?? "").toLowerCase().slice(0, 4000)
       ) as string;
     } catch { /* ignore — best-effort */ }
 
-    // Detect stuck at listing/search page (dates not selected, no booking progress)
+    // ── Detect stuck at listing/search page ───────────────────────────────
     const stuckAtListing =
       (pageText.includes("select dates to continue") ||
        pageText.includes("select check-in and check-out") ||
@@ -169,6 +166,7 @@ The user will enter the CVV and click the final payment button themselves. Your 
       !pageText.includes("request to book");
 
     if (stuckAtListing) {
+      const screenshotBase64 = `data:image/png;base64,${(await page.screenshot({ type: "png" })).toString("base64")}`;
       return {
         status: "error",
         screenshotBase64,
@@ -179,35 +177,73 @@ The user will enter the CVV and click the final payment button themselves. Your 
       };
     }
 
-    // Detect: reached checkout page but form fields are still empty (agent stopped early)
+    // ── Direct form-fill fallback ─────────────────────────────────────────
+    // If the agent landed on a guest info / checkout form but left fields empty
+    // (e.g. because reCAPTCHA console errors confused it), fill them directly
+    // using page.act() — lower-level than the agent and not blocked by reCAPTCHA.
+    const p = input.profile;
+    const hasProfile = !!(p.first_name || p.last_name || p.email || p.phone);
+
+    const onGuestForm =
+      isPaymentUrl(currentUrl) &&
+      hasProfile &&
+      (pageText.includes("guest details") ||
+       pageText.includes("guest information") ||
+       pageText.includes("first name") ||
+       pageText.includes("confirm and pay") ||
+       pageText.includes("finalize your booking"));
+
+    if (onGuestForm) {
+      // Check whether the form is already filled (profile email visible in input values)
+      let alreadyFilled = false;
+      if (p.email) {
+        try {
+          alreadyFilled = await page.evaluate((email: string) => {
+            return Array.from(document.querySelectorAll("input")).some(
+              (el) => el.value.toLowerCase().includes(email.toLowerCase())
+            );
+          }, p.email) as boolean;
+        } catch { /* ignore */ }
+      }
+
+      if (!alreadyFilled) {
+        // Fill each field directly — these act() calls are more reliable than
+        // the agent because they target specific visible elements
+        const fillActions: { action: string }[] = [];
+        if (p.first_name) fillActions.push({ action: `Click the First name input field and type "${p.first_name}"` });
+        if (p.last_name)  fillActions.push({ action: `Click the Last name input field and type "${p.last_name}"` });
+        if (p.phone)      fillActions.push({ action: `Click the Phone number input field and type "${p.phone}"` });
+        if (p.email)      fillActions.push({ action: `Click the Email input field and type "${p.email}"` });
+        if (p.address_line1) fillActions.push({ action: `Click the Street address input field and type "${p.address_line1}"` });
+        if (p.city)       fillActions.push({ action: `Click the City input field and type "${p.city}"` });
+        if (p.state)      fillActions.push({ action: `Click the State input field and type "${p.state}"` });
+        if (p.zip)        fillActions.push({ action: `Click the ZIP or postal code input field and type "${p.zip}"` });
+        if (p.card_name)  fillActions.push({ action: `Click the Cardholder name input field and type "${p.card_name}"` });
+        if (p.card_number) fillActions.push({ action: `Click the Card number input field and type "${p.card_number}"` });
+        if (p.card_expiry) fillActions.push({ action: `Click the Card expiry input field and type "${p.card_expiry}"` });
+
+        for (const { action } of fillActions) {
+          try {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            await (page as any).act({ action });
+          } catch { /* non-fatal — move to next field */ }
+        }
+
+        // Re-read page state after direct fill
+        currentUrl = page.url();
+        try {
+          pageText = await page.evaluate(() =>
+            (document.body?.innerText ?? "").toLowerCase().slice(0, 4000)
+          ) as string;
+        } catch { /* ignore */ }
+      }
+    }
+
+    const screenshotBase64 = `data:image/png;base64,${(await page.screenshot({ type: "png" })).toString("base64")}`;
+
+    // ── Determine final outcome ───────────────────────────────────────────
     const msg = (result.message ?? "").toLowerCase();
     const hitPaymentUrl = isPaymentUrl(currentUrl);
-
-    const agentMentionsCaptchaBlock =
-      msg.includes("recaptcha") ||
-      msg.includes("captcha") ||
-      msg.includes("cloudflare");
-
-    // If agent is on a checkout page but says it was blocked by captcha AND
-    // form fields look empty → escalate to error so user can see the real state
-    const onCheckoutWithEmptyForm =
-      hitPaymentUrl &&
-      agentMentionsCaptchaBlock &&
-      !result.completed &&
-      (pageText.includes("enter your first name") ||
-       pageText.includes("enter your last name") ||
-       pageText.includes("enter your email") ||
-       (pageText.includes("first name") && pageText.includes("last name") && pageText.includes("email") && !pageText.includes("@")));
-
-    if (onCheckoutWithEmptyForm) {
-      return {
-        status: "paused_payment",  // still send user to the page — they're 1 step away
-        screenshotBase64,
-        handoffUrl: currentUrl,
-        sessionUrl,
-        summary: "Agent reached the guest info form but was blocked by a reCAPTCHA error from filling it automatically. Open the link — the dates are pre-selected, just fill your name, email and phone.",
-      };
-    }
 
     // Agent stopped before CVV/pay button (has filled card number+expiry already)
     const hitPaymentGate =
