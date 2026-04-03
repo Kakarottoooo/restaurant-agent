@@ -36,10 +36,21 @@ export default function HotelCard({ card, index, checkIn, checkOut, guests }: Ho
       // Build a booking.com search URL for this hotel so the agent uses a
       // consistent, bot-friendly OTA platform instead of the hotel's own site.
       const numAdults = guests ?? 1;
+
+      // Extract a short city hint from location_summary (e.g. "West Village, New York" → "New York")
+      const locationHint = card.location_summary
+        ? card.location_summary.split(",").slice(-1)[0].trim()
+        : "";
+
+      // Search booking.com by "Hotel Name City" for best match.
+      const searchTerm = locationHint
+        ? `${hotel.name} ${locationHint}`
+        : hotel.name;
+
       const bookingComUrl = (() => {
         const base = "https://www.booking.com/searchresults.html";
         const params = new URLSearchParams({
-          ss: hotel.name,
+          ss: searchTerm,
           checkin: checkIn ?? "",
           checkout: checkOut ?? "",
           group_adults: String(numAdults),
@@ -47,7 +58,6 @@ export default function HotelCard({ card, index, checkIn, checkOut, guests }: Ho
           selected_currency: "USD",
           lang: "en-us",
         });
-        // Remove empty params
         for (const [k, v] of [...params.entries()]) {
           if (!v) params.delete(k);
         }
@@ -58,7 +68,8 @@ export default function HotelCard({ card, index, checkIn, checkOut, guests }: Ho
         `Find and book "${hotel.name}" on booking.com for ${numAdults} adult(s).`,
         checkIn ? `Check-in date: ${checkIn}.` : "",
         checkOut ? `Check-out date: ${checkOut}.` : "",
-        `On the search results page, click on the card for "${hotel.name}".`,
+        `On the search results page, find the card closest to "${hotel.name}"${locationHint ? ` in ${locationHint}` : ""} and click on it.`,
+        `If booking.com shows no search results or an error page, navigate directly to this fallback URL instead and complete the booking there: ${hotel.booking_link}`,
         "On the hotel detail page, confirm or update the dates, then select the cheapest available room and click Reserve.",
         "Fill in all guest information and card details.",
         "Stop before entering CVV or clicking the final payment confirmation button.",

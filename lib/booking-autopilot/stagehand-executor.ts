@@ -2027,7 +2027,9 @@ FIRST STEP — GET TO THE BOOKING FORM:
 - If a cookie consent banner appears, click "Decline all" or "Reject all" to dismiss it before proceeding.
 
 BOOKING.COM SPECIFIC FLOW:
-1. Search results page → click the correct hotel card by name
+1. Search results page → find and click the correct hotel card by name
+   - If the search results page shows an error or no results matching the hotel name, look in the task for a "fallback URL" and navigate there instead
+   - If results appear but the exact name isn't listed, click the closest match (same brand or city)
 2. Hotel detail page → verify/set dates → scroll to room list → choose cheapest room → click "Reserve" / "I'll reserve"
 3. Guest details form → fill name, email, phone, address
 4. Payment page → choose "Credit or debit card" → fill card number and expiry
