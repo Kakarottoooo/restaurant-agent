@@ -1966,7 +1966,8 @@ AFTER CLICKING "BOOK NOW" — WAIT FOR CALENDAR TO LOAD:
 
 BOOKING.COM SPECIFIC FLOW:
 1. Search results page → find and click the correct hotel card by name
-   - If the search results page shows an error or no results matching the hotel name, look in the task for a "fallback URL" and navigate there instead
+   - If booking.com shows NO hotel cards, an error message, OR redirects to the booking.com homepage (booking.com/index.html) — this means the search FAILED. Immediately navigate to the fallback URL provided in the task. Do NOT wait or retry the search.
+   - Signs of search failure: URL contains "errorc_searchstring_not_found", page shows "We couldn't find", page is booking.com homepage with no search results.
    - If results appear but the exact name isn't listed, click the closest match (same brand or city)
 2. Hotel detail page → verify/set dates → scroll to room list → choose cheapest room → click "Reserve" / "I'll reserve"
 3. Guest details form → fill name, email, phone, address

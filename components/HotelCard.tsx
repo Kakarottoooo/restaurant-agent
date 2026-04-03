@@ -43,9 +43,9 @@ export default function HotelCard({ card, index, checkIn, checkOut, guests }: Ho
         : "";
 
       // Search booking.com by "Hotel Name City" for best match.
-      const searchTerm = locationHint
-        ? `${hotel.name} ${locationHint}`
-        : hotel.name;
+      // Strip slashes and extra punctuation that confuse booking.com's search.
+      const rawSearch = locationHint ? `${hotel.name} ${locationHint}` : hotel.name;
+      const searchTerm = rawSearch.replace(/[/\\|]/g, " ").replace(/\s+/g, " ").trim();
 
       const bookingComUrl = (() => {
         const base = "https://www.booking.com/searchresults.html";
