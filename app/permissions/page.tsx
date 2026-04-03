@@ -606,10 +606,16 @@ export interface AgentModelConfig {
 // Stagehand v3 requires "provider/model" format for all model identifiers
 const MODEL_OPTIONS: { model: string; label: string; provider: string; hint: string }[] = [
   {
+    model: "openai/gpt-4o-mini",
+    label: "GPT-4o mini",
+    provider: "OpenAI",
+    hint: "Recommended — 15× cheaper than GPT-4o, fast & accurate for booking tasks",
+  },
+  {
     model: "openai/gpt-4o-2024-08-06",
     label: "GPT-4o",
     provider: "OpenAI",
-    hint: "Best overall — strong vision & form-filling, widely supported",
+    hint: "Higher accuracy, higher cost",
   },
   {
     model: "google/gemini-2.0-flash",
