@@ -748,6 +748,42 @@ export function useChat({
     [loading, isNearMe, cityId, gpsCoords, nearLocation, profileContext, sessionPreferences, learnedWeights, onSubscriptionIntent, onAgentResponse, trackScenarioEvent, userId, getTelemetrySessionId]
   );
 
+  // ── Result cache: save to / restore from sessionStorage on back-navigation ──
+  const CACHE_KEY_PREFIX = "chat_results:";
+
+  // Save results to sessionStorage whenever a search completes
+  useEffect(() => {
+    if (loading) return;
+    const q = new URLSearchParams(window.location.search).get("q");
+    if (!q) return;
+    const hasResults =
+      messages.some((m) => m.role === "assistant") ||
+      allHotelCards.length > 0 ||
+      allFlightCards.length > 0 ||
+      allCards.length > 0;
+    if (!hasResults) return;
+    try {
+      const payload = {
+        messages,
+        allCards,
+        visibleCards,
+        allHotelCards,
+        hotelDates,
+        allFlightCards,
+        allCreditCardCards,
+        allLaptopCards,
+        allSmartphoneCards,
+        allHeadphoneCards,
+        resultCategory,
+        resultMode,
+        decisionPlan,
+        suggestedRefinements,
+      };
+      sessionStorage.setItem(CACHE_KEY_PREFIX + q, JSON.stringify(payload));
+    } catch { /* quota exceeded — ignore */ }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading]);
+
   const autoSearchFired = useRef(false);
   const sendMessageRef = useRef(sendMessage);
   useEffect(() => {
@@ -757,18 +793,31 @@ export function useChat({
     if (autoSearchFired.current) return;
     const q = new URLSearchParams(window.location.search).get("q");
     if (!q) return;
-    // Only auto-fire if the user hasn't already seen results for this query
-    // in this tab session. Prevents re-running on back-navigation.
-    const ssKey = `auto_search_done:${q}`;
-    if (sessionStorage.getItem(ssKey)) {
-      // Query already ran — strip the param from URL so it's clean
-      const clean = new URL(window.location.href);
-      clean.searchParams.delete("q");
-      window.history.replaceState({}, "", clean.toString());
-      return;
+
+    // Check for cached results first — restore without re-running
+    const cached = sessionStorage.getItem(CACHE_KEY_PREFIX + q);
+    if (cached) {
+      try {
+        const p = JSON.parse(cached);
+        if (p.messages?.length) setMessages(p.messages);
+        if (p.allCards?.length) { setAllCards(p.allCards); setVisibleCards(p.visibleCards ?? p.allCards); }
+        if (p.allHotelCards?.length) setAllHotelCards(p.allHotelCards);
+        if (p.hotelDates) setHotelDates(p.hotelDates);
+        if (p.allFlightCards?.length) setAllFlightCards(p.allFlightCards);
+        if (p.allCreditCardCards?.length) setAllCreditCardCards(p.allCreditCardCards);
+        if (p.allLaptopCards?.length) setAllLaptopCards(p.allLaptopCards);
+        if (p.allSmartphoneCards?.length) setAllSmartphoneCards(p.allSmartphoneCards);
+        if (p.allHeadphoneCards?.length) setAllHeadphoneCards(p.allHeadphoneCards);
+        if (p.resultCategory) setResultCategory(p.resultCategory);
+        if (p.resultMode) setResultMode(p.resultMode);
+        if (p.decisionPlan) setDecisionPlan(p.decisionPlan);
+        if (p.suggestedRefinements?.length) setSuggestedRefinements(p.suggestedRefinements);
+        autoSearchFired.current = true;
+        return; // results restored — no need to re-run
+      } catch { /* corrupted cache — fall through and re-run */ }
     }
+
     autoSearchFired.current = true;
-    sessionStorage.setItem(ssKey, "1");
     sendMessageRef.current(q);
   }, []);
 
