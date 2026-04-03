@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { HotelRecommendationCard } from "@/lib/types";
+import ProfilePicker from "./ProfilePicker";
 
 interface HotelCardProps {
   card: HotelRecommendationCard;
@@ -12,14 +13,21 @@ interface HotelCardProps {
 export default function HotelCard({ card, index }: HotelCardProps) {
   const { hotel } = card;
   const router = useRouter();
+  const [showPicker, setShowPicker] = useState(false);
   const [booking, setBooking] = useState(false);
 
-  async function handleBook() {
+  function handleBook() {
     if (booking) return;
+    setShowPicker(true);
+  }
+
+  async function proceedWithProfile(profileId: number) {
+    setShowPicker(false);
     setBooking(true);
+    // Remember this as the active profile for future bookings
+    localStorage.setItem("active_profile_id", String(profileId));
     try {
       const sessionId = localStorage.getItem("session_id") ?? crypto.randomUUID();
-      const profileId = localStorage.getItem("active_profile_id");
       const savedModel = JSON.parse(localStorage.getItem("agent_model_config") ?? "{}");
       const agentModel = savedModel.model && savedModel.apiKey ? savedModel : undefined;
       const step = {
@@ -30,7 +38,7 @@ export default function HotelCard({ card, index }: HotelCardProps) {
         body: {
           startUrl: hotel.booking_link,
           task: `Book a room at ${hotel.name}. Select the best available option and stop at the payment page without completing payment.`,
-          ...(profileId ? { profileId: parseInt(profileId) } : {}),
+          profileId,
           agentModel,
         },
         fallbackUrl: hotel.booking_link,
@@ -43,7 +51,6 @@ export default function HotelCard({ card, index }: HotelCardProps) {
       });
       if (createRes.ok) {
         const { jobId } = await createRes.json();
-        // Fire-and-forget: start the job in background
         fetch(`/api/booking-jobs/${jobId}/start`, { method: "POST" }).catch(() => {});
         router.push("/tasks");
       }
@@ -53,6 +60,13 @@ export default function HotelCard({ card, index }: HotelCardProps) {
   }
 
   return (
+    <>
+    {showPicker && (
+      <ProfilePicker
+        onSelect={proceedWithProfile}
+        onCancel={() => setShowPicker(false)}
+      />
+    )}
     <div
       style={{
         backgroundColor: "var(--card)",
@@ -353,5 +367,6 @@ export default function HotelCard({ card, index }: HotelCardProps) {
         </div>
       </div>
     </div>
+    </>
   );
 }

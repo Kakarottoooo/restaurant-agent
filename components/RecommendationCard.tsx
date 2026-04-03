@@ -4,6 +4,7 @@ import Image from "next/image";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { RecommendationCard as CardType, FeedbackRecord } from "@/lib/types";
+import ProfilePicker from "./ProfilePicker";
 
 interface Props {
   card: CardType;
@@ -76,14 +77,20 @@ export default function RecommendationCard({
 }: Props) {
   const router = useRouter();
   const [booking, setBooking] = useState(false);
+  const [showPicker, setShowPicker] = useState(false);
 
-  async function handleReserve() {
+  function handleReserve() {
     if (booking) return;
-    setBooking(true);
     fireTelemetry("reserve_click");
+    setShowPicker(true);
+  }
+
+  async function proceedWithProfile(profileId: number) {
+    setShowPicker(false);
+    setBooking(true);
+    localStorage.setItem("active_profile_id", String(profileId));
     try {
       const sessionId = localStorage.getItem("session_id") ?? crypto.randomUUID();
-      const profileId = localStorage.getItem("active_profile_id");
       const savedModel = JSON.parse(localStorage.getItem("agent_model_config") ?? "{}");
       const agentModel = savedModel.model && savedModel.apiKey ? savedModel : undefined;
       const startUrl =
@@ -97,7 +104,7 @@ export default function RecommendationCard({
         body: {
           startUrl,
           task: `Make a reservation at ${card.restaurant.name}. Fill in the contact information and stop at the payment or confirmation page without completing payment.`,
-          ...(profileId ? { profileId: parseInt(profileId) } : {}),
+          profileId,
           agentModel,
         },
         fallbackUrl: startUrl,
@@ -192,6 +199,13 @@ export default function RecommendationCard({
   }
 
   return (
+    <>
+    {showPicker && (
+      <ProfilePicker
+        onSelect={proceedWithProfile}
+        onCancel={() => setShowPicker(false)}
+      />
+    )}
     <div
       className="animate-fadeIn overflow-hidden"
       style={{
@@ -895,5 +909,6 @@ export default function RecommendationCard({
         </div>
       </div>
     </div>
+    </>
   );
 }
