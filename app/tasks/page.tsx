@@ -954,23 +954,6 @@ function JobCard({ job, onRefresh, sessionId }: { job: BookingJob; onRefresh?: (
         <span style={{ color: "var(--text-muted, #aaa)", fontSize: 12, flexShrink: 0 }}>
           {expanded ? "▲" : "▼"}
         </span>
-        {!isRunning && (
-          <button
-            onClick={handleDelete}
-            disabled={deleting}
-            title="Delete task"
-            style={{
-              flexShrink: 0, background: "none", border: "none", padding: "2px 4px",
-              cursor: deleting ? "default" : "pointer", fontSize: 15, lineHeight: 1,
-              color: "var(--text-muted, #aaa)", opacity: deleting ? 0.4 : 1,
-              transition: "color 0.15s",
-            }}
-            onMouseEnter={(e) => { if (!deleting) (e.currentTarget as HTMLButtonElement).style.color = "rgba(220,38,38,0.7)"; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "var(--text-muted, #aaa)"; }}
-          >
-            ×
-          </button>
-        )}
       </div>
 
       {expanded && (
@@ -1008,6 +991,29 @@ function JobCard({ job, onRefresh, sessionId }: { job: BookingJob; onRefresh?: (
 
           {/* Satisfaction widget for completed jobs */}
           {isComplete && <SatisfactionWidget jobId={job.id} />}
+
+          {/* Delete trip button */}
+          {!isRunning && (
+            <div style={{ borderTop: "0.5px solid var(--border, #e5e7eb)", padding: "10px 14px" }}>
+              <button
+                onClick={handleDelete}
+                disabled={deleting}
+                style={{
+                  background: "none",
+                  border: "0.5px solid var(--border, #e5e7eb)",
+                  borderRadius: 8,
+                  padding: "6px 14px",
+                  fontFamily: "var(--font-dm-sans)",
+                  fontSize: 12,
+                  color: deleting ? "var(--text-muted, #aaa)" : "rgba(220,38,38,0.75)",
+                  cursor: deleting ? "default" : "pointer",
+                  opacity: deleting ? 0.5 : 1,
+                }}
+              >
+                {deleting ? "Deleting…" : "🗑 Delete trip record"}
+              </button>
+            </div>
+          )}
         </>
       )}
     </div>
