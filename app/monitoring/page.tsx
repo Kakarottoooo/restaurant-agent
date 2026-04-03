@@ -28,12 +28,13 @@ function timeAgo(iso: string | null | undefined): string {
 interface MonitorCardProps {
   monitor: BookingMonitor;
   onCancel: (id: string) => void;
+  onDelete: (id: string) => void;
   typeMeta: Record<string, { emoji: string; label: string; desc: string }>;
   statusMeta: Record<string, { color: string; dot: string; label: string }>;
   t: { lastChecked: string; nextCheck: string; stopWatching: string; alertLabel: string };
 }
 
-function MonitorCard({ monitor, onCancel, typeMeta, statusMeta, t }: MonitorCardProps) {
+function MonitorCard({ monitor, onCancel, onDelete, typeMeta, statusMeta, t }: MonitorCardProps) {
   const type   = typeMeta[monitor.type] ?? typeMeta.availability_watch;
   const status = statusMeta[monitor.status] ?? statusMeta.active;
   const isLive  = monitor.status === "active";
@@ -109,18 +110,31 @@ function MonitorCard({ monitor, onCancel, typeMeta, statusMeta, t }: MonitorCard
       </div>
 
       {/* Actions */}
-      {isLive && (
+      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+        {isLive && (
+          <button
+            onClick={() => onCancel(monitor.id)}
+            style={{
+              fontFamily: "var(--font-dm-sans)", fontSize: 11, color: "var(--text-muted, #aaa)",
+              background: "none", border: "0.5px solid var(--border, #e5e7eb)",
+              borderRadius: 6, padding: "3px 10px", cursor: "pointer",
+            }}
+          >
+            {t.stopWatching}
+          </button>
+        )}
         <button
-          onClick={() => onCancel(monitor.id)}
+          onClick={() => onDelete(monitor.id)}
           style={{
-            fontFamily: "var(--font-dm-sans)", fontSize: 11, color: "var(--text-muted, #aaa)",
+            fontFamily: "var(--font-dm-sans)", fontSize: 11,
+            color: "rgba(220,38,38,0.65)",
             background: "none", border: "0.5px solid var(--border, #e5e7eb)",
             borderRadius: 6, padding: "3px 10px", cursor: "pointer",
           }}
         >
-          {t.stopWatching}
+          🗑 Delete
         </button>
-      )}
+      </div>
     </div>
   );
 }
@@ -187,6 +201,15 @@ export default function MonitoringPage() {
       body: JSON.stringify({ status: "cancelled" }),
     }).catch(() => {});
     load();
+  }
+
+  async function deleteMonitor(id: string) {
+    await fetch(`/api/monitors/${id}`, { method: "DELETE" }).catch(() => {});
+    setGroups((prev) =>
+      prev
+        .map((g) => ({ ...g, monitors: g.monitors.filter((m) => m.id !== id) }))
+        .filter((g) => g.monitors.length > 0)
+    );
   }
 
   const total  = groups.reduce((n, g) => n + g.monitors.length, 0);
@@ -296,7 +319,7 @@ export default function MonitoringPage() {
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
               {group.monitors.map((m) => (
-                <MonitorCard key={m.id} monitor={m} onCancel={cancelMonitor}
+                <MonitorCard key={m.id} monitor={m} onCancel={cancelMonitor} onDelete={deleteMonitor}
                   typeMeta={typeMeta} statusMeta={statusMeta} t={cardT} />
               ))}
             </div>
