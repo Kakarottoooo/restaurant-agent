@@ -2011,6 +2011,7 @@ function buildInstruction(input: BrowserTaskInput): string {
 
 You are starting at: ${input.startUrl}
 IMPORTANT: After navigating to the starting URL you may be redirected to a different domain — this is expected and correct (e.g. a hotel may have rebranded or moved). Stay on whatever website you actually land on and complete the booking there. Do NOT navigate to other hotel websites, search engines, or unrelated sites. If you land on the correct hotel's booking page, that IS the right site even if the domain differs from the starting URL.
+${input.startUrl.includes("booking.com") ? `\nYou are on booking.com. Flow: search results → click hotel card → hotel detail page → select room → "Reserve" → fill guest info → fill card → STOP before "Complete booking".` : ""}${input.startUrl.includes("expedia.com") ? `\nYou are on Expedia. Flow: search results → click hotel → select room → "Reserve" → fill guest info → fill card → STOP before final payment button.` : ""}
 
 Guest details — fill these into ALL guest/contact information fields you encounter:
 - Full name: ${fullName}
@@ -2019,9 +2020,24 @@ Guest details — fill these into ALL guest/contact information fields you encou
 ${addressParts.length ? `\nBilling address:\n${addressParts.map(a => `- ${a}`).join("\n")}` : ""}
 ${cardParts.length ? `\nPayment card (fill number and expiry, then STOP before CVV):\n${cardParts.map(c => `- ${c}`).join("\n")}` : ""}
 
-FIRST STEP — OPEN THE BOOKING WIDGET:
+FIRST STEP — GET TO THE BOOKING FORM:
+- If you are on a booking.com or Expedia SEARCH RESULTS page: find the hotel card matching the hotel name in the task, click on it to open its detail page. Do NOT click any generic "Reserve" button on the search results page itself — first open the hotel's own detail page.
+- If you are on a booking.com or Expedia HOTEL DETAIL page: scroll down to find the room list, select the cheapest available room, and click "Reserve" or "I'll reserve".
 - If the hotel homepage shows a "BOOK NOW" or "Book Now" button in the header/navigation bar, click it FIRST to open the booking calendar widget. This is the entry point — you cannot select dates until you click this button.
-- If a cookie consent banner appears, click "Decline all" or "Reject all" to dismiss it, then click "BOOK NOW".
+- If a cookie consent banner appears, click "Decline all" or "Reject all" to dismiss it before proceeding.
+
+BOOKING.COM SPECIFIC FLOW:
+1. Search results page → click the correct hotel card by name
+2. Hotel detail page → verify/set dates → scroll to room list → choose cheapest room → click "Reserve" / "I'll reserve"
+3. Guest details form → fill name, email, phone, address
+4. Payment page → choose "Credit or debit card" → fill card number and expiry
+5. STOP before CVV and before "Complete booking" / "Pay now" button
+
+EXPEDIA SPECIFIC FLOW:
+1. Search results → click correct hotel → "Select room"
+2. Room selection → choose room → "Reserve"
+3. Trip summary / checkout form → fill guest info and card
+4. STOP before final "Complete booking" button
 
 Booking widget navigation rules:
 - The booking calendar and room selection are inside an IFRAME on the page.

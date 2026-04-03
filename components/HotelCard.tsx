@@ -32,6 +32,38 @@ export default function HotelCard({ card, index, checkIn, checkOut, guests }: Ho
       const sessionId = localStorage.getItem("session_id") ?? crypto.randomUUID();
       const savedModel = JSON.parse(localStorage.getItem("agent_model_config") ?? "{}");
       const agentModel = savedModel.model && savedModel.apiKey ? savedModel : undefined;
+
+      // Build a booking.com search URL for this hotel so the agent uses a
+      // consistent, bot-friendly OTA platform instead of the hotel's own site.
+      const numAdults = guests ?? 1;
+      const bookingComUrl = (() => {
+        const base = "https://www.booking.com/searchresults.html";
+        const params = new URLSearchParams({
+          ss: hotel.name,
+          checkin: checkIn ?? "",
+          checkout: checkOut ?? "",
+          group_adults: String(numAdults),
+          no_rooms: "1",
+          selected_currency: "USD",
+          lang: "en-us",
+        });
+        // Remove empty params
+        for (const [k, v] of [...params.entries()]) {
+          if (!v) params.delete(k);
+        }
+        return `${base}?${params.toString()}`;
+      })();
+
+      const task = [
+        `Find and book "${hotel.name}" on booking.com for ${numAdults} adult(s).`,
+        checkIn ? `Check-in date: ${checkIn}.` : "",
+        checkOut ? `Check-out date: ${checkOut}.` : "",
+        `On the search results page, click on the card for "${hotel.name}".`,
+        "On the hotel detail page, confirm or update the dates, then select the cheapest available room and click Reserve.",
+        "Fill in all guest information and card details.",
+        "Stop before entering CVV or clicking the final payment confirmation button.",
+      ].filter(Boolean).join(" ");
+
       // Include contact info inline so the agent always has it,
       // even if server-side profile lookup fails (no auth session on job).
       // Card number is NOT included here — fetched server-side via profileId.
@@ -41,16 +73,8 @@ export default function HotelCard({ card, index, checkIn, checkOut, guests }: Ho
         label: hotel.name,
         apiEndpoint: "/api/booking-autopilot/universal",
         body: {
-          startUrl: hotel.booking_link,
-          task: [
-            `Book a room at ${hotel.name}.`,
-            checkIn ? `Preferred check-in date: ${checkIn}.` : "",
-            checkOut ? `Preferred check-out date: ${checkOut}.` : "",
-            guests ? `Guests: ${guests}.` : "",
-            "If the site shows a date picker, click the check-in date cell first, then the check-out date cell.",
-            "If there is a minimum stay requirement, extend the check-out date by the required number of nights and try again.",
-            "Select the best available room option and stop at the payment page without completing payment.",
-          ].filter(Boolean).join(" "),
+          startUrl: bookingComUrl,
+          task,
           profileId: picked.profileId,
           profile: {
             first_name: picked.first_name,
