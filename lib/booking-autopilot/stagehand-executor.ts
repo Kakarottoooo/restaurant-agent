@@ -1388,9 +1388,31 @@ export async function runBrowserTask(
     {
       const landedUrl = page.url();
       const bookingComFailed =
-        landedUrl.includes("errorc_searchstring_not_found");
+        landedUrl.includes("errorc_searchstring_not_found") ||
+        // booking.com redirects to index.html when it detects a bot browser
+        (landedUrl.includes("booking.com/index.html") && input.startUrl.includes("booking.com/searchresults"));
 
       if (bookingComFailed) {
+        const isBotRedirect = landedUrl.includes("booking.com/index.html");
+
+        if (isBotRedirect) {
+          // Bot redirect — let the user open the original search URL in their own browser
+          // (works fine for real browsers, no CAPTCHA)
+          trace(`booking.com bot-redirect detected (${landedUrl}). Returning handoff to original search URL.`);
+          const screenshotBase64 = `data:image/png;base64,${(await page.screenshot({ type: "png" })).toString("base64")}`;
+          const sessionUrl = useCloud ? stagehand.browserbaseSessionURL : undefined;
+          await stagehand.close();
+          return {
+            status: "captcha",
+            screenshotBase64,
+            handoffUrl: input.startUrl,
+            sessionUrl,
+            summary: "Booking.com detected an automated browser. Click the link to open the search in your own browser and complete booking there.",
+            error: "booking.com bot-redirect to index.html.",
+            debugTrace,
+          };
+        }
+
         // Resolve fallback: prefer explicit input.fallbackUrl, then parse from task string
         const fallback =
           input.fallbackUrl ??
