@@ -1404,8 +1404,9 @@ CRITICAL — DO NOT STOP EARLY:
 - Card number / expiry date → FILL IN (do NOT stop here)
 - You are only done when card number + expiry are filled AND you are stopped before CVV / final pay button
 - "I reached the payment summary page" is NOT done — you must still fill card fields first
-- NEVER click generic page-level carousel buttons like "Next Slide" / "Previous Slide" outside the booking widget or checkout iframe
-- If there is both a booking-widget "Next" button and a page carousel "Next Slide" button, ALWAYS click the booking-widget one near the selected dates / guests / room options
+- NEVER click "Next Slide" / "Previous Slide" carousel buttons — these control the photo gallery, not the booking calendar
+- The booking calendar's month arrows are INSIDE the Namastay booking panel, directly beside the month/year heading. They are NOT the same as the photo carousel arrows on the main page.
+- If you are unsure which button advances the calendar month: take an ariaTree first, find the element that is adjacent to the month/year text (e.g., "April 2026"), and click that element. Do not guess.
 
 DISTINGUISH: "advance" buttons vs "final payment" buttons:
 - ALWAYS CLICK these (they move the flow forward, they do NOT charge): "Proceed to payment", "Continue", "Reserve", "Next", "Select", "Credit or debit card" (selection option)
@@ -2025,6 +2026,15 @@ FIRST STEP — GET TO THE BOOKING FORM:
 - If you are on a booking.com or Expedia HOTEL DETAIL page: scroll down to find the room list, select the cheapest available room, and click "Reserve" or "I'll reserve".
 - If the hotel homepage shows a "BOOK NOW" or "Book Now" button in the header/navigation bar, click it FIRST to open the booking calendar widget. This is the entry point — you cannot select dates until you click this button.
 - If a cookie consent banner appears, click "Decline all" or "Reject all" to dismiss it before proceeding.
+
+AFTER CLICKING "BOOK NOW" — WAIT FOR CALENDAR TO LOAD:
+- After clicking "BOOK NOW", take an ariaTree snapshot BEFORE trying to click anything else.
+- Verify the ariaTree shows a BOOKING CALENDAR with a month/year header (e.g., "April 2026") and a date grid showing day numbers. If the calendar is not yet visible, take another screenshot and wait.
+- The booking calendar navigation arrows (‹ left / › right) appear INSIDE the Namastay booking panel — they sit directly next to the month/year header text (e.g., "April 2026 ›").
+- The "Previous Slide" and "Next Slide" buttons belong to the PHOTO GALLERY carousel on the main hotel page — they control photos, NOT calendar months. NEVER click these.
+- To distinguish: if clicking a button changes a photo but not the calendar month header, you clicked the wrong button. Use ariaTree to find the calendar navigation arrows instead.
+- When acting on the calendar arrow, describe it as: "click the right arrow button next to the month/year heading inside the Namastay booking calendar"
+- After each calendar arrow click, take an ariaTree to confirm the month header changed before clicking again.
 
 BOOKING.COM SPECIFIC FLOW:
 1. Search results page → find and click the correct hotel card by name
