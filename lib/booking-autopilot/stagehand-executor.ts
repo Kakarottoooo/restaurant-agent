@@ -1320,11 +1320,11 @@ export async function runBrowserTask(
     ...(useCloud && {
       apiKey: process.env.BROWSERBASE_API_KEY,
       projectId: process.env.BROWSERBASE_PROJECT_ID,
-      // Use Browserbase residential proxies to avoid bot-detection on OTA sites
-      // (booking.com and Expedia block datacenter IPs).
-      browserbaseSessionCreateParams: {
-        proxies: true,
-      },
+      // Residential proxies bypass OTA bot-detection (booking.com, Expedia).
+      // Requires Browserbase plan that includes proxies — disable if on free plan.
+      ...(process.env.BROWSERBASE_USE_PROXIES === "true" && {
+        browserbaseSessionCreateParams: { proxies: true },
+      }),
     }),
     model: modelName,  // just the string — Stagehand reads key from env vars above
     verbose: 0,
