@@ -1387,15 +1387,19 @@ export async function runBrowserTask(
     // ── Early check: booking.com search failed — redirect to fallback ────────
     {
       const landedUrl = page.url();
+      const isBookingComStart = input.startUrl.includes("booking.com/searchresults");
+      const bookingComBotRedirect =
+        isBookingComStart && (
+          landedUrl.includes("booking.com/index.html") ||
+          // Bot detection sometimes redirects to root or homepage variants
+          /booking\.com\/?(\?|#|$)/.test(landedUrl)
+        ) && !landedUrl.includes("errorc_searchstring_not_found");
       const bookingComFailed =
         landedUrl.includes("errorc_searchstring_not_found") ||
-        // booking.com redirects to index.html when it detects a bot browser
-        (landedUrl.includes("booking.com/index.html") && input.startUrl.includes("booking.com/searchresults"));
+        bookingComBotRedirect;
 
       if (bookingComFailed) {
-        // index.html + errorc_searchstring_not_found = genuine search failure → use Expedia fallback
-        // index.html alone = bot detection redirect → return early with original search URL
-        const isBotRedirect = landedUrl.includes("booking.com/index.html") && !landedUrl.includes("errorc_searchstring_not_found");
+        const isBotRedirect = bookingComBotRedirect;
 
         if (isBotRedirect) {
           // Bot redirect — let the user open the original search URL in their own browser

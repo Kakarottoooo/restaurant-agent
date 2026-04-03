@@ -86,7 +86,7 @@ export default function HotelCard({ card, index, checkIn, checkOut, guests }: Ho
         body: {
           startUrl: bookingComUrl,
           task,
-          fallbackUrl: bookingComUrl,
+          fallbackUrl: hotel.booking_link,
           profileId: picked.profileId,
           profile: {
             first_name: picked.first_name,
@@ -101,7 +101,7 @@ export default function HotelCard({ card, index, checkIn, checkOut, guests }: Ho
           },
           agentModel,
         },
-        fallbackUrl: bookingComUrl,
+        fallbackUrl: hotel.booking_link,
         status: "pending",
       };
       const createRes = await fetch("/api/booking-jobs", {
