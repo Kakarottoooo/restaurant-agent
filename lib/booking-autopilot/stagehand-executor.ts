@@ -2069,6 +2069,19 @@ CALENDAR MONTH NAVIGATION:
 - After each arrow click, re-read the calendar header to confirm the month changed correctly.
 - NEVER click a date cell unless the header already shows the correct month and year.
 
+STAY DURATION / SINGLE CHECK-IN DATE CALENDARS (IHG and similar):
+- Some hotel calendars (e.g. IHG) use a CHECK-IN DATE + STAY DURATION model, NOT a check-in/check-out range picker.
+- How to identify: the calendar shows a "Stay duration" control with +/− buttons (e.g. "1 night") at the bottom, and each date cell shows a price per night.
+- On these calendars: click ONLY the check-in date cell. Do NOT click the checkout date — clicking a second date will OVERRIDE the check-in selection and move it forward.
+- After clicking check-in, use the "+" (Increment) button next to "Stay duration" / "1 night" to increase the number of nights until it matches the required stay length.
+- Example: check-in May 26, check-out May 28 = 2 nights → click May 26, then click "+" once to go from 1 night to 2 nights.
+- Then click CONTINUE to proceed to room selection.
+
+ONLY FILL GUEST INFO ON THE ACTUAL CHECKOUT / GUEST DETAILS PAGE:
+- Do NOT call fillForm or type any guest info while on the room selection page, search results page, or calendar dialog.
+- The checkout / guest details page typically has clearly labeled fields: "First name", "Last name", "Email address", "Phone number", "Address", "City", "State", "ZIP", and a payment card section.
+- If you are not sure whether you are on the checkout form, take an ariaTree snapshot and look for those labeled fields before typing anything.
+
 Fill ALL guest info and billing address fields that are inside the booking widget or checkout form.
 Do NOT fill newsletter subscription inputs, footer email fields, or any input outside the booking/checkout area.
 If a page shows only card fields (no name/email/phone), skip those and fill just the card fields.
