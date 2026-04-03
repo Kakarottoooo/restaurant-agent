@@ -1353,13 +1353,17 @@ export async function runBrowserTask(
         earlyText.includes("err_connection_refused") ||
         earlyText.includes("err_name_not_resolved") ||
         earlyText.includes("dns_probe_finished_nxdomain");
-      // Bot-detection / error pages on hotel brand sites (Hilton, Marriott, etc.)
+      // Bot-detection / error pages on hotel brand sites and OTAs
       const botBlocked =
         earlyText.includes("something went wrong") ||
         earlyText.includes("access denied") ||
         earlyText.includes("reference no.") ||
         earlyText.includes("please enable cookies") ||
-        earlyText.includes("checking your browser");
+        earlyText.includes("checking your browser") ||
+        earlyText.includes("show us your human side") ||   // Expedia CAPTCHA
+        earlyText.includes("bot or not") ||                // Expedia CAPTCHA title
+        earlyText.includes("we can't tell if you're a human") ||  // Expedia CAPTCHA
+        earlyText.includes("please type the numbers you hear");    // Expedia audio CAPTCHA
       if (unreachable || botBlocked) {
         const reason = botBlocked ? "Bot detection / error page" : "Network unreachable";
         trace(`${reason} detected on landing page — stopping early.`);
@@ -1395,6 +1399,36 @@ export async function runBrowserTask(
         if (fallback) {
           trace(`booking.com search failed (${landedUrl}). Navigating to fallback: ${fallback}`);
           await page.goto(fallback, { waitUntil: "domcontentloaded", timeoutMs: 30_000 });
+
+          // Check if fallback page is also bot-blocked (e.g. Expedia CAPTCHA)
+          let fallbackText = "";
+          try {
+            fallbackText = (await page.evaluate(() =>
+              (document.body?.innerText ?? "").toLowerCase().slice(0, 1000)
+            ) as string);
+          } catch { /* ignore */ }
+          const fallbackBotBlocked =
+            fallbackText.includes("show us your human side") ||
+            fallbackText.includes("bot or not") ||
+            fallbackText.includes("we can't tell if you're a human") ||
+            fallbackText.includes("please type the numbers you hear") ||
+            fallbackText.includes("checking your browser") ||
+            fallbackText.includes("access denied");
+          if (fallbackBotBlocked) {
+            trace("Fallback OTA also bot-blocked — returning captcha status with handoff link.");
+            const screenshotBase64 = `data:image/png;base64,${(await page.screenshot({ type: "png" })).toString("base64")}`;
+            const sessionUrl = useCloud ? stagehand.browserbaseSessionURL : undefined;
+            await stagehand.close();
+            return {
+              status: "captcha",
+              screenshotBase64,
+              handoffUrl: fallback,
+              sessionUrl,
+              summary: "The booking site is showing a CAPTCHA. Click the link to open it and complete the booking yourself.",
+              error: "Bot detection on fallback OTA.",
+              debugTrace,
+            };
+          }
         } else {
           trace(`booking.com search failed but no fallback URL found. Letting agent handle it.`);
         }
