@@ -1348,18 +1348,28 @@ export async function runBrowserTask(
         earlyText.includes("err_connection_refused") ||
         earlyText.includes("err_name_not_resolved") ||
         earlyText.includes("dns_probe_finished_nxdomain");
-      if (unreachable) {
-        trace("Early network check failed before the booking flow started.");
+      // Bot-detection / error pages on hotel brand sites (Hilton, Marriott, etc.)
+      const botBlocked =
+        earlyText.includes("something went wrong") ||
+        earlyText.includes("access denied") ||
+        earlyText.includes("reference no.") ||
+        earlyText.includes("please enable cookies") ||
+        earlyText.includes("checking your browser");
+      if (unreachable || botBlocked) {
+        const reason = botBlocked ? "Bot detection / error page" : "Network unreachable";
+        trace(`${reason} detected on landing page — stopping early.`);
         const screenshotBase64 = `data:image/png;base64,${(await page.screenshot({ type: "png" })).toString("base64")}`;
         const sessionUrl = useCloud ? stagehand.browserbaseSessionURL : undefined;
         await stagehand.close();
         return {
           status: "captcha",
           screenshotBase64,
-          handoffUrl: input.startUrl,
+          handoffUrl: input.fallbackUrl ?? input.startUrl,
           sessionUrl,
-          summary: "The hotel's website could not be reached by the automated browser (network error). Open the link to book directly in your own browser.",
-          error: "Site unreachable from cloud browser (ERR_TUNNEL_CONNECTION_FAILED or similar).",
+          summary: botBlocked
+            ? "This hotel's website blocked the automated browser. Please book directly via the link."
+            : "The hotel's website could not be reached by the automated browser (network error). Open the link to book directly in your own browser.",
+          error: `${reason} on landing page.`,
           debugTrace,
         };
       }
