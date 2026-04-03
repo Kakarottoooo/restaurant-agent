@@ -130,6 +130,12 @@ CALENDAR & DATE PICKERS:
 - After both dates are selected, look for "Book now" / "Reserve" / "Check availability" and click it
 - NEVER report dates as selected unless you can clearly see them shown as chosen on the page
 
+BROWSER ERRORS — IGNORE THESE, KEEP GOING:
+- reCAPTCHA errors ("Invalid domain", "Invalid site key", reCAPTCHA failed to load) → IGNORE, fill the form fields anyway
+- CORS errors, network errors, console errors → IGNORE, they do not block you from typing into fields
+- Only stop for a VISIBLE on-screen CAPTCHA challenge (image grid, checkbox, slider) that blocks submission
+- JavaScript console errors are invisible to the user and do NOT stop you from filling text inputs
+
 The user will enter the CVV and click the final payment button themselves. Your job is to fill everything up to that point.`,
     });
 
@@ -173,9 +179,35 @@ The user will enter the CVV and click the final payment button themselves. Your 
       };
     }
 
-    // Determine outcome
+    // Detect: reached checkout page but form fields are still empty (agent stopped early)
     const msg = (result.message ?? "").toLowerCase();
     const hitPaymentUrl = isPaymentUrl(currentUrl);
+
+    const agentMentionsCaptchaBlock =
+      msg.includes("recaptcha") ||
+      msg.includes("captcha") ||
+      msg.includes("cloudflare");
+
+    // If agent is on a checkout page but says it was blocked by captcha AND
+    // form fields look empty → escalate to error so user can see the real state
+    const onCheckoutWithEmptyForm =
+      hitPaymentUrl &&
+      agentMentionsCaptchaBlock &&
+      !result.completed &&
+      (pageText.includes("enter your first name") ||
+       pageText.includes("enter your last name") ||
+       pageText.includes("enter your email") ||
+       (pageText.includes("first name") && pageText.includes("last name") && pageText.includes("email") && !pageText.includes("@")));
+
+    if (onCheckoutWithEmptyForm) {
+      return {
+        status: "paused_payment",  // still send user to the page — they're 1 step away
+        screenshotBase64,
+        handoffUrl: currentUrl,
+        sessionUrl,
+        summary: "Agent reached the guest info form but was blocked by a reCAPTCHA error from filling it automatically. Open the link — the dates are pre-selected, just fill your name, email and phone.",
+      };
+    }
 
     // Agent stopped before CVV/pay button (has filled card number+expiry already)
     const hitPaymentGate =
