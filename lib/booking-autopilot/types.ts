@@ -73,6 +73,11 @@ export interface BrowserTaskInput {
   agentModel?: AgentModelConfig;
   /** DB profile ID — server fetches and decrypts card data. Preferred over inline profile. */
   profileId?: number;
+  /**
+   * Fallback URL to use if the startUrl fails (e.g. booking.com returns no results).
+   * The executor will navigate here automatically instead of relying on the agent to detect errors.
+   */
+  fallbackUrl?: string;
 }
 
 export type BrowserTaskStatus =
@@ -95,4 +100,6 @@ export interface BrowserTaskResult {
   summary: string;
   /** Error detail when status === "error". */
   error?: string;
+  /** Structured trace of automatic fallback decisions taken by the executor. */
+  debugTrace?: string[];
 }

@@ -1365,6 +1365,28 @@ export async function runBrowserTask(
       }
     }
 
+    // ── Early check: booking.com search failed — redirect to fallback ────────
+    {
+      const landedUrl = page.url();
+      const bookingComFailed =
+        landedUrl.includes("errorc_searchstring_not_found") ||
+        (landedUrl.includes("booking.com/index.html") && input.startUrl.includes("booking.com/searchresults"));
+
+      if (bookingComFailed) {
+        // Resolve fallback: prefer explicit input.fallbackUrl, then parse from task string
+        const fallback =
+          input.fallbackUrl ??
+          input.task.match(/fallback URL[^:]*:\s*(https?:\/\/\S+)/i)?.[1]?.replace(/\s.*$/, "");
+
+        if (fallback) {
+          trace(`booking.com search failed (${landedUrl}). Navigating to fallback: ${fallback}`);
+          await page.goto(fallback, { waitUntil: "domcontentloaded", timeoutMs: 30_000 });
+        } else {
+          trace(`booking.com search failed but no fallback URL found. Letting agent handle it.`);
+        }
+      }
+    }
+
     // Build the agent instruction
     const instruction = buildInstruction(input);
 

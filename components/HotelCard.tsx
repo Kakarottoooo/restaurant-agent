@@ -86,6 +86,7 @@ export default function HotelCard({ card, index, checkIn, checkOut, guests }: Ho
         body: {
           startUrl: bookingComUrl,
           task,
+          fallbackUrl: hotel.booking_link,
           profileId: picked.profileId,
           profile: {
             first_name: picked.first_name,
