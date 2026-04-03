@@ -603,31 +603,45 @@ export interface AgentModelConfig {
   apiKey: string;
 }
 
-// Stagehand v3 requires "provider/model" format for all model identifiers
-const MODEL_OPTIONS: { model: string; label: string; provider: string; hint: string }[] = [
+// Per-provider key storage keys in localStorage
+const PROVIDER_KEY_STORAGE: Record<string, string> = {
+  OpenAI: "provider_key_openai",
+  Anthropic: "provider_key_anthropic",
+  Google: "provider_key_google",
+};
+
+// Stagehand v3 requires "provider/model" format
+const PROVIDER_GROUPS: {
+  id: string;
+  label: string;
+  placeholder: string;
+  models: { model: string; label: string; hint: string; badge?: string }[];
+}[] = [
   {
-    model: "openai/gpt-4o-mini",
-    label: "GPT-4o mini",
-    provider: "OpenAI",
-    hint: "Recommended — 15× cheaper than GPT-4o, fast & accurate for booking tasks",
+    id: "OpenAI",
+    label: "OpenAI",
+    placeholder: "sk-...",
+    models: [
+      { model: "openai/gpt-4o-mini", label: "GPT-4o mini", hint: "Recommended — fast & affordable", badge: "★ Best value" },
+      { model: "openai/gpt-4o-2024-08-06", label: "GPT-4o", hint: "Higher accuracy, higher cost" },
+    ],
   },
   {
-    model: "openai/gpt-4o-2024-08-06",
-    label: "GPT-4o",
-    provider: "OpenAI",
-    hint: "Higher accuracy, higher cost",
+    id: "Anthropic",
+    label: "Anthropic",
+    placeholder: "sk-ant-...",
+    models: [
+      { model: "anthropic/claude-haiku-4-5-20251001", label: "Claude Haiku 4.5", hint: "Fastest & cheapest Claude" },
+      { model: "anthropic/claude-sonnet-4-6", label: "Claude Sonnet 4.6", hint: "Best reasoning accuracy" },
+    ],
   },
   {
-    model: "google/gemini-2.0-flash",
-    label: "Gemini 2.0 Flash",
-    provider: "Google",
-    hint: "Fast & free tier available",
-  },
-  {
-    model: "anthropic/claude-sonnet-4-6",
-    label: "Claude Sonnet 4.6",
-    provider: "Anthropic",
-    hint: "Best reasoning accuracy",
+    id: "Google",
+    label: "Google / Gemini",
+    placeholder: "AIza...",
+    models: [
+      { model: "google/gemini-2.0-flash", label: "Gemini 2.0 Flash", hint: "Fast, free tier available" },
+    ],
   },
 ];
 
@@ -642,35 +656,77 @@ function saveAgentModelConfig(cfg: AgentModelConfig) {
 }
 
 function AgentModelTab() {
-  const [cfg, setCfg] = useState<AgentModelConfig>({ model: "", apiKey: "" });
-  const [showKey, setShowKey] = useState(false);
+  const [activeModel, setActiveModel] = useState("");
+  // per-provider keys typed by the user (from localStorage)
+  const [localKeys, setLocalKeys] = useState<Record<string, string>>({});
+  // which providers have server-side env keys
+  const [serverKeys, setServerKeys] = useState<Record<string, boolean>>({});
+  const [showKey, setShowKey] = useState<Record<string, boolean>>({});
   const [saved, setSaved] = useState(false);
 
-  useEffect(() => { setCfg(loadAgentModelConfig()); }, []);
+  // Load active model + per-provider keys from localStorage
+  useEffect(() => {
+    const cfg = loadAgentModelConfig();
+    setActiveModel(cfg.model ?? "");
+    const loaded: Record<string, string> = {};
+    for (const [pid, storageKey] of Object.entries(PROVIDER_KEY_STORAGE)) {
+      loaded[pid] = localStorage.getItem(storageKey) ?? "";
+    }
+    setLocalKeys(loaded);
+  }, []);
+
+  // Check server-side env keys
+  useEffect(() => {
+    fetch("/api/agent-keys-status")
+      .then((r) => r.json())
+      .then((data: { openai: boolean; anthropic: boolean; google: boolean }) => {
+        setServerKeys({ OpenAI: data.openai, Anthropic: data.anthropic, Google: data.google });
+      })
+      .catch(() => {});
+  }, []);
+
+  function providerOfModel(model: string): string {
+    return PROVIDER_GROUPS.find((g) => g.models.some((m) => m.model === model))?.id ?? "";
+  }
+
+  function resolvedApiKey(providerId: string): string {
+    // If user has a local key use that; otherwise empty (server env key will be used)
+    return localKeys[providerId] ?? "";
+  }
 
   function selectModel(model: string) {
-    const next = { ...cfg, model };
-    setCfg(next);
-    saveAgentModelConfig(next);
+    const providerId = providerOfModel(model);
+    const apiKey = resolvedApiKey(providerId);
+    const cfg: AgentModelConfig = { model, apiKey };
+    saveAgentModelConfig(cfg);
+    setActiveModel(model);
+    flash();
+  }
+
+  function saveProviderKey(providerId: string, key: string) {
+    const trimmed = key.trim();
+    setLocalKeys((prev) => ({ ...prev, [providerId]: trimmed }));
+    localStorage.setItem(PROVIDER_KEY_STORAGE[providerId], trimmed);
+    // If active model belongs to this provider, update its apiKey too
+    if (providerOfModel(activeModel) === providerId) {
+      saveAgentModelConfig({ model: activeModel, apiKey: trimmed });
+    }
+    flash();
+  }
+
+  function flash() {
     setSaved(true);
     setTimeout(() => setSaved(false), 1800);
   }
 
-  function setApiKey(apiKey: string) {
-    const next = { ...cfg, apiKey };
-    setCfg(next);
-    saveAgentModelConfig(next);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 1800);
-  }
-
-  const selectedOption = MODEL_OPTIONS.find((o) => o.model === cfg.model);
-  const isReady = !!cfg.model && !!cfg.apiKey;
+  const activeLabel = PROVIDER_GROUPS.flatMap((g) => g.models).find((m) => m.model === activeModel)?.label;
+  const activeProvider = providerOfModel(activeModel);
+  const isReady = !!activeModel && (!!localKeys[activeProvider] || !!serverKeys[activeProvider]);
 
   const inputStyle: React.CSSProperties = {
-    width: "100%", padding: "10px 12px", borderRadius: 10, boxSizing: "border-box",
+    flex: 1, padding: "9px 12px", borderRadius: 10, boxSizing: "border-box",
     border: "0.5px solid var(--border, #e5e7eb)", backgroundColor: "var(--card, #fff)",
-    fontFamily: "var(--font-dm-sans)", fontSize: 14, color: "var(--text-primary, #111)",
+    fontFamily: "var(--font-dm-sans)", fontSize: 13, color: "var(--text-primary, #111)",
     outline: "none",
   };
 
@@ -686,80 +742,124 @@ function AgentModelTab() {
       }}>
         <span style={{ fontSize: 20 }}>{isReady ? "✅" : "🤖"}</span>
         <div>
-          <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 13, color: "var(--text-primary, #111)", fontWeight: 600 }}>
-            {isReady ? `Using ${selectedOption?.label} for browser automation` : "Choose your AI model"}
+          <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 13, fontWeight: 600, color: "var(--text-primary, #111)" }}>
+            {isReady ? `Using ${activeLabel} for browser automation` : "Select an AI model to enable booking agent"}
           </p>
           <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 11, color: "var(--text-muted, #aaa)" }}>
-            {isReady ? "Agent will use this model to navigate booking sites" : "The agent needs a vision model to navigate websites"}
+            {isReady ? "Click any model below to switch instantly" : "Enter an API key for at least one provider, then select a model"}
           </p>
         </div>
       </div>
 
-      {/* Model cards */}
-      <SectionLabel>Browser Agent Model</SectionLabel>
-      <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 24 }}>
-        {MODEL_OPTIONS.map((opt) => {
-          const active = cfg.model === opt.model;
-          return (
-            <div key={opt.model} onClick={() => selectModel(opt.model)} style={{
-              padding: "14px 16px", borderRadius: 12, cursor: "pointer",
-              border: active ? "1.5px solid var(--gold, #C9A84C)" : "0.5px solid var(--border, #e5e7eb)",
-              backgroundColor: active ? "rgba(201,168,76,0.06)" : "var(--card, #fff)",
-              transition: "border-color 0.15s, background 0.15s",
+      {/* Provider groups */}
+      {PROVIDER_GROUPS.map((group) => {
+        const hasServerKey = !!serverKeys[group.id];
+        const localKey = localKeys[group.id] ?? "";
+        const hasKey = hasServerKey || !!localKey;
+        const isVisible = showKey[group.id];
+
+        return (
+          <div key={group.id} style={{ marginBottom: 24 }}>
+            {/* Provider header */}
+            <div style={{
+              display: "flex", alignItems: "center", gap: 8, marginBottom: 10,
             }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-                <p style={{
-                  fontFamily: "var(--font-dm-sans)", fontSize: 14, fontWeight: 700,
-                  color: active ? "var(--gold, #C9A84C)" : "var(--text-primary, #111)",
-                }}>
-                  {opt.label}
-                </p>
+              <p style={{
+                fontFamily: "var(--font-dm-sans)", fontSize: 11, fontWeight: 700,
+                color: "var(--text-muted, #aaa)", textTransform: "uppercase", letterSpacing: "0.08em",
+              }}>
+                {group.label}
+              </p>
+              {hasServerKey && (
                 <span style={{
                   fontSize: 10, fontFamily: "var(--font-dm-sans)", fontWeight: 600,
-                  padding: "2px 8px", borderRadius: 20,
-                  backgroundColor: active ? "var(--gold, #C9A84C)" : "var(--card-2, #f5f5f4)",
-                  color: active ? "#fff" : "var(--text-muted, #aaa)",
+                  padding: "2px 7px", borderRadius: 20,
+                  backgroundColor: "rgba(34,197,94,0.12)", color: "#16a34a",
                 }}>
-                  {opt.provider}
+                  ✓ Server key
                 </span>
-              </div>
-              <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 11.5, color: "var(--text-secondary, #666)" }}>
-                {opt.hint}
-              </p>
+              )}
             </div>
-          );
-        })}
-      </div>
 
-      {/* API key input — shown once a model is selected */}
-      {cfg.model && (
-        <>
-          <SectionLabel>API Key</SectionLabel>
-          <FieldLabel>{`${selectedOption?.provider ?? ""} API key`}</FieldLabel>
-          <div style={{ position: "relative" }}>
-            <input
-              style={{ ...inputStyle, paddingRight: 44 }}
-              type={showKey ? "text" : "password"}
-              value={cfg.apiKey}
-              placeholder="Paste your API key here"
-              onChange={(e) => setApiKey(e.target.value)}
-            />
-            <button onClick={() => setShowKey((v) => !v)} style={{
-              position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)",
-              background: "none", border: "none", cursor: "pointer",
-              fontFamily: "var(--font-dm-sans)", fontSize: 11, color: "var(--text-muted, #aaa)",
-            }}>
-              {showKey ? "Hide" : "Show"}
-            </button>
+            {/* API key row — hide if server has it */}
+            {!hasServerKey && (
+              <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+                <input
+                  style={inputStyle}
+                  type={isVisible ? "text" : "password"}
+                  value={localKey}
+                  placeholder={localKey ? "••••••••••••" : `${group.placeholder} — paste once, saved locally`}
+                  onChange={(e) => saveProviderKey(group.id, e.target.value)}
+                />
+                <button
+                  onClick={() => setShowKey((prev) => ({ ...prev, [group.id]: !prev[group.id] }))}
+                  style={{
+                    padding: "0 12px", borderRadius: 10, border: "0.5px solid var(--border, #e5e7eb)",
+                    background: "var(--card, #fff)", fontFamily: "var(--font-dm-sans)", fontSize: 11,
+                    color: "var(--text-muted, #aaa)", cursor: "pointer", whiteSpace: "nowrap",
+                  }}
+                >
+                  {isVisible ? "Hide" : "Show"}
+                </button>
+              </div>
+            )}
+
+            {/* Model chips */}
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+              {group.models.map((m) => {
+                const active = activeModel === m.model;
+                const canSelect = hasKey;
+                return (
+                  <div
+                    key={m.model}
+                    onClick={() => canSelect && selectModel(m.model)}
+                    title={!canSelect ? `Enter a ${group.label} API key first` : m.hint}
+                    style={{
+                      padding: "10px 14px", borderRadius: 12,
+                      cursor: canSelect ? "pointer" : "not-allowed",
+                      opacity: canSelect ? 1 : 0.45,
+                      border: active ? "1.5px solid var(--gold, #C9A84C)" : "0.5px solid var(--border, #e5e7eb)",
+                      backgroundColor: active ? "rgba(201,168,76,0.08)" : "var(--card, #fff)",
+                      transition: "border-color 0.15s, background 0.15s",
+                      minWidth: 120,
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3 }}>
+                      {active && <span style={{ fontSize: 10, color: "var(--gold, #C9A84C)" }}>●</span>}
+                      <p style={{
+                        fontFamily: "var(--font-dm-sans)", fontSize: 13, fontWeight: 700,
+                        color: active ? "var(--gold, #C9A84C)" : "var(--text-primary, #111)",
+                      }}>
+                        {m.label}
+                      </p>
+                      {m.badge && (
+                        <span style={{
+                          fontSize: 9, fontFamily: "var(--font-dm-sans)", fontWeight: 600,
+                          padding: "1px 6px", borderRadius: 20,
+                          backgroundColor: active ? "var(--gold, #C9A84C)" : "rgba(201,168,76,0.15)",
+                          color: active ? "#fff" : "var(--gold, #C9A84C)",
+                        }}>
+                          {m.badge}
+                        </span>
+                      )}
+                    </div>
+                    <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 10.5, color: "var(--text-secondary, #666)" }}>
+                      {m.hint}
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
           </div>
-          <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 11, color: "var(--text-muted, #aaa)", marginTop: 10, lineHeight: 1.6 }}>
-            Stored locally on your device and sent directly to the browser agent. Never stored on our servers.
-          </p>
-        </>
-      )}
+        );
+      })}
+
+      <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 11, color: "var(--text-muted, #aaa)", marginTop: 4, lineHeight: 1.6 }}>
+        API keys are stored locally on your device only.
+      </p>
 
       <p style={{
-        fontFamily: "var(--font-dm-sans)", fontSize: 12, textAlign: "center", marginTop: 20,
+        fontFamily: "var(--font-dm-sans)", fontSize: 12, textAlign: "center", marginTop: 16,
         color: saved ? "var(--gold, #C9A84C)" : "transparent", transition: "color 0.3s",
       }}>
         ✓ Saved
