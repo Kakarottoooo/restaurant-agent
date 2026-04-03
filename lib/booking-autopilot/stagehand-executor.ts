@@ -119,22 +119,59 @@ YOUR JOB:
 
 IMPORTANT DISTINCTIONS:
 - Guest info forms (name, email, phone, address) → FILL THEM IN and continue
-- Date / room / seat selection → SELECT and continue
+- Date / room / seat / party-size selection → SELECT and continue
 - Credit card NUMBER and EXPIRY DATE → FILL THEM IN and continue
 - CVV / security code field → STOP HERE, do not fill
 - Final payment confirmation button ("Pay Now", "Confirm Payment", "Complete Purchase") → STOP HERE, do not click
+
+CALENDAR & DATE PICKERS:
+- Click the check-in date first, then the check-out date directly in the calendar grid
+- If the first click opens the calendar, click the exact date cell number
+- After both dates are selected, look for "Book now" / "Reserve" / "Check availability" and click it
+- NEVER report dates as selected unless you can clearly see them shown as chosen on the page
 
 The user will enter the CVV and click the final payment button themselves. Your job is to fill everything up to that point.`,
     });
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const result = await agent.execute({ instruction, maxSteps: 25 }) as any;
+    const result = await agent.execute({ instruction, maxSteps: 40 }) as any;
 
     const currentUrl = page.url();
     const screenshotBuffer = await page.screenshot({ type: "png" });
     const screenshotBase64 = `data:image/png;base64,${screenshotBuffer.toString("base64")}`;
 
     const sessionUrl = useCloud ? stagehand.browserbaseSessionURL : undefined;
+
+    // Verify the agent made real progress by checking page content
+    let pageText = "";
+    try {
+      pageText = await page.evaluate(() =>
+        (document.body?.innerText ?? "").toLowerCase().slice(0, 3000)
+      ) as string;
+    } catch { /* ignore — best-effort */ }
+
+    // Detect stuck at listing/search page (dates not selected, no booking progress)
+    const stuckAtListing =
+      (pageText.includes("select dates to continue") ||
+       pageText.includes("select check-in and check-out") ||
+       pageText.includes("enter your dates") ||
+       pageText.includes("add dates for prices") ||
+       (pageText.includes("book now") && pageText.includes("select dates"))) &&
+      !pageText.includes("your reservation") &&
+      !pageText.includes("review your booking") &&
+      !pageText.includes("confirm and pay") &&
+      !pageText.includes("request to book");
+
+    if (stuckAtListing) {
+      return {
+        status: "error",
+        screenshotBase64,
+        handoffUrl: currentUrl,
+        sessionUrl,
+        summary: "Agent couldn't select the dates — the calendar UI was too complex. Open the link to complete the booking yourself.",
+        error: "Stuck at date selection — no booking progress detected",
+      };
+    }
 
     // Determine outcome
     const msg = (result.message ?? "").toLowerCase();

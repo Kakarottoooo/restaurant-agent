@@ -216,169 +216,126 @@ function TimeInput({ value, onChange, label }: { value: string; onChange: (v: st
 
 // ── Booking Profile helpers ────────────────────────────────────────────────
 
-const PROFILE_KEY = "booking_profile";
+// ── Booking Profile types ──────────────────────────────────────────────────
 
-export interface BookingProfile {
+interface ProfileRecord {
+  id: number;
+  label: string;
+  is_default: boolean;
   first_name: string;
   last_name: string;
   email: string;
   phone: string;
+  address_line1?: string;
+  city?: string;
+  state?: string;
+  zip?: string;
+  country?: string;
+  card_name?: string;
+  card_number_masked?: string;
+  card_number?: string;
+  card_expiry?: string;
 }
 
-export function loadBookingProfile(): BookingProfile {
-  if (typeof window === "undefined") return { first_name: "", last_name: "", email: "", phone: "" };
-  try {
-    return JSON.parse(localStorage.getItem(PROFILE_KEY) ?? "{}");
-  } catch {
-    return { first_name: "", last_name: "", email: "", phone: "" };
-  }
-}
+type ProfileInput = Partial<Omit<ProfileRecord, "id" | "card_number_masked">>;
 
-function saveBookingProfile(p: BookingProfile) {
-  localStorage.setItem(PROFILE_KEY, JSON.stringify(p));
-}
+const EMPTY_INPUT: ProfileInput = {
+  label: "Personal", is_default: false,
+  first_name: "", last_name: "", email: "", phone: "",
+};
 
-// ── Booking Profile tab ────────────────────────────────────────────────────
+// ── Booking Profile tab (multi-profile, DB-backed) ─────────────────────────
 
-function BookingProfileTab() {
-  const [profile, setProfile] = useState<BookingProfile>({ first_name: "", last_name: "", email: "", phone: "" });
-  const [showCard, setShowCard] = useState(false);
-  const [saved, setSaved] = useState(false);
-
-  useEffect(() => { setProfile(loadBookingProfile()); }, []);
-
-  function set(field: keyof BookingProfile, value: string) {
-    const next = { ...profile, [field]: value };
-    setProfile(next);
-    saveBookingProfile(next);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 1800);
-  }
-
-  const inputStyle: React.CSSProperties = {
+function ProfileForm({ data, onChange, showCard, onToggleCard }: {
+  data: ProfileInput;
+  onChange: (patch: ProfileInput) => void;
+  showCard: boolean;
+  onToggleCard: () => void;
+}) {
+  const set = (k: keyof ProfileInput, v: string) => onChange({ ...data, [k]: v });
+  const inp: React.CSSProperties = {
     width: "100%", padding: "10px 12px", borderRadius: 10, boxSizing: "border-box",
     border: "0.5px solid var(--border, #e5e7eb)", backgroundColor: "var(--card, #fff)",
-    fontFamily: "var(--font-dm-sans)", fontSize: 14, color: "var(--text-primary, #111)",
-    outline: "none",
+    fontFamily: "var(--font-dm-sans)", fontSize: 14, color: "var(--text-primary, #111)", outline: "none",
   };
-
-  const hasContact = !!(profile.first_name && profile.last_name && profile.email && profile.phone);
-  const hasCard = !!(profile.card_number && profile.card_expiry && profile.card_name);
-
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+      <SectionLabel>Profile Name</SectionLabel>
+      <input style={inp} value={data.label ?? ""} placeholder="e.g. Personal, Work, Family"
+        onChange={(e) => set("label", e.target.value)} />
 
-      {/* Status banner */}
-      <div style={{
-        display: "flex", alignItems: "center", gap: 10,
-        padding: "12px 14px", borderRadius: 12, marginBottom: 24,
-        backgroundColor: hasContact ? "rgba(201,168,76,0.08)" : "var(--card, #fff)",
-        border: `0.5px solid ${hasContact ? "var(--gold, #C9A84C)" : "var(--border, #e5e7eb)"}`,
-      }}>
-        <span style={{ fontSize: 20 }}>{hasContact && hasCard ? "✅" : "📋"}</span>
-        <div>
-          <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 13, fontWeight: 600, color: "var(--text-primary, #111)" }}>
-            {hasContact && hasCard ? "Agent can auto-fill forms and payment" : hasContact ? "Contact ready — add card to skip payment form" : "Add your details to enable auto-fill"}
-          </p>
-          <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 11, color: "var(--text-muted, #aaa)" }}>
-            {hasCard ? "Agent fills card info, you enter CVV and confirm payment" : "CVV is never stored — you enter it at checkout"}
-          </p>
-        </div>
-      </div>
-
-      {/* Name */}
       <SectionLabel>Name</SectionLabel>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
         <div>
           <FieldLabel>First name</FieldLabel>
-          <input style={inputStyle} value={profile.first_name ?? ""} placeholder="Jane"
+          <input style={inp} value={data.first_name ?? ""} placeholder="Jane"
             onChange={(e) => set("first_name", e.target.value)} />
         </div>
         <div>
           <FieldLabel>Last name</FieldLabel>
-          <input style={inputStyle} value={profile.last_name ?? ""} placeholder="Smith"
+          <input style={inp} value={data.last_name ?? ""} placeholder="Smith"
             onChange={(e) => set("last_name", e.target.value)} />
         </div>
       </div>
 
-      {/* Contact */}
       <SectionLabel>Contact</SectionLabel>
       <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 16 }}>
         <div>
           <FieldLabel>Email</FieldLabel>
-          <input style={inputStyle} type="email" value={profile.email ?? ""} placeholder="jane@example.com"
+          <input style={inp} type="email" value={data.email ?? ""} placeholder="jane@example.com"
             onChange={(e) => set("email", e.target.value)} />
         </div>
         <div>
           <FieldLabel>Phone</FieldLabel>
-          <input style={inputStyle} type="tel" value={profile.phone ?? ""} placeholder="+1 555 000 0000"
+          <input style={inp} type="tel" value={data.phone ?? ""} placeholder="+1 555 000 0000"
             onChange={(e) => set("phone", e.target.value)} />
         </div>
       </div>
 
-      {/* Billing address */}
       <SectionLabel>Billing Address</SectionLabel>
       <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 16 }}>
         <div>
           <FieldLabel>Street address</FieldLabel>
-          <input style={inputStyle} value={profile.address_line1 ?? ""} placeholder="123 Main St"
+          <input style={inp} value={data.address_line1 ?? ""} placeholder="123 Main St"
             onChange={(e) => set("address_line1", e.target.value)} />
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 80px", gap: 12 }}>
-          <div>
-            <FieldLabel>City</FieldLabel>
-            <input style={inputStyle} value={profile.city ?? ""} placeholder="Nashville"
-              onChange={(e) => set("city", e.target.value)} />
-          </div>
-          <div>
-            <FieldLabel>State</FieldLabel>
-            <input style={inputStyle} value={profile.state ?? ""} placeholder="TN"
-              onChange={(e) => set("state", e.target.value)} />
-          </div>
+          <div><FieldLabel>City</FieldLabel>
+            <input style={inp} value={data.city ?? ""} placeholder="Nashville"
+              onChange={(e) => set("city", e.target.value)} /></div>
+          <div><FieldLabel>State</FieldLabel>
+            <input style={inp} value={data.state ?? ""} placeholder="TN"
+              onChange={(e) => set("state", e.target.value)} /></div>
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "120px 1fr", gap: 12 }}>
-          <div>
-            <FieldLabel>ZIP</FieldLabel>
-            <input style={inputStyle} value={profile.zip ?? ""} placeholder="37201"
-              onChange={(e) => set("zip", e.target.value)} />
-          </div>
-          <div>
-            <FieldLabel>Country</FieldLabel>
-            <input style={inputStyle} value={profile.country ?? ""} placeholder="United States"
-              onChange={(e) => set("country", e.target.value)} />
-          </div>
+          <div><FieldLabel>ZIP</FieldLabel>
+            <input style={inp} value={data.zip ?? ""} placeholder="37201"
+              onChange={(e) => set("zip", e.target.value)} /></div>
+          <div><FieldLabel>Country</FieldLabel>
+            <input style={inp} value={data.country ?? ""} placeholder="United States"
+              onChange={(e) => set("country", e.target.value)} /></div>
         </div>
       </div>
 
-      {/* Payment card */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-        <p style={{
-          fontFamily: "var(--font-dm-sans)", fontSize: 11, fontWeight: 700,
-          color: "var(--text-muted, #aaa)", textTransform: "uppercase", letterSpacing: "0.08em",
-        }}>Payment Card</p>
-        <span style={{
-          fontSize: 10, fontFamily: "var(--font-dm-sans)", padding: "2px 8px", borderRadius: 20,
-          backgroundColor: "rgba(201,168,76,0.1)", color: "var(--gold, #C9A84C)", fontWeight: 600,
-        }}>CVV never stored</span>
+        <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 11, fontWeight: 700, color: "var(--text-muted, #aaa)", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+          Payment Card
+        </p>
+        <span style={{ fontSize: 10, fontFamily: "var(--font-dm-sans)", padding: "2px 8px", borderRadius: 20, backgroundColor: "rgba(201,168,76,0.1)", color: "var(--gold, #C9A84C)", fontWeight: 600 }}>
+          CVV never stored 🔒
+        </span>
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 8 }}>
-        <div>
-          <FieldLabel>Name on card</FieldLabel>
-          <input style={inputStyle} value={profile.card_name ?? ""} placeholder="Jane Smith"
-            onChange={(e) => set("card_name", e.target.value)} />
-        </div>
-        <div>
-          <FieldLabel>Card number</FieldLabel>
+        <div><FieldLabel>Name on card</FieldLabel>
+          <input style={inp} value={data.card_name ?? ""} placeholder="Jane Smith"
+            onChange={(e) => set("card_name", e.target.value)} /></div>
+        <div><FieldLabel>Card number</FieldLabel>
           <div style={{ position: "relative" }}>
-            <input
-              style={{ ...inputStyle, paddingRight: 44 }}
+            <input style={{ ...inp, paddingRight: 44 }}
               type={showCard ? "text" : "password"}
-              value={profile.card_number ?? ""}
-              placeholder="•••• •••• •••• ••••"
-              maxLength={19}
-              onChange={(e) => set("card_number", e.target.value)}
-            />
-            <button onClick={() => setShowCard(v => !v)} style={{
+              value={data.card_number ?? ""} placeholder="•••• •••• •••• ••••" maxLength={19}
+              onChange={(e) => set("card_number", e.target.value)} />
+            <button onClick={onToggleCard} style={{
               position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)",
               background: "none", border: "none", cursor: "pointer",
               fontFamily: "var(--font-dm-sans)", fontSize: 11, color: "var(--text-muted, #aaa)",
@@ -386,28 +343,255 @@ function BookingProfileTab() {
           </div>
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "120px 1fr", gap: 12 }}>
-          <div>
-            <FieldLabel>Expiry (MM/YY)</FieldLabel>
-            <input style={inputStyle} value={profile.card_expiry ?? ""} placeholder="12/27"
-              maxLength={5} onChange={(e) => set("card_expiry", e.target.value)} />
-          </div>
+          <div><FieldLabel>Expiry (MM/YY)</FieldLabel>
+            <input style={inp} value={data.card_expiry ?? ""} placeholder="12/27" maxLength={5}
+              onChange={(e) => set("card_expiry", e.target.value)} /></div>
           <div style={{ display: "flex", alignItems: "flex-end", paddingBottom: 2 }}>
             <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 11, color: "var(--text-muted, #aaa)", lineHeight: 1.6 }}>
-              🔒 Agent fills card number and expiry. You enter CVV and click "Pay" yourself — same as Chrome autofill.
+              Agent fills number and expiry. You enter CVV and click Pay yourself.
             </p>
           </div>
         </div>
       </div>
+    </div>
+  );
+}
 
-      {/* Privacy note */}
+function BookingProfileTab() {
+  const [profiles, setProfiles] = useState<ProfileRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [expandedId, setExpandedId] = useState<number | null>(null);
+  const [addingNew, setAddingNew] = useState(false);
+  const [editData, setEditData] = useState<ProfileInput>(EMPTY_INPUT);
+  const [showCard, setShowCard] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  const loadProfiles = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch("/api/user/booking-profiles");
+      if (res.ok) {
+        const { profiles: list } = await res.json();
+        setProfiles(list ?? []);
+        const def = (list ?? []).find((p: ProfileRecord) => p.is_default);
+        if (def) localStorage.setItem("active_profile_id", String(def.id));
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { loadProfiles(); }, [loadProfiles]);
+
+  async function openProfile(p: ProfileRecord) {
+    if (expandedId === p.id) { setExpandedId(null); return; }
+    setAddingNew(false);
+    const res = await fetch(`/api/user/booking-profiles?id=${p.id}&card=true`);
+    if (res.ok) {
+      const { profile: full } = await res.json();
+      setEditData({
+        label: full.label, is_default: full.is_default,
+        first_name: full.first_name, last_name: full.last_name,
+        email: full.email, phone: full.phone,
+        address_line1: full.address_line1 ?? "",
+        city: full.city ?? "", state: full.state ?? "",
+        zip: full.zip ?? "", country: full.country ?? "",
+        card_name: full.card_name ?? "",
+        card_number: full.card_number ?? "",
+        card_expiry: full.card_expiry ?? "",
+      });
+    }
+    setShowCard(false);
+    setExpandedId(p.id);
+  }
+
+  async function saveExisting() {
+    if (!expandedId) return;
+    setSaving(true);
+    try {
+      await fetch(`/api/user/booking-profiles/${expandedId}`, {
+        method: "PUT", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(editData),
+      });
+      await loadProfiles();
+      setExpandedId(null);
+    } finally { setSaving(false); }
+  }
+
+  async function saveNew() {
+    setSaving(true);
+    try {
+      await fetch("/api/user/booking-profiles", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(editData),
+      });
+      await loadProfiles();
+      setAddingNew(false);
+      setEditData(EMPTY_INPUT);
+    } finally { setSaving(false); }
+  }
+
+  async function deleteProfile(id: number) {
+    if (profiles.length <= 1) return;
+    setDeleting(true);
+    try {
+      await fetch(`/api/user/booking-profiles/${id}`, { method: "DELETE" });
+      if (expandedId === id) setExpandedId(null);
+      await loadProfiles();
+    } finally { setDeleting(false); }
+  }
+
+  async function makeDefault(id: number) {
+    await fetch(`/api/user/booking-profiles/${id}`, {
+      method: "PUT", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ is_default: true }),
+    });
+    await loadProfiles();
+  }
+
+  function startAddNew() {
+    setExpandedId(null);
+    setEditData({ ...EMPTY_INPUT, is_default: profiles.length === 0 });
+    setShowCard(false);
+    setAddingNew(true);
+  }
+
+  const btnStyle = (primary: boolean): React.CSSProperties => ({
+    padding: "9px 18px", borderRadius: 10, fontSize: 13, cursor: "pointer",
+    fontFamily: "var(--font-dm-sans)", fontWeight: 600, border: "none",
+    backgroundColor: primary ? "var(--gold, #C9A84C)" : "var(--card, #f5f5f4)",
+    color: primary ? "#fff" : "var(--text-secondary, #666)",
+  });
+
+  if (loading) {
+    return (
+      <div style={{ textAlign: "center", padding: "40px 0", color: "var(--text-muted, #aaa)", fontFamily: "var(--font-dm-sans)", fontSize: 13 }}>
+        Loading profiles…
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+      {/* Header */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+        <div>
+          <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 13, fontWeight: 700, color: "var(--text-primary, #111)" }}>
+            My Profiles
+          </p>
+          <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 11, color: "var(--text-muted, #aaa)" }}>
+            Card numbers encrypted on our servers. CVV never stored.
+          </p>
+        </div>
+        {!addingNew && (
+          <button onClick={startAddNew} style={btnStyle(true)}>+ Add</button>
+        )}
+      </div>
+
+      {/* Profile list */}
+      {profiles.length === 0 && !addingNew && (
+        <div style={{
+          textAlign: "center", padding: "32px 20px", borderRadius: 14,
+          border: "0.5px dashed var(--border, #e5e7eb)", marginBottom: 20,
+        }}>
+          <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 13, color: "var(--text-secondary, #666)" }}>
+            No profiles yet
+          </p>
+          <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 11, color: "var(--text-muted, #aaa)", marginTop: 4 }}>
+            Add a profile to enable auto-fill during booking
+          </p>
+        </div>
+      )}
+
+      {profiles.map((p) => (
+        <div key={p.id} style={{ marginBottom: 12 }}>
+          {/* Profile card header */}
+          <div
+            onClick={() => openProfile(p)}
+            style={{
+              display: "flex", alignItems: "center", justifyContent: "space-between",
+              padding: "12px 14px", borderRadius: expandedId === p.id ? "12px 12px 0 0" : 12,
+              cursor: "pointer", userSelect: "none",
+              border: `0.5px solid ${p.is_default ? "var(--gold, #C9A84C)" : "var(--border, #e5e7eb)"}`,
+              backgroundColor: p.is_default ? "rgba(201,168,76,0.06)" : "var(--card, #fff)",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <span style={{ fontSize: 18 }}>👤</span>
+              <div>
+                <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 13, fontWeight: 600, color: "var(--text-primary, #111)" }}>
+                  {p.label}
+                  {p.is_default && (
+                    <span style={{ marginLeft: 8, fontSize: 10, fontWeight: 700, color: "var(--gold, #C9A84C)", backgroundColor: "rgba(201,168,76,0.1)", padding: "1px 7px", borderRadius: 20 }}>
+                      Default
+                    </span>
+                  )}
+                </p>
+                <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 11, color: "var(--text-muted, #aaa)" }}>
+                  {[p.first_name, p.last_name].filter(Boolean).join(" ") || "No name"}
+                  {p.card_number_masked && ` · ${p.card_number_masked}`}
+                </p>
+              </div>
+            </div>
+            <span style={{ color: "var(--text-muted, #aaa)", fontSize: 12 }}>{expandedId === p.id ? "▲" : "▼"}</span>
+          </div>
+
+          {/* Expanded edit form */}
+          {expandedId === p.id && (
+            <div style={{
+              padding: "16px 14px", border: "0.5px solid var(--gold, #C9A84C)",
+              borderTop: "none", borderRadius: "0 0 12px 12px",
+              backgroundColor: "var(--background, #fafaf9)",
+            }}>
+              <ProfileForm data={editData} onChange={setEditData} showCard={showCard} onToggleCard={() => setShowCard(v => !v)} />
+              <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
+                <button onClick={saveExisting} disabled={saving} style={btnStyle(true)}>
+                  {saving ? "Saving…" : "Save"}
+                </button>
+                {!p.is_default && (
+                  <button onClick={() => makeDefault(p.id)} style={btnStyle(false)}>
+                    Make default
+                  </button>
+                )}
+                <button onClick={() => setExpandedId(null)} style={btnStyle(false)}>Cancel</button>
+                {profiles.length > 1 && (
+                  <button onClick={() => deleteProfile(p.id)} disabled={deleting}
+                    style={{ ...btnStyle(false), marginLeft: "auto", color: "#ef4444" }}>
+                    Delete
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      ))}
+
+      {/* Add new profile form */}
+      {addingNew && (
+        <div style={{
+          padding: "16px 14px", borderRadius: 12,
+          border: "0.5px solid var(--gold, #C9A84C)",
+          backgroundColor: "var(--background, #fafaf9)", marginTop: 4,
+        }}>
+          <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 13, fontWeight: 700, color: "var(--text-primary, #111)", marginBottom: 16 }}>
+            New Profile
+          </p>
+          <ProfileForm data={editData} onChange={setEditData} showCard={showCard} onToggleCard={() => setShowCard(v => !v)} />
+          <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
+            <button onClick={saveNew} disabled={saving} style={btnStyle(true)}>
+              {saving ? "Saving…" : "Create"}
+            </button>
+            <button onClick={() => { setAddingNew(false); setEditData(EMPTY_INPUT); }} style={btnStyle(false)}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
       <p style={{ fontFamily: "var(--font-dm-sans)", fontSize: 11, color: "var(--text-muted, #aaa)", marginTop: 20, lineHeight: 1.6 }}>
-        All data stored locally on your device only. CVV is never saved. Final payment confirmation always requires your action.
+        🔒 Card numbers are AES-256 encrypted and stored securely. CVV is never saved anywhere. Final payment always requires your action.
       </p>
-
-      <p style={{
-        fontFamily: "var(--font-dm-sans)", fontSize: 12, textAlign: "center", marginTop: 16,
-        color: saved ? "var(--gold, #C9A84C)" : "transparent", transition: "color 0.3s",
-      }}>✓ Saved</p>
     </div>
   );
 }

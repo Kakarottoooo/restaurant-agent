@@ -1,4 +1,5 @@
 import { sql, db } from "@vercel/postgres";
+import { encrypt, decrypt } from "./encryption";
 
 export { sql };
 
@@ -56,6 +57,7 @@ export async function initDb() {
   await ensurePriceWatchesTable();
   await ensureUserPreferencesTable();
   await ensureUserNotificationsTable();
+  await ensureBookingProfilesTable();
 }
 
 export async function ensureScenarioEventsTable() {
@@ -1323,4 +1325,221 @@ export async function mergeSessionPreferences(
         SELECT preference_key FROM user_preferences WHERE user_id = ${userId}
       )
   `;
+}
+
+// ── Booking Profiles (secure, encrypted card data) ─────────────────────────
+
+let bookingProfilesTableReady: Promise<void> | null = null;
+
+export async function ensureBookingProfilesTable() {
+  if (!bookingProfilesTableReady) {
+    bookingProfilesTableReady = (async () => {
+      await sql`
+        CREATE TABLE IF NOT EXISTS booking_profiles (
+          id              SERIAL PRIMARY KEY,
+          user_id         TEXT NOT NULL,
+          label           TEXT NOT NULL DEFAULT 'Personal',
+          is_default      BOOLEAN NOT NULL DEFAULT FALSE,
+          first_name      TEXT NOT NULL DEFAULT '',
+          last_name       TEXT NOT NULL DEFAULT '',
+          email           TEXT NOT NULL DEFAULT '',
+          phone           TEXT NOT NULL DEFAULT '',
+          address_line1   TEXT,
+          city            TEXT,
+          state           TEXT,
+          zip             TEXT,
+          country         TEXT,
+          card_name       TEXT,
+          card_number_enc TEXT,
+          card_expiry     TEXT,
+          created_at      TIMESTAMPTZ DEFAULT NOW(),
+          updated_at      TIMESTAMPTZ DEFAULT NOW()
+        )
+      `;
+      await sql`CREATE INDEX IF NOT EXISTS booking_profiles_user_idx ON booking_profiles (user_id)`;
+    })().catch((err) => {
+      bookingProfilesTableReady = null;
+      console.error("ensureBookingProfilesTable error:", err);
+    }) as Promise<void>;
+  }
+  return bookingProfilesTableReady;
+}
+
+export interface BookingProfileRow {
+  id: number;
+  user_id: string;
+  label: string;
+  is_default: boolean;
+  first_name: string;
+  last_name: string;
+  email: string;
+  phone: string;
+  address_line1?: string;
+  city?: string;
+  state?: string;
+  zip?: string;
+  country?: string;
+  card_name?: string;
+  /** Masked card number for display, e.g. "•••• •••• •••• 4242" */
+  card_number_masked?: string;
+  card_expiry?: string;
+  /** Full decrypted card number — only included when explicitly requested */
+  card_number?: string;
+}
+
+type ProfileInput = Omit<BookingProfileRow, "id" | "user_id" | "card_number_masked">;
+
+function maskCard(num: string): string {
+  const digits = num.replace(/\D/g, "");
+  if (digits.length < 4) return "••••";
+  return `•••• •••• •••• ${digits.slice(-4)}`;
+}
+
+function rowToProfile(row: Record<string, unknown>, includeCard = false): BookingProfileRow {
+  const cardEnc = row.card_number_enc as string | null;
+  const decrypted = cardEnc ? decrypt(cardEnc) : "";
+  return {
+    id: row.id as number,
+    user_id: row.user_id as string,
+    label: row.label as string,
+    is_default: row.is_default as boolean,
+    first_name: (row.first_name as string) ?? "",
+    last_name: (row.last_name as string) ?? "",
+    email: (row.email as string) ?? "",
+    phone: (row.phone as string) ?? "",
+    address_line1: (row.address_line1 as string) ?? undefined,
+    city: (row.city as string) ?? undefined,
+    state: (row.state as string) ?? undefined,
+    zip: (row.zip as string) ?? undefined,
+    country: (row.country as string) ?? undefined,
+    card_name: (row.card_name as string) ?? undefined,
+    card_number_masked: decrypted ? maskCard(decrypted) : undefined,
+    card_expiry: (row.card_expiry as string) ?? undefined,
+    ...(includeCard && { card_number: decrypted || undefined }),
+  };
+}
+
+export async function listBookingProfiles(userId: string): Promise<BookingProfileRow[]> {
+  await ensureBookingProfilesTable();
+  const result = await sql`
+    SELECT * FROM booking_profiles WHERE user_id = ${userId} ORDER BY is_default DESC, id ASC
+  `;
+  return result.rows.map((r) => rowToProfile(r));
+}
+
+export async function getBookingProfileById(
+  id: number,
+  userId: string,
+  includeCard = false
+): Promise<BookingProfileRow | null> {
+  await ensureBookingProfilesTable();
+  const result = await sql`
+    SELECT * FROM booking_profiles WHERE id = ${id} AND user_id = ${userId}
+  `;
+  if (result.rows.length === 0) return null;
+  return rowToProfile(result.rows[0], includeCard);
+}
+
+export async function getDefaultBookingProfile(
+  userId: string,
+  includeCard = false
+): Promise<BookingProfileRow | null> {
+  await ensureBookingProfilesTable();
+  const result = await sql`
+    SELECT * FROM booking_profiles
+    WHERE user_id = ${userId}
+    ORDER BY is_default DESC, id ASC
+    LIMIT 1
+  `;
+  if (result.rows.length === 0) return null;
+  return rowToProfile(result.rows[0], includeCard);
+}
+
+export async function createBookingProfile(
+  userId: string,
+  data: Partial<ProfileInput>
+): Promise<BookingProfileRow> {
+  await ensureBookingProfilesTable();
+  const cardEnc = data.card_number ? encrypt(data.card_number) : null;
+  // If this is the first profile, make it default
+  const countRes = await sql`SELECT COUNT(*) as cnt FROM booking_profiles WHERE user_id = ${userId}`;
+  const isFirst = parseInt((countRes.rows[0].cnt as string) ?? "0") === 0;
+
+  const result = await sql`
+    INSERT INTO booking_profiles (
+      user_id, label, is_default,
+      first_name, last_name, email, phone,
+      address_line1, city, state, zip, country,
+      card_name, card_number_enc, card_expiry,
+      updated_at
+    ) VALUES (
+      ${userId},
+      ${data.label ?? "Personal"},
+      ${data.is_default ?? isFirst},
+      ${data.first_name ?? ""},
+      ${data.last_name ?? ""},
+      ${data.email ?? ""},
+      ${data.phone ?? ""},
+      ${data.address_line1 ?? null},
+      ${data.city ?? null},
+      ${data.state ?? null},
+      ${data.zip ?? null},
+      ${data.country ?? null},
+      ${data.card_name ?? null},
+      ${cardEnc},
+      ${data.card_expiry ?? null},
+      NOW()
+    ) RETURNING *
+  `;
+  return rowToProfile(result.rows[0]);
+}
+
+export async function updateBookingProfile(
+  id: number,
+  userId: string,
+  data: Partial<ProfileInput>
+): Promise<BookingProfileRow | null> {
+  await ensureBookingProfilesTable();
+
+  // Fetch existing to preserve card enc if not updating
+  const existing = await sql`SELECT * FROM booking_profiles WHERE id = ${id} AND user_id = ${userId}`;
+  if (existing.rows.length === 0) return null;
+
+  const cardEnc = data.card_number !== undefined
+    ? (data.card_number ? encrypt(data.card_number) : null)
+    : (existing.rows[0].card_number_enc as string | null);
+
+  if (data.is_default) {
+    await sql`UPDATE booking_profiles SET is_default = FALSE WHERE user_id = ${userId}`;
+  }
+
+  const result = await sql`
+    UPDATE booking_profiles SET
+      label         = ${data.label ?? (existing.rows[0].label as string)},
+      is_default    = ${data.is_default ?? (existing.rows[0].is_default as boolean)},
+      first_name    = ${data.first_name ?? (existing.rows[0].first_name as string)},
+      last_name     = ${data.last_name ?? (existing.rows[0].last_name as string)},
+      email         = ${data.email ?? (existing.rows[0].email as string)},
+      phone         = ${data.phone ?? (existing.rows[0].phone as string)},
+      address_line1 = ${data.address_line1 !== undefined ? (data.address_line1 ?? null) : (existing.rows[0].address_line1 as string | null)},
+      city          = ${data.city !== undefined ? (data.city ?? null) : (existing.rows[0].city as string | null)},
+      state         = ${data.state !== undefined ? (data.state ?? null) : (existing.rows[0].state as string | null)},
+      zip           = ${data.zip !== undefined ? (data.zip ?? null) : (existing.rows[0].zip as string | null)},
+      country       = ${data.country !== undefined ? (data.country ?? null) : (existing.rows[0].country as string | null)},
+      card_name     = ${data.card_name !== undefined ? (data.card_name ?? null) : (existing.rows[0].card_name as string | null)},
+      card_number_enc = ${cardEnc},
+      card_expiry   = ${data.card_expiry !== undefined ? (data.card_expiry ?? null) : (existing.rows[0].card_expiry as string | null)},
+      updated_at    = NOW()
+    WHERE id = ${id} AND user_id = ${userId}
+    RETURNING *
+  `;
+  return rowToProfile(result.rows[0]);
+}
+
+export async function deleteBookingProfile(id: number, userId: string): Promise<boolean> {
+  await ensureBookingProfilesTable();
+  const result = await sql`
+    DELETE FROM booking_profiles WHERE id = ${id} AND user_id = ${userId} RETURNING id
+  `;
+  return result.rows.length > 0;
 }

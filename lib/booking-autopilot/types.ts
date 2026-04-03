@@ -71,6 +71,8 @@ export interface BrowserTaskInput {
   stepIndex: number;
   /** Which LLM to use for browser vision. Defaults to Gemini 2.0 Flash if omitted. */
   agentModel?: AgentModelConfig;
+  /** DB profile ID — server fetches and decrypts card data. Preferred over inline profile. */
+  profileId?: number;
 }
 
 export type BrowserTaskStatus =
