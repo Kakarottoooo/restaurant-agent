@@ -1,8 +1,19 @@
 export interface BookingProfile {
+  // Contact
   first_name: string;
   last_name: string;
   email: string;
   phone: string;
+  // Billing address
+  address_line1?: string;
+  city?: string;
+  state?: string;
+  zip?: string;
+  country?: string;
+  // Payment card — CVV is intentionally never stored
+  card_name?: string;    // name on card
+  card_number?: string;  // full number, stored locally only
+  card_expiry?: string;  // MM/YY
 }
 
 export interface RestaurantAutopilotRequest {

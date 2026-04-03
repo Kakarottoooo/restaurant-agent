@@ -112,17 +112,19 @@ export async function runBrowserTask(
 
 YOUR JOB:
 1. Navigate to the booking page and select the requested dates/options.
-2. Fill in ALL guest information fields (full name, email, phone, address) using the details provided in the instruction.
-3. Proceed through every step UNTIL you reach a field asking for a CREDIT CARD NUMBER, card expiry date, or CVV security code.
-4. STOP immediately before entering any credit card or payment card information.
+2. Fill in ALL guest information fields (full name, email, phone, billing address) using the details provided.
+3. Fill in the CREDIT CARD NUMBER and EXPIRY DATE if provided — these are safe to enter.
+4. STOP immediately before entering the CVV / security code field, OR before clicking any final "Pay Now", "Confirm Payment", or "Complete Purchase" button.
 5. Report what page you stopped at and the current URL.
 
 IMPORTANT DISTINCTIONS:
-- Guest info forms (name, email, phone) → FILL THEM IN and continue
-- Date / room selection → SELECT and continue
-- Credit card / payment card fields → STOP HERE, do not fill
+- Guest info forms (name, email, phone, address) → FILL THEM IN and continue
+- Date / room / seat selection → SELECT and continue
+- Credit card NUMBER and EXPIRY DATE → FILL THEM IN and continue
+- CVV / security code field → STOP HERE, do not fill
+- Final payment confirmation button ("Pay Now", "Confirm Payment", "Complete Purchase") → STOP HERE, do not click
 
-Do NOT stop at guest information forms. Always fill them and proceed.`,
+The user will enter the CVV and click the final payment button themselves. Your job is to fill everything up to that point.`,
     });
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -138,15 +140,18 @@ Do NOT stop at guest information forms. Always fill them and proceed.`,
     const msg = (result.message ?? "").toLowerCase();
     const hitPaymentUrl = isPaymentUrl(currentUrl);
 
-    // Agent explicitly stopped at credit card / payment card fields
+    // Agent stopped before CVV/pay button (has filled card number+expiry already)
     const hitPaymentGate =
       hitPaymentUrl ||
-      msg.includes("credit card") ||
-      msg.includes("card number") ||
       msg.includes("cvv") ||
-      msg.includes("expiry") ||
+      msg.includes("security code") ||
+      msg.includes("pay now") ||
+      msg.includes("confirm payment") ||
+      msg.includes("complete purchase") ||
       msg.includes("payment card") ||
-      msg.includes("billing information");
+      // Legacy: agent stopped at card entry page before filling anything
+      (msg.includes("credit card") && !msg.includes("filled")) ||
+      (msg.includes("card number") && !msg.includes("filled"));
 
     if (hitPaymentGate) {
       return {
@@ -271,14 +276,31 @@ function buildInstruction(input: BrowserTaskInput): string {
   const hasProfile = !!(p.first_name || p.last_name || p.email || p.phone);
 
   if (hasProfile) {
+    const fullName = [p.first_name, p.last_name].filter(Boolean).join(" ");
+    const addressParts = [
+      p.address_line1 && `Street: ${p.address_line1}`,
+      p.city && `City: ${p.city}`,
+      p.state && `State: ${p.state}`,
+      p.zip && `ZIP: ${p.zip}`,
+      p.country && `Country: ${p.country}`,
+    ].filter(Boolean);
+    const cardParts = [
+      p.card_name && `Cardholder name: ${p.card_name}`,
+      p.card_number && `Card number: ${p.card_number}`,
+      p.card_expiry && `Expiry date: ${p.card_expiry}`,
+    ].filter(Boolean);
+
     return `${input.task}
 
 Guest details — fill these into ALL guest/contact information fields you encounter:
-- Full name: ${[p.first_name, p.last_name].filter(Boolean).join(" ")}
+- Full name: ${fullName}
 - Email: ${p.email}
 - Phone: ${p.phone}
+${addressParts.length ? `\nBilling address:\n${addressParts.map(a => `- ${a}`).join("\n")}` : ""}
+${cardParts.length ? `\nPayment card (fill number and expiry, then STOP before CVV):\n${cardParts.map(c => `- ${c}`).join("\n")}` : ""}
 
-Fill ALL guest info fields and proceed. STOP ONLY when you reach a credit card number, card expiry, or CVV field. Do not enter any payment card data.`;
+Fill ALL guest info and billing address fields. Fill card number and expiry date if present.
+STOP before the CVV / security code field and before any final "Pay Now" / "Confirm Payment" button.`;
   }
 
   // No profile — navigate as far as possible then stop and list what's needed
