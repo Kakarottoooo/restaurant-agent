@@ -39,6 +39,7 @@ const PAYMENT_KEYWORDS = [
   "billing information",
   "pay now",
   "complete purchase",
+  "complete booking",
   "confirm and pay",
 ];
 
@@ -1164,6 +1165,7 @@ async function assessBookingStage(params: {
     pageText.includes("pay now") ||
     pageText.includes("confirm payment") ||
     pageText.includes("complete purchase") ||
+    pageText.includes("complete booking") ||
     pageText.includes("payment card") ||
     containsAny(pageText, PAYMENT_KEYWORDS) ||
     visibleCheckoutFields;
@@ -1376,7 +1378,7 @@ YOUR JOB:
 1. Navigate to the booking page and select the requested dates/options.
 2. Fill in ALL guest information fields (full name, email, phone, billing address) using the details provided.
 3. Fill in the CREDIT CARD NUMBER and EXPIRY DATE if provided — these are safe to enter.
-4. STOP immediately before entering the CVV / security code field, OR before clicking any final "Pay Now", "Confirm Payment", or "Complete Purchase" button.
+4. STOP immediately before entering the CVV / security code field, OR before clicking any final "Pay Now", "Confirm Payment", "Complete Purchase", or "Complete Booking" button.
 5. Report what page you stopped at and the current URL.
 
 NEVER ASK QUESTIONS — ALWAYS TRY:
@@ -1392,7 +1394,7 @@ Step 3 → If you see a review/summary page with a "Book Now" or "Reserve Now" b
 Step 4 → Once the guest/checkout form is visible, click "Credit or debit card" / "Pay with card" if it's a selection option (radio button), to reveal the card number and expiry input fields
 Step 5 → Fill guest info: fill name, email, phone, billing address into their individual labeled input fields
 Step 6 → Fill card number and expiry date into their individual labeled input fields
-Step 7 → STOP — do NOT enter CVV, do NOT click the final "Pay Now" / "Confirm Payment" / "Complete Purchase" button, and do NOT click "Book Now" when CVV is visible
+Step 7 → STOP — do NOT enter CVV, do NOT click the final "Pay Now" / "Confirm Payment" / "Complete Purchase" / "Complete Booking" button, and do NOT click "Book Now" when CVV is visible
 
 CRITICAL — DO NOT STOP EARLY:
 - Room selection page → SELECT a room and advance (do NOT stop here)
@@ -1415,7 +1417,7 @@ DISTINGUISH: "advance" buttons vs "final payment" buttons:
   → STOP (do NOT click) if: actual labeled input fields for name, email, phone, card number, card expiry are already visible AND filled. Clicking here would submit real payment.
   → STOP (do NOT click) if: a CVV / security code field is visible anywhere on the page.
 
-- ALWAYS STOP before: "Pay Now", "Confirm Payment", "Complete Purchase", "Place Order", "Submit Payment"
+- ALWAYS STOP before: "Pay Now", "Confirm Payment", "Complete Purchase", "Complete Booking", "Place Order", "Submit Payment", "Confirm Booking"
 
 KEY: "Credit or debit card" shown as a RADIO BUTTON / SELECTION OPTION is NOT a card entry field — it just selects the payment method. You must CLICK it to reveal the actual card number and expiry inputs.
 
@@ -1735,6 +1737,8 @@ Do NOT stop at the review summary and do NOT treat this as the final payment ste
       msg.includes("pay now") ||
       msg.includes("confirm payment") ||
       msg.includes("complete purchase") ||
+      msg.includes("complete booking") ||
+      msg.includes("confirm booking") ||
       msg.includes("payment card") ||
       (msg.includes("credit card") && !msg.includes("filled")) ||
       (msg.includes("card number") && !msg.includes("filled"));
@@ -2044,7 +2048,7 @@ If a page shows a booking review summary (dates, room, total price) with a priva
   4. After clicking, fill the card number and expiry date fields that appear.
   5. STOP before the CVV / security code field.
 
-STOP before CVV and before any button that says "Pay Now", "Confirm Payment", "Complete Purchase", or "Submit Payment".
+STOP before CVV and before any button that says "Pay Now", "Confirm Payment", "Complete Purchase", "Complete Booking", "Confirm Booking", or "Submit Payment".
 Do NOT stop at "Book Now" or "Reserve Now" — those open the card form, not finalize payment.`;
   }
 
