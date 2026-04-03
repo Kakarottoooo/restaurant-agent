@@ -1421,38 +1421,10 @@ export async function runBrowserTask(
           input.task.match(/fallback URL[^:]*:\s*(https?:\/\/\S+)/i)?.[1]?.replace(/\s.*$/, "");
 
         if (fallback) {
+          // booking.com search failed (errorc_searchstring_not_found) — retry with fallback URL.
+          // fallbackUrl is also a booking.com search URL, so no bot-check needed here.
           trace(`booking.com search failed (${landedUrl}). Navigating to fallback: ${fallback}`);
           await page.goto(fallback, { waitUntil: "domcontentloaded", timeoutMs: 30_000 });
-
-          // Check if fallback page is also bot-blocked (e.g. Expedia CAPTCHA)
-          let fallbackText = "";
-          try {
-            fallbackText = (await page.evaluate(() =>
-              (document.body?.innerText ?? "").toLowerCase().slice(0, 1000)
-            ) as string);
-          } catch { /* ignore */ }
-          const fallbackBotBlocked =
-            fallbackText.includes("show us your human side") ||
-            fallbackText.includes("bot or not") ||
-            fallbackText.includes("we can't tell if you're a human") ||
-            fallbackText.includes("please type the numbers you hear") ||
-            fallbackText.includes("checking your browser") ||
-            fallbackText.includes("access denied");
-          if (fallbackBotBlocked) {
-            trace("Fallback OTA also bot-blocked — returning captcha status with handoff link.");
-            const screenshotBase64 = `data:image/png;base64,${(await page.screenshot({ type: "png" })).toString("base64")}`;
-            const sessionUrl = useCloud ? stagehand.browserbaseSessionURL : undefined;
-            await stagehand.close();
-            return {
-              status: "captcha",
-              screenshotBase64,
-              handoffUrl: fallback,
-              sessionUrl,
-              summary: "The booking site is showing a CAPTCHA. Click the link to open it and complete the booking yourself.",
-              error: "Bot detection on fallback OTA.",
-              debugTrace,
-            };
-          }
         } else {
           trace(`booking.com search failed but no fallback URL found. Letting agent handle it.`);
         }
@@ -1481,7 +1453,6 @@ KEY RULES:
 - Calendar month wrong → click ‹/› arrow to navigate; verify header before clicking a date.
 - IHG/single-date calendar (shows per-night price on each cell, has Stay duration +/− control) → click check-in date ONLY, then use + button to set nights, then CONTINUE.
 - If hotel detail page shows wrong dates → update the date picker first, then View Prices.
-- EXPEDIA SEARCH RESULTS: If the "Where to?" field shows a city (e.g. "New York, New York") instead of the hotel name, use the "Search by property name" text field in the LEFT SIDEBAR to type the hotel name and filter results. Do NOT scroll through 300+ results.
 - "Book Now" at a consent/review summary (no name/email/card fields visible yet) → check terms checkbox, then click it to open the actual form.
 - Terms/privacy checkboxes → always check before clicking booking buttons.
 - Fill guest fields one at a time; only fill on the actual checkout form page.
